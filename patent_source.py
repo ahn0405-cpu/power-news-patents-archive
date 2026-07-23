@@ -26,14 +26,15 @@ _BASE = "https://patents.google.com/xhr/query"
 _DEBUG_DONE = False
 
 
-def _build_url(term: str, country: str, after: str, before: str) -> str:
-    # 내부 검색 질의(q=키워드&country=..&before/after=publication:YYYYMMDD)를 통째로
-    # url= 파라미터에 '한 번만' 인코딩해 넣는다. urlencode 로 미리 인코딩한 뒤 다시
-    # quote 하면 ':' 등이 이중 인코딩(%253A)돼 엔드포인트가 500 을 반환한다.
-    inner = (f"q={term}"
-             f"&country={country}"
-             f"&before=publication:{before}"
-             f"&after=publication:{after}")
+def _build_url(term: str, country: str) -> str:
+    # 내부 검색 질의(q=키워드&country=..&sort=new)를 통째로 url= 파라미터에 '한 번만'
+    # 인코딩해 넣는다. urlencode 로 미리 인코딩한 뒤 다시 quote 하면 특수문자가
+    # 이중 인코딩돼 엔드포인트가 500 을 반환한다.
+    #
+    # 절대 날짜창(before/after=publication:...) 대신 sort=new(최신 공개순)를 쓴다.
+    # 날짜창은 실행 환경 시계가 실제와 어긋나면(미래 날짜) 결과가 0이 되기 때문.
+    # '최신순 상위 N + 아카이브 중복제거'로 매주 새로 공개된 특허만 누적한다.
+    inner = f"q={term}&country={country}&sort=new"
     return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
 
 
@@ -44,8 +45,8 @@ def _parse_json(raw: bytes) -> dict:
     return json.loads(text)
 
 
-def _fetch(term: str, country: str, after: str, before: str) -> list[dict]:
-    url = _build_url(term, country, after, before)
+def _fetch(term: str, country: str) -> list[dict]:
+    url = _build_url(term, country)
     req = urllib.request.Request(url, headers={
         "User-Agent": _UA, "Accept": "application/json",
         "Referer": "https://patents.google.com/",
@@ -107,7 +108,7 @@ def _dedup_key(p: dict) -> str:
     return (p.get("number") or "").upper() or re.sub(r"[\s\W_]+", "", p.get("title", "").lower())
 
 
-def _live_collect(after: str, before: str) -> list[dict]:
+def _live_collect() -> list[dict]:
     collected: list[dict] = []
     seen: set[str] = set()
     errors = 0
@@ -119,7 +120,7 @@ def _live_collect(after: str, before: str) -> list[dict]:
             for term in terms:
                 total_q += 1
                 try:
-                    items = _fetch(term, country, after, before)
+                    items = _fetch(term, country)
                 except Exception as e:
                     errors += 1
                     print(f"  ! [{cat['name']}/{country}] '{term}' 실패: {e}")
@@ -165,8 +166,8 @@ _MOCK = {
 }
 
 
-def _mock_collect(today: datetime, after: str, before: str) -> list[dict]:
-    seed = int(hashlib.md5(after.encode()).hexdigest()[:8], 16)
+def _mock_collect(today: datetime) -> list[dict]:
+    seed = int(hashlib.md5(today.strftime("%Y-%m-%d").encode()).hexdigest()[:8], 16)
     collected = []
     for ci, cat in enumerate(cfg.CATEGORIES):
         for i, (title, assignee, country) in enumerate(_MOCK.get(cat["key"], [])):
@@ -191,18 +192,16 @@ def _mock_collect(today: datetime, after: str, before: str) -> list[dict]:
 
 
 def collect(today: datetime) -> tuple[list[dict], bool]:
-    """최근 LOOKBACK_DAYS 일 공개 특허와 mock 여부를 반환.
+    """최신 공개 특허(키워드별 최신순 상위 N)와 mock 여부를 반환.
 
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
     """
-    before = (today + timedelta(days=1)).strftime("%Y%m%d")
-    after = (today - timedelta(days=cfg.LOOKBACK_DAYS)).strftime("%Y%m%d")
     if cfg.is_mock():
-        return _mock_collect(today, after, before), True
+        return _mock_collect(today), True
     try:
-        return _live_collect(after, before), False
+        return _live_collect(), False
     except Exception as e:
         if cfg.force_live():
             raise
         print(f"⚠️ 특허 라이브 수집 실패 → MOCK 폴백: {e}")
-        return _mock_collect(today, after, before), True
+        return _mock_collect(today), True
