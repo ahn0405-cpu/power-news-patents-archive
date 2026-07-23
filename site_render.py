@@ -168,13 +168,15 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
 
 
 def render_all(site_dir: Path, news_days: dict[str, dict],
-               patent_weeks: dict[str, dict], generated: str) -> Path:
+               patent_weeks: dict[str, dict], generated: str,
+               brief: dict | None = None) -> Path:
     site_dir = Path(site_dir)
     site_dir.mkdir(parents=True, exist_ok=True)
 
     feed = {
         "generated": generated,
         "title": SITE_TITLE, "tagline": SITE_TAGLINE,
+        "brief": brief or None,
         "insights": _insights.build(news_days, patent_weeks),
         "news": _news_feed(news_days),
         "patents": _patent_feed(patent_weeks),
@@ -245,6 +247,29 @@ a{color:inherit}
 .sparkwrap{display:flex;flex-direction:column;justify-content:space-between}
 .sparkwrap svg{width:100%;height:38px;display:block;margin-top:4px}
 .sparkwrap .k b{color:var(--accent)}
+/* 서술형 브리핑 */
+.brief{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:11px;padding:16px 18px 14px;box-shadow:var(--shadow);margin:2px 0 14px}
+.brief .bhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 0 3px}
+.brief .btag{font-size:10.5px;font-weight:800;letter-spacing:.03em;color:var(--accent);
+  border:1px solid var(--accent);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.brief .bdate{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.brief .bstale{color:#b06a1d;font-size:11px;font-weight:700}
+@media (prefers-color-scheme:dark){ .brief .bstale{color:var(--accent)} }
+.brief h2{font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.4;margin:2px 0 9px}
+.brief .bbody{font-size:13.5px;line-height:1.75;color:var(--ink);margin:0}
+.brief .bbody p{margin:0 0 7px}
+.brief .bbody p:last-child{margin-bottom:0}
+.brief .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:12px 0 2px}
+.brief .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.brief .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.brief .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
+.brief .bfoot{color:var(--muted);font-size:11px;margin-top:11px;padding-top:9px;border-top:1px solid var(--line);
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.brief .bfoot .sep{opacity:.5}
+.brief .btoggle{margin-left:auto;background:none;border:0;color:var(--accent2);font:inherit;font-size:11px;cursor:pointer}
+.brief.collapsed .bbody,.brief.collapsed .bpoints{display:none}
+@media (max-width:820px){ .brief .bpoints{grid-template-columns:1fr} }
 /* 트렌드 인사이트 바 */
 .insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
 .insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
@@ -420,6 +445,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <button data-view="list" aria-pressed="true">목록</button>
     <button data-view="stats" aria-pressed="false">📊 통계</button>
   </div>
+  <section class="brief" id="brief" aria-label="오늘의 브리핑" hidden></section>
   <section class="insights" id="insights" aria-label="트렌드 인사이트" hidden></section>
   <section class="overview" id="overview" aria-label="개요"></section>
   <div class="controls">
@@ -478,6 +504,7 @@ const CGRID = {
 const LS_SAVE='pnp_saved', LS_READ='pnp_read';
 let saved = new Set(JSON.parse(localStorage.getItem(LS_SAVE)||'[]'));
 let read  = new Set(JSON.parse(localStorage.getItem(LS_READ)||'[]'));
+let briefCollapsed = localStorage.getItem('pnp_briefClosed')==='1';
 function persist(){ localStorage.setItem(LS_SAVE,JSON.stringify([...saved])); localStorage.setItem(LS_READ,JSON.stringify([...read])); }
 
 const state = { tab:'news', view:'list', q:'', cats:new Set(), countries:new Set(),
@@ -579,6 +606,36 @@ function sparkline(series){
       +'" rx="1.5" fill="var(--spark)"><title>'+esc(p.x)+' · '+p.y+'건 (클릭해 필터)</title></rect>';
   });
   return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이(막대 클릭 시 그 기간만)">'+bars+'</svg>';
+}
+
+function renderBrief(){
+  const box = $('#brief');
+  const b = FEED.brief;
+  // 서술형 브리핑은 뉴스 홈에서만. 반자동(사람이 갱신·커밋)이라 없을 수도 있다.
+  if(state.tab!=='news' || !b || !(b.headline || (b.body&&b.body.length))){
+    box.hidden=true; box.innerHTML=''; return; }
+  box.hidden=false;
+  // 최신 뉴스일과 브리핑 기준일 차이 → 오래된 브리핑이면 정직하게 표시.
+  let stale='';
+  const L=latestNewsDate();
+  if(b.date && L){ const dd=Math.round((Date.parse(L)-Date.parse(b.date))/86400000);
+    if(dd>=2) stale='<span class="bstale">· '+dd+'일 전 작성</span>'; }
+  const body=(b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
+  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
+    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
+  const foot=[];
+  if(b.author) foot.push('✍️ '+esc(b.author)+(b.mode?' · '+esc(b.mode):''));
+  if(b.basis) foot.push('<span class="sep">·</span> '+esc(b.basis));
+  if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
+  box.className='brief'+(briefCollapsed?' collapsed':'');
+  box.innerHTML =
+    '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
+    + (b.date?'<span class="bdate">'+esc(b.date)+' 기준</span>':'') + stale
+    + '<button class="btoggle" id="briefToggle">'+(briefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
+    + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
+    + '<div class="bbody">'+body+'</div>'
+    + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'');
 }
 
 function renderInsights(){
@@ -690,6 +747,7 @@ function renderSource(){
 }
 
 function render(){
+  renderBrief();
   renderInsights();
   renderOverview();
   renderPeriodBar(); renderSource();
@@ -876,6 +934,9 @@ function wire(){
     const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
+  $('#brief').onclick = e=>{ if(e.target.closest('#briefToggle')){
+    briefCollapsed=!briefCollapsed; localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0');
+    renderBrief(); } };
   $('#insights').onclick = e=>{
     const kw=e.target.closest('[data-kw]');
     if(kw){ state.q=kw.getAttribute('data-kw'); $('#q').value=state.q; state.limit=PAGE;

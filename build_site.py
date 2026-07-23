@@ -16,8 +16,10 @@
 """
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import news_config as ncfg
 import news_source
@@ -25,6 +27,20 @@ import news_archive
 import patent_archive
 import patent_source
 import site_render
+
+
+def _load_brief() -> dict | None:
+    """저장소에 커밋된 서술형 브리핑(brief.json)을 읽는다. 반자동(사람이 갱신·커밋)이라
+    수집·빌드 자동화와 분리돼 있고, 파일이 없거나 깨지면 조용히 건너뛴다(뉴스는 정상)."""
+    f = Path(__file__).resolve().parent / "brief.json"
+    if not f.exists():
+        return None
+    try:
+        obj = json.loads(f.read_text(encoding="utf-8"))
+        return obj or None
+    except Exception as e:
+        print(f"[경고] brief.json 읽기 실패(무시): {e}")
+        return None
 
 
 def _collect_arg() -> str:
@@ -65,7 +81,11 @@ def main() -> None:
     # ── 저장 + 전체 사이트 재생성 ──
     news_archive.save(ncfg.SITE_DIR, news_days, generated)
     patent_archive.save(ncfg.SITE_DIR, patent_weeks, generated)
-    index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks, generated)
+    brief = _load_brief()
+    if brief:
+        print(f"  브리핑: {brief.get('date', '?')} — {brief.get('headline', '')[:40]}…")
+    index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
+                                   generated, brief=brief)
 
     nt = sum(len(d.get("articles", [])) for d in news_days.values())
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())
