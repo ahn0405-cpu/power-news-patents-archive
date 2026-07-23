@@ -33,9 +33,10 @@ def _build_url(term: str, country: str, cpc: str = "") -> str:
     # 절대 날짜창(before/after=publication:...) 대신 sort=new(최신 공개순)를 쓴다.
     # 날짜창은 실행 환경 시계가 실제와 어긋나면(미래 날짜) 결과가 0이 되기 때문.
     # '최신순 상위 N + 아카이브 중복제거'로 매주 새로 공개된 특허만 누적한다.
-    # q 는 따옴표로 감싼 '구문검색' → 느슨한 다중어 매칭 방지.
-    # cpc(특허분류) 를 주면 해당 기술영역으로 결과를 잠근다(무선통신·AI 특허 배제).
-    inner = f'q="{term}"&country={country}&sort=new'
+    # 제목 필드 정확검색: q=TI="용어" → 제목에 그 용어가 있어야 매칭.
+    # (Actions 프로브로 지원·정밀도 실측 확인. 무선통신·AI 특허는 제목이 달라 배제됨.)
+    # cpc 는 옵션(제공 시 AND 로 추가 잠금). 콤마 멀티CPC 는 AND(교집합)라 쓰지 않는다.
+    inner = f'q=TI="{term}"&country={country}&sort=new'
     if cpc:
         inner += f"&cpc={cpc}"
     return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
@@ -134,7 +135,8 @@ def _live_collect() -> list[dict]:
                         break
                 if added_c >= cfg.PER_COUNTRY_LIMIT:
                     break
-        print(f"  · {cat['emoji']} {cat['name']}: {cat_added}건")
+        samp = [c["title"][:34] for c in collected if c["category"] == cat["key"]][:3]
+        print(f"  · {cat['emoji']} {cat['name']}: {cat_added}건 | " + " / ".join(samp))
     if not collected and errors >= total_q:
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected

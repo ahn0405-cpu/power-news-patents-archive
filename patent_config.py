@@ -31,32 +31,32 @@ COUNTRY_LABEL = {"KR": ("🇰🇷", "한국"), "US": ("🇺🇸", "미국")}
 
 # 카테고리별 특허 검색어 (뉴스와 같은 key/emoji/name, 검색어만 기술용어로 튜닝)
 CATEGORIES = [
-    # cpc: 해당 카테고리로 결과를 좁히는 CPC(특허분류) 접두. 전력=H02, 원자력=G21,
-    # 배터리=H01M 등. 무선통신(H04)·AI(G06N) 특허가 키워드에 걸려도 분류가 달라 배제된다.
+    # 검색은 제목 정확검색(q=TI="용어"). 용어는 '특허 제목에 실제로 등장하는 정밀 전력 용어'
+    # 로 고른다 → 무선통신·AI 특허는 제목이 달라 배제. cpc 는 옵션(기본 미사용; 필요 시 AND 잠금).
     {"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리",
-     "kr": ["전력수요관리", "수요반응", "피크저감"],
-     "en": ["power demand response", "electric power demand management"], "cpc": "H02J"},
+     "kr": ["수요반응", "전력수요 예측", "피크저감"],
+     "en": ["demand response", "peak shaving"], "cpc": ""},
     {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망",
-     "kr": ["송전선로", "변전소", "전력계통 안정화", "변압기"],
-     "en": ["electric power transmission", "electrical substation", "power transformer"], "cpc": "H02"},
+     "kr": ["송전선로", "변전소", "변압기", "보호계전기"],
+     "en": ["power transmission", "substation", "power transformer"], "cpc": ""},
     {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
-     "kr": ["소형모듈원자로", "원자로 냉각계통"],
-     "en": ["small modular reactor", "nuclear power plant"], "cpc": "G21"},
+     "kr": ["소형모듈원자로", "원자력발전"],
+     "en": ["small modular reactor", "nuclear reactor"], "cpc": ""},
     {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장",
-     "kr": ["에너지저장장치", "해상풍력", "태양광 발전"],
-     "en": ["battery energy storage system", "photovoltaic power generation"], "cpc": ""},
+     "kr": ["에너지저장장치", "해상풍력", "태양광발전"],
+     "en": ["energy storage system", "offshore wind", "photovoltaic"], "cpc": ""},
     {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·전원장치",
-     "kr": ["무정전 전원장치", "데이터센터 전력공급"],
-     "en": ["uninterruptible power supply", "data center power distribution"], "cpc": "H02"},
+     "kr": ["무정전전원장치", "데이터센터 전원"],
+     "en": ["uninterruptible power supply", "data center power"], "cpc": ""},
     {"key": "mega", "emoji": "🏗️", "name": "전력반도체·팹 전력",
-     "kr": ["전력반도체", "전력변환 모듈"],
-     "en": ["power semiconductor device", "power conversion module"], "cpc": "H02M"},
+     "kr": ["전력반도체", "전력변환장치"],
+     "en": ["power semiconductor", "power converter"], "cpc": ""},
     {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드",
-     "kr": ["전력량계", "스마트미터", "스마트그리드"],
-     "en": ["smart electricity meter", "smart power grid"], "cpc": ""},
+     "kr": ["전력량계", "스마트그리드"],
+     "en": ["smart meter", "smart grid"], "cpc": ""},
     {"key": "industry", "emoji": "🏭", "name": "전력설비·기기",
-     "kr": ["가스절연 개폐장치", "초고압 케이블", "전력용 차단기"],
-     "en": ["gas insulated switchgear", "high voltage power cable"], "cpc": ""},
+     "kr": ["가스절연개폐장치", "초고압케이블", "차단기"],
+     "en": ["gas insulated switchgear", "high voltage cable", "circuit breaker"], "cpc": ""},
 ]
 
 CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
