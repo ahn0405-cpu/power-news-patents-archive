@@ -7,6 +7,10 @@ on:
   schedule:
     - cron: "0 23 * * *"   # 08:00 KST 매일
   workflow_dispatch: {}    # Actions 탭에서 손으로 즉시 실행
+  push:
+    branches: [main]
+    paths:
+      - brief.json         # 서술형 브리핑 갱신(커밋) 시 즉시 재배포 (주간 Routine이 이 경로로 커밋)
 
 # gh-pages 브랜치에 사이트를 push 하려면 write 필요
 permissions:
