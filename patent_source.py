@@ -133,8 +133,7 @@ def _live_collect() -> list[dict]:
                     break
             if added >= cfg.PER_CATEGORY_LIMIT:
                 break
-        samp = [c["title"][:34] for c in collected if c["category"] == cat["key"]][:3]
-        print(f"  · {cat['emoji']} {cat['name']} (cpc={cat.get('cpc','')or'-'}): {added}건 | " + " / ".join(samp))
+        print(f"  · {cat['emoji']} {cat['name']}: {added}건")
     if not collected and errors >= total_q:
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected
