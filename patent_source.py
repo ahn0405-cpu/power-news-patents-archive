@@ -25,7 +25,7 @@ _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 _BASE = "https://patents.google.com/xhr/query"
 
 
-def _build_url(term: str, country: str) -> str:
+def _build_url(term: str, country: str, cpc: str = "") -> str:
     # 내부 검색 질의(q=키워드&country=..&sort=new)를 통째로 url= 파라미터에 '한 번만'
     # 인코딩해 넣는다. urlencode 로 미리 인코딩한 뒤 다시 quote 하면 특수문자가
     # 이중 인코딩돼 엔드포인트가 500 을 반환한다.
@@ -33,7 +33,11 @@ def _build_url(term: str, country: str) -> str:
     # 절대 날짜창(before/after=publication:...) 대신 sort=new(최신 공개순)를 쓴다.
     # 날짜창은 실행 환경 시계가 실제와 어긋나면(미래 날짜) 결과가 0이 되기 때문.
     # '최신순 상위 N + 아카이브 중복제거'로 매주 새로 공개된 특허만 누적한다.
-    inner = f"q={term}&country={country}&sort=new"
+    # q 는 따옴표로 감싼 '구문검색' → 느슨한 다중어 매칭 방지.
+    # cpc(특허분류) 를 주면 해당 기술영역으로 결과를 잠근다(무선통신·AI 특허 배제).
+    inner = f'q="{term}"&country={country}&sort=new'
+    if cpc:
+        inner += f"&cpc={cpc}"
     return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
 
 
@@ -44,8 +48,8 @@ def _parse_json(raw: bytes) -> dict:
     return json.loads(text)
 
 
-def _fetch(term: str, country: str) -> list[dict]:
-    url = _build_url(term, country)
+def _fetch(term: str, country: str, cpc: str = "") -> list[dict]:
+    url = _build_url(term, country, cpc)
     req = urllib.request.Request(url, headers={
         "User-Agent": _UA, "Accept": "application/json",
         "Referer": "https://patents.google.com/",
@@ -110,7 +114,7 @@ def _live_collect() -> list[dict]:
             for term in terms:
                 total_q += 1
                 try:
-                    items = _fetch(term, country)
+                    items = _fetch(term, country, cat.get("cpc", ""))
                 except Exception as e:
                     errors += 1
                     print(f"  ! [{cat['name']}/{country}] '{term}' 실패: {e}")
@@ -129,7 +133,8 @@ def _live_collect() -> list[dict]:
                     break
             if added >= cfg.PER_CATEGORY_LIMIT:
                 break
-        print(f"  · {cat['emoji']} {cat['name']}: {added}건")
+        samp = [c["title"][:34] for c in collected if c["category"] == cat["key"]][:3]
+        print(f"  · {cat['emoji']} {cat['name']} (cpc={cat.get('cpc','')or'-'}): {added}건 | " + " / ".join(samp))
     if not collected and errors >= total_q:
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected
