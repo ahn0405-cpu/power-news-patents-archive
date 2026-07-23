@@ -26,16 +26,21 @@ _BASE = "https://patents.google.com/xhr/query"
 
 
 def _build_url(term: str, country: str, after: str, before: str) -> str:
-    # 내부 검색 질의(q=키워드&country=..&before/after=publication:YYYYMMDD&num=100)를
-    # 통째로 url= 파라미터에 인코딩해 넣는 방식.
-    inner = urllib.parse.urlencode({
-        "q": term,
-        "country": country,
-        "before": f"publication:{before}",
-        "after": f"publication:{after}",
-        "num": "100",
-    })
-    return f"{_BASE}?url={urllib.parse.quote(inner)}&exp="
+    # 내부 검색 질의(q=키워드&country=..&before/after=publication:YYYYMMDD)를 통째로
+    # url= 파라미터에 '한 번만' 인코딩해 넣는다. urlencode 로 미리 인코딩한 뒤 다시
+    # quote 하면 ':' 등이 이중 인코딩(%253A)돼 엔드포인트가 500 을 반환한다.
+    inner = (f"q={term}"
+             f"&country={country}"
+             f"&before=publication:{before}"
+             f"&after=publication:{after}")
+    return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
+
+
+def _parse_json(raw: bytes) -> dict:
+    text = raw.decode("utf-8", "replace").lstrip()
+    if text.startswith(")]}'"):      # XSSI 보호 프리픽스 제거
+        text = text.split("\n", 1)[-1]
+    return json.loads(text)
 
 
 def _fetch(term: str, country: str, after: str, before: str) -> list[dict]:
@@ -45,7 +50,7 @@ def _fetch(term: str, country: str, after: str, before: str) -> list[dict]:
         "Referer": "https://patents.google.com/",
     })
     with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        data = json.loads(r.read().decode("utf-8", "replace"))
+        data = _parse_json(r.read())
     out = []
     clusters = (data.get("results", {}) or {}).get("cluster", []) or []
     for cl in clusters:
