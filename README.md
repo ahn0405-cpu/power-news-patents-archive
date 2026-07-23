@@ -1,0 +1,1 @@
+# power-news-patents-archive
