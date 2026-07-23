@@ -108,8 +108,10 @@ def _live_collect() -> list[dict]:
     errors = 0
     total_q = 0
     for cat in cfg.CATEGORIES:
-        added = 0
+        cat_added = 0
         for country in cfg.COUNTRIES:
+            # 국가별로 상한을 따로 둔다 → 먼저 조회한 나라가 카테고리 몫을 독식하지 않게.
+            added_c = 0
             terms = cat["kr"] if country == "KR" else cat["en"]
             for term in terms:
                 total_q += 1
@@ -126,14 +128,13 @@ def _live_collect() -> list[dict]:
                     seen.add(key)
                     it["category"] = cat["key"]
                     collected.append(it)
-                    added += 1
-                    if added >= cfg.PER_CATEGORY_LIMIT:
+                    added_c += 1
+                    cat_added += 1
+                    if added_c >= cfg.PER_COUNTRY_LIMIT:
                         break
-                if added >= cfg.PER_CATEGORY_LIMIT:
+                if added_c >= cfg.PER_COUNTRY_LIMIT:
                     break
-            if added >= cfg.PER_CATEGORY_LIMIT:
-                break
-        print(f"  · {cat['emoji']} {cat['name']}: {added}건")
+        print(f"  · {cat['emoji']} {cat['name']}: {cat_added}건")
     if not collected and errors >= total_q:
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected

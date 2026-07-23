@@ -22,6 +22,8 @@ COUNTRIES = ["KR", "US"]                 # 한국·미국
 LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "7"))
 PER_QUERY_LIMIT = int(os.getenv("PATENT_PER_QUERY", "20"))
 PER_CATEGORY_LIMIT = int(os.getenv("PATENT_PER_CATEGORY", "18"))
+# 카테고리·국가별 상한(한국/미국 균형 수집). 카테고리당 최대 = 국가수 × 이 값.
+PER_COUNTRY_LIMIT = int(os.getenv("PATENT_PER_COUNTRY", "10"))
 REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "25"))
 MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)   # auto | on | off
 
