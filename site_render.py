@@ -292,21 +292,16 @@ a{color:inherit}
 .trend .d{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;white-space:nowrap}
 .trend .d .n{color:var(--muted);font-weight:600}
 .trend .up{color:var(--accent)}.trend .dn{color:var(--muted)}.trend .fl{color:var(--muted)}
-.cross{display:flex;flex-direction:column;gap:8px}
-.cross .row{display:grid;grid-template-columns:1fr;gap:3px;cursor:pointer;border-radius:6px;padding:3px 4px;margin:0 -4px}
-.cross .row:hover{background:var(--bg)}
-.cross .top{display:flex;justify-content:space-between;align-items:center;font-size:12.5px}
-.cross .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cross .b{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--bg)}
-.cross .bn{background:var(--accent);height:100%}
-.cross .bp{background:var(--accent2);height:100%}
-.cross .mini{font-size:10.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
-.cross .both{color:var(--accent);font-weight:800;margin-left:5px}
-.ilegend{display:flex;gap:12px;font-size:10.5px;color:var(--muted);margin-top:9px}
-.ilegend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;
-  margin-right:4px;vertical-align:middle}
-.ilegend .ln::before{background:var(--accent)}
-.ilegend .lp::before{background:var(--accent2)}
+.ppick{display:flex;flex-direction:column;gap:2px}
+.ppick .pk{display:flex;gap:8px;align-items:flex-start;text-decoration:none;color:var(--ink);
+  padding:6px 4px;border-radius:6px;margin:0 -4px;border-bottom:1px solid var(--line)}
+.ppick .pk:last-child{border-bottom:0}
+.ppick .pk:hover{background:var(--bg)}
+.ppick .pf{font-size:13px;line-height:1.5;flex:none}
+.ppick .pt2{font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.ppick .pk:hover .pt2{color:var(--accent2)}
+.ppick .who{color:var(--muted);font-size:11px;margin-left:6px;white-space:nowrap}
 .iempty{color:var(--muted);font-size:12px}
 @media (max-width:820px){ .insights{grid-template-columns:1fr} }
 /* 컨트롤 */
@@ -664,17 +659,16 @@ function renderInsights(){
       +'<span class="'+cls+'">'+dd+'</span></div></div>';
   }).join('') : '<span class="iempty">–</span>';
 
-  // 3) 뉴스↔특허 교차 (둘 다 활발한 주제)
-  const cx = (ins.cross||[]).filter(r=>r.news||r.patent).slice(0,6);
-  const maxAll = Math.max(1, ...cx.map(r=>Math.max(r.news, r.patent)));
-  const cxHtml = cx.length ? cx.map(r=>{
-    const wn=(r.news/maxAll*100).toFixed(0), wp=(r.patent/maxAll*100).toFixed(0);
-    const both=r.both?'<span class="both" title="뉴스·특허 동시 활발">◆</span>':'';
-    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터">'
-      +'<div class="top"><div class="nm">'+r.emoji+' '+esc(r.name)+both+'</div>'
-      +'<div class="mini">📰'+r.news+' · 📄'+r.patent+'</div></div>'
-      +'<div class="b"><div class="bn" style="width:'+wn+'%"></div><div class="bp" style="width:'+wp+'%"></div></div></div>';
-  }).join('') : '<span class="iempty">–</span>';
+  // 3) 이번 주 공개 특허 (질적 노출 — 건수 아님). 최신 주 특허 중 최근 공개분 일부.
+  const picks = patentPicks(5);
+  const cos = FEED.patents.countries;
+  const pkHtml = picks.length ? picks.map(p=>{
+    const co=(cos.find(x=>x.code===p.country))||{emoji:''};
+    const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
+    return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
+      +'<span class="pf">'+(co.emoji||'📄')+'</span>'
+      +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
+  }).join('') : '<span class="iempty">이번 주 공개 특허가 아직 없습니다.</span>';
 
   box.innerHTML =
     '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
@@ -683,10 +677,19 @@ function renderInsights(){
     + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
     + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비)</p>'
     + '<div class="trend">'+ctHtml+'</div></div>'
-    + '<div class="ipanel"><h3>🔀 뉴스 × 특허</h3>'
-    + '<p class="isub">최근 '+w.recentDays+'일 뉴스 · '+w.recentWeeks+'주 특허. <b>◆</b>=둘 다 활발</p>'
-    + '<div class="cross">'+cxHtml+'</div>'
-    + '<div class="ilegend"><span class="ln">뉴스</span><span class="lp">특허</span></div></div>';
+    + '<div class="ipanel"><h3>📄 이번 주 공개 특허</h3>'
+    + '<p class="isub">최근 공개분 일부 · 무엇을/누가 출원했는지 (건수 아님) · 클릭 시 원문</p>'
+    + '<div class="ppick">'+pkHtml+'</div></div>';
+}
+
+function latestPatentWeek(){ const p=FEED.patents.perWeek; return p.length? p[p.length-1].x : ''; }
+function patentPicks(n){
+  const items = FEED.patents.items.slice();
+  const w = latestPatentWeek();
+  let pool = items.filter(it=>it.week===w);
+  if(pool.length < n) pool = items;                 // 최신 주가 빈약하면 전체에서
+  pool.sort((a,b)=> (Date.parse(b.pub_date||b.week)||0)-(Date.parse(a.pub_date||a.week)||0));
+  return pool.slice(0, n);
 }
 
 function renderOverview(){
