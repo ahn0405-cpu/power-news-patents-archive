@@ -30,45 +30,63 @@ _SUFFIX_KEYS = ["주식회사", "유한회사", "coltd", "co", "ltd", "limited",
                 "corp", "corporation", "llc", "gmbh", "company", "plc", "sa",
                 "nv", "ag", "holdings", "kk", "ep", "lp"]
 
+# (대표명, 국적 ISO2, [별칭 키...])
 _ALIAS_RAW = [
-    ("삼성전자", ["삼성전자", "samsungelectronics", "samsungelec"]),
-    ("삼성SDI", ["삼성sdi", "samsungsdi"]),
-    ("삼성전기", ["삼성전기", "samsungelectromechanics"]),
-    ("삼성디스플레이", ["삼성디스플레이", "samsungdisplay"]),
-    ("SK하이닉스", ["sk하이닉스", "skhynix"]),
-    ("SK온", ["sk온", "skon"]),
-    ("LG에너지솔루션", ["lg에너지솔루션", "lgenergysolution"]),
-    ("LG전자", ["lg전자", "lgelectronics"]),
-    ("LG화학", ["lg화학", "lgchem"]),
-    ("LG디스플레이", ["lg디스플레이", "lgdisplay"]),
-    ("현대자동차", ["현대자동차", "hyundaimotor", "hyundaimotorcompany"]),
-    ("기아", ["기아", "기아자동차", "kia", "kiamotors"]),
-    ("현대모비스", ["현대모비스", "hyundaimobis"]),
-    ("현대일렉트릭", ["현대일렉트릭", "hyundaielectric"]),
-    ("한국전력공사", ["한국전력공사", "한국전력", "kepco", "koreaelectricpower"]),
-    ("한국수력원자력", ["한국수력원자력", "khnp", "koreahydronuclearpower"]),
-    ("한국전기연구원", ["한국전기연구원", "keri"]),
-    ("한국에너지기술연구원", ["한국에너지기술연구원", "kier"]),
-    ("한국전자통신연구원", ["한국전자통신연구원", "etri"]),
-    ("LS일렉트릭", ["ls일렉트릭", "lselectric"]),
-    ("LS전선", ["ls전선", "lscable", "lscns"]),
-    ("효성중공업", ["효성중공업", "hyosungheavyindustries"]),
-    ("두산에너빌리티", ["두산에너빌리티", "doosanenerbility", "두산중공업", "doosanheavyindustries"]),
-    ("포스코", ["포스코", "posco", "포스코홀딩스"]),
-    ("한화솔루션", ["한화솔루션", "hanwhasolutions"]),
-    ("Qualcomm", ["qualcomm"]),
-    ("Intel", ["intel"]),
-    ("TSMC", ["tsmc", "taiwansemiconductormanufacturing"]),
-    ("Micron", ["micron", "microntechnology"]),
-    ("Applied Materials", ["appliedmaterials"]),
-    ("Siemens", ["siemens"]),
-    ("Panasonic", ["panasonic"]),
-    ("Toyota", ["toyota", "toyotamotor"]),
-    ("Tesla", ["tesla"]),
-    ("Google", ["google"]),
-    ("Apple", ["apple"]),
+    ("삼성전자", "KR", ["삼성전자", "samsungelectronics", "samsungelec"]),
+    ("삼성SDI", "KR", ["삼성sdi", "samsungsdi"]),
+    ("삼성전기", "KR", ["삼성전기", "samsungelectromechanics"]),
+    ("삼성디스플레이", "KR", ["삼성디스플레이", "samsungdisplay"]),
+    ("SK하이닉스", "KR", ["sk하이닉스", "skhynix"]),
+    ("SK온", "KR", ["sk온", "skon"]),
+    ("LG에너지솔루션", "KR", ["lg에너지솔루션", "lgenergysolution"]),
+    ("LG전자", "KR", ["lg전자", "lgelectronics"]),
+    ("LG화학", "KR", ["lg화학", "lgchem"]),
+    ("LG디스플레이", "KR", ["lg디스플레이", "lgdisplay"]),
+    ("현대자동차", "KR", ["현대자동차", "hyundaimotor", "hyundaimotorcompany"]),
+    ("기아", "KR", ["기아", "기아자동차", "kia", "kiamotors"]),
+    ("현대모비스", "KR", ["현대모비스", "hyundaimobis"]),
+    ("현대일렉트릭", "KR", ["현대일렉트릭", "hyundaielectric"]),
+    ("한국전력공사", "KR", ["한국전력공사", "한국전력", "kepco", "koreaelectricpower"]),
+    ("한국수력원자력", "KR", ["한국수력원자력", "khnp", "koreahydronuclearpower"]),
+    ("한국전기연구원", "KR", ["한국전기연구원", "keri"]),
+    ("한국에너지기술연구원", "KR", ["한국에너지기술연구원", "kier"]),
+    ("한국전자통신연구원", "KR", ["한국전자통신연구원", "etri"]),
+    ("LS일렉트릭", "KR", ["ls일렉트릭", "lselectric"]),
+    ("LS전선", "KR", ["ls전선", "lscable", "lscns"]),
+    ("효성중공업", "KR", ["효성중공업", "hyosungheavyindustries"]),
+    ("두산에너빌리티", "KR", ["두산에너빌리티", "doosanenerbility", "두산중공업", "doosanheavyindustries"]),
+    ("포스코", "KR", ["포스코", "posco", "포스코홀딩스"]),
+    ("한화솔루션", "KR", ["한화솔루션", "hanwhasolutions"]),
+    ("Qualcomm", "US", ["qualcomm"]),
+    ("Intel", "US", ["intel"]),
+    ("Micron", "US", ["micron", "microntechnology"]),
+    ("Applied Materials", "US", ["appliedmaterials"]),
+    ("General Electric", "US", ["generalelectric"]),
+    ("Tesla", "US", ["tesla"]),
+    ("Google", "US", ["google"]),
+    ("Apple", "US", ["apple"]),
+    ("Westinghouse", "US", ["westinghouse", "westinghouseelectric"]),
+    ("TSMC", "TW", ["tsmc", "taiwansemiconductormanufacturing"]),
+    ("Siemens", "DE", ["siemens"]),
+    ("Bosch", "DE", ["bosch", "robertbosch"]),
+    ("Panasonic", "JP", ["panasonic"]),
+    ("Toyota", "JP", ["toyota", "toyotamotor"]),
+    ("Sony", "JP", ["sony"]),
+    ("CATL", "CN", ["catl", "contemporaryamperextechnology"]),
+    ("BYD", "CN", ["byd"]),
 ]
-_ALIASES = {a: canon for canon, al in _ALIAS_RAW for a in al}
+_ALIASES = {a: canon for canon, _co, al in _ALIAS_RAW for a in al}
+_CANON_CO = {canon: co for canon, co, _al in _ALIAS_RAW}
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def _assignee_country(canon: str, original: str) -> str:
+    """출원인 국적 추정(ISO2). 큐레이션 매핑 우선, 없으면 한글 포함 시 KR, 그 외 미상('')."""
+    if canon in _CANON_CO:
+        return _CANON_CO[canon]
+    if _HANGUL.search(original or ""):
+        return "KR"
+    return ""
 
 
 def _akey(s: str) -> str:
@@ -133,6 +151,7 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
                 "title": p.get("title", ""), "url": p.get("url", ""),
                 "assignee": p.get("assignee", ""), "number": p.get("number", ""),
                 "aName": _canon_assignee(p.get("assignee", "")),
+                "aCountry": _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", "")),
                 "pub_date": p.get("pub_date"), "summary": p.get("snippet", ""),
                 "category": p.get("category", "etc"), "country": p.get("country", ""),
                 "week": wk, "mock": mock,
@@ -298,8 +317,19 @@ a{color:inherit}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
+.natwrap{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
+.tilemap{display:grid;grid-template-columns:repeat(11,1fr);gap:3px}
+.tilemap .cell{aspect-ratio:1/.85;border-radius:5px;border:1px solid var(--line);background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1}
+.tilemap .cell .cv{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px}
+.natbars{display:flex;flex-direction:column;gap:8px}
+.natbars .row{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:9px;font-size:13px}
+.natbars .bar{height:14px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.natbars .val{font-weight:700;font-variant-numeric:tabular-nums}
+.unknown{color:var(--muted);font-size:12px;margin-top:8px}
 @media (max-width:820px){
 .stats{grid-template-columns:1fr}
+.natwrap{grid-template-columns:1fr}
 .lead .row{grid-template-columns:120px 1fr auto}
   .overview{grid-template-columns:repeat(2,1fr)}
   .tile.spark{grid-column:1 / -1}
@@ -363,6 +393,17 @@ const $ = s => document.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LS_KEY = 'pnp_lastVisit';
 const lastVisit = Number(localStorage.getItem(LS_KEY) || 0);
+
+// 타일 그리드 세계지도용 국가 배치(대략 지리적 위치, 11열×5행). 지리 데이터 불필요.
+const CGRID = {
+  CA:{f:'🇨🇦',n:'캐나다',c:2,r:1}, US:{f:'🇺🇸',n:'미국',c:2,r:2}, MX:{f:'🇲🇽',n:'멕시코',c:2,r:3}, BR:{f:'🇧🇷',n:'브라질',c:3,r:4},
+  GB:{f:'🇬🇧',n:'영국',c:5,r:1}, SE:{f:'🇸🇪',n:'스웨덴',c:6,r:1}, FI:{f:'🇫🇮',n:'핀란드',c:7,r:1},
+  NL:{f:'🇳🇱',n:'네덜란드',c:5,r:2}, DE:{f:'🇩🇪',n:'독일',c:6,r:2},
+  FR:{f:'🇫🇷',n:'프랑스',c:5,r:3}, CH:{f:'🇨🇭',n:'스위스',c:6,r:3},
+  ES:{f:'🇪🇸',n:'스페인',c:5,r:4}, IT:{f:'🇮🇹',n:'이탈리아',c:6,r:4}, IL:{f:'🇮🇱',n:'이스라엘',c:7,r:4},
+  RU:{f:'🇷🇺',n:'러시아',c:9,r:1}, CN:{f:'🇨🇳',n:'중국',c:9,r:2}, KR:{f:'🇰🇷',n:'한국',c:10,r:2}, JP:{f:'🇯🇵',n:'일본',c:11,r:2},
+  IN:{f:'🇮🇳',n:'인도',c:8,r:3}, TW:{f:'🇹🇼',n:'대만',c:10,r:3}, SG:{f:'🇸🇬',n:'싱가포르',c:9,r:4}, AU:{f:'🇦🇺',n:'호주',c:10,r:5}
+};
 
 const state = { tab:'news', view:'list', q:'', cats:new Set(), countries:new Set(), sort:'new', newonly:false, limit:PAGE };
 
@@ -535,6 +576,21 @@ function renderStats(list){
       + '<td class="c" style="font-weight:700">'+rowTot+'</td></tr>';
   }).join('');
 
+  // 출원인 국적(추정) — 타일 그리드 지도 + 국가 랭킹
+  const byN={}; let unknown=0;
+  list.forEach(it=>{ const c=it.aCountry; if(!c){unknown++;return;} byN[c]=(byN[c]||0)+1; });
+  const maxN=Math.max(1,...Object.values(byN));
+  const cells=Object.keys(CGRID).map(iso=>{ const g=CGRID[iso], v=byN[iso]||0;
+    const bg=v?('background:rgba(232,163,61,'+(0.2+v/maxN*0.72).toFixed(2)+');border-color:transparent'):'';
+    return '<div class="cell" style="grid-column:'+g.c+';grid-row:'+g.r+';'+bg+'" title="'+g.n+' '+v+'건">'
+      + g.f+'<span class="cv">'+(v||'')+'</span></div>'; }).join('');
+  const natRanked=Object.entries(byN).sort((a,b)=>b[1]-a[1]);
+  const denom=list.length||1;
+  const natRows=natRanked.map(([iso,v])=>{ const g=CGRID[iso]||{f:'🏳️',n:iso};
+    const w=Math.max(2,v/maxN*100), pct=(v/denom*100).toFixed(0);
+    return '<div class="row"><span>'+g.f+' '+esc(g.n)+'</span><div class="bar" style="width:'+w+'%"></div>'
+      + '<span class="val">'+v+' <span style="color:var(--muted);font-weight:500">('+pct+'%)</span></span></div>'; }).join('');
+
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
       + '<div><div class="k">대상 특허</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
@@ -542,6 +598,12 @@ function renderStats(list){
       + '<div><div class="k">최다 출원인</div><div class="v">'+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
       + '</div></div>'
+    + '<div class="panel wide"><h3>🗺️ 출원인 국적 (추정)</h3>'
+      + '<p class="sub">출원인 이름으로 추정한 국적(대기업 매핑 + 한글명은 한국). 위 \'공개청\'과는 다른 개념입니다.'
+        + (unknown? ' · 추정 미상 '+unknown+'건' : '') + '</p>'
+      + '<div class="natwrap"><div class="tilemap">'+cells+'</div>'
+      + '<div class="natbars">'+(natRows||'<span class="unknown">추정 가능한 국적이 없습니다.</span>')
+        + (unknown? '<div class="unknown">🏳️ 미상 '+unknown+'건 (매핑 안 된 출원인)</div>':'') + '</div></div></div>'
     + '<div class="panel wide"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'명</span></h3>'
       + '<p class="sub">현재 필터(카테고리·국가·검색) 기준 누적 출원 건수. 오른쪽은 공개청별 내역.</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
