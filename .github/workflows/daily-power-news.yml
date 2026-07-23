@@ -22,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 코드 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0    # gh-pages 브랜치 접근용
 
       - name: 파이썬 설정
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
         # 의존성 없음 — news_* 모듈은 표준 라이브러리만 사용
@@ -67,7 +67,7 @@ jobs:
 
       - name: 사이트 아티팩트 업로드 (백업)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: power-news-site-${{ github.run_id }}
           path: site/
