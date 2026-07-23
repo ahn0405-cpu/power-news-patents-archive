@@ -394,10 +394,13 @@ a{color:inherit}
 .dist .row{display:grid;grid-template-columns:88px 1fr auto;align-items:center;gap:10px;font-size:13px}
 .dist .bar{height:16px;background:var(--accent2);border-radius:0 4px 4px 0;min-width:2px}
 .dist .val{font-weight:700;font-variant-numeric:tabular-nums}
-.heat{width:100%;border-collapse:separate;border-spacing:2px;font-size:12.5px}
-.heat th{font-weight:600;color:var(--muted);text-align:center;padding:3px;font-size:11.5px}
-.heat td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px}
-.heat td.c{text-align:center;border-radius:5px;font-variant-numeric:tabular-nums;min-width:44px;padding:6px 4px}
+.catlead{display:flex;flex-direction:column;gap:11px}
+.catlead .crow{display:flex;flex-direction:column;gap:5px}
+.catlead .clab{font-size:12.5px;font-weight:700}
+.catlead .ctops{display:flex;flex-wrap:wrap;gap:5px}
+.catlead .cta{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;
+  display:inline-flex;align-items:center;gap:5px;background:var(--bg)}
+.catlead .cta .ctn{color:var(--accent2);font-weight:700;font-variant-numeric:tabular-nums;font-size:10.5px}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
@@ -818,19 +821,18 @@ function renderStats(list){
       + '<div class="bar" style="width:'+w+'%"></div><span class="val">'+v
       + ' <span style="color:var(--muted);font-weight:500">('+pct+'%)</span></span></div>';
   }).join('');
-  // 카테고리 × 공개청 히트맵
-  const grid = {}; let maxCell=1;
-  list.forEach(it=>{ const k=it.category+'|'+it.country; grid[k]=(grid[k]||0)+1; if(grid[k]>maxCell)maxCell=grid[k]; });
-  const heatHead = '<tr><th></th>'+countries.map(c=>'<th>'+c.emoji+' '+esc(c.name)+'</th>').join('')+'<th>합계</th></tr>';
-  const heatBody = cats.map(cat=>{
-    let rowTot=0;
-    const cells = countries.map(c=>{
-      const v=grid[cat.key+'|'+c.code]||0; rowTot+=v;
-      const a=(v/maxCell*0.8).toFixed(2);
-      return '<td class="c" style="background:rgba(232,163,61,'+a+')">'+(v||'·')+'</td>';
-    }).join('');
-    return '<tr><td class="lab">'+cat.emoji+' '+esc(cat.name)+'</td>'+cells
-      + '<td class="c" style="font-weight:700">'+rowTot+'</td></tr>';
+  // 카테고리별 주요 출원인 — 각 분야 표본에서 자주 등장한 출원인(상한 영향 적음).
+  // (카테고리 간 '건수' 비교는 수집 상한으로 포화돼 의미가 없어, '누가'로 대체)
+  const byCatA = {};
+  list.forEach(it=>{ const k=it.category, nm=it.aName||'(출원인 미상)';
+    (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1; });
+  const catLeadRows = cats.filter(c=>byCatA[c.key]).map(c=>{
+    const entries=Object.entries(byCatA[c.key])
+      .filter(([n])=>n!=='(출원인 미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    const chips=entries.slice(0,3).map(([n,v])=>
+      '<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
+    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div>'
+      + '<div class="ctops">'+(chips||'<span class="unknown">출원인 미상</span>')+'</div></div>';
   }).join('');
 
   // 출원인 국적(추정) — 타일 그리드 지도 + 국가 랭킹
@@ -864,10 +866,12 @@ function renderStats(list){
     + '<div class="panel wide"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'명</span></h3>'
       + '<p class="sub">현재 필터(카테고리·국가·검색) 기준 누적 출원 건수. 오른쪽은 공개청별 내역.</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
-    + '<div class="panel"><h3>🌐 공개청 분포</h3><p class="sub">특허가 공개된 특허청 기준(출원인 국적과 다를 수 있음).</p>'
+    + '<div class="panel"><h3>🌐 공개청 분포</h3><p class="sub">특허가 공개된 특허청 기준(출원인 국적과 다를 수 있음). '
+      + '국가별 수집 상한이 있어 필터가 없으면 KR·US가 비슷하게 나옵니다.</p>'
       + '<div class="dist">'+distRows+'</div></div>'
-    + '<div class="panel"><h3>🔥 카테고리 × 공개청</h3><p class="sub">색이 진할수록 건수 많음.</p>'
-      + '<table class="heat"><thead>'+heatHead+'</thead><tbody>'+heatBody+'</tbody></table></div>'
+    + '<div class="panel"><h3>🏭 카테고리별 주요 출원인</h3>'
+      + '<p class="sub">각 분야 표본에서 자주 등장한 출원인. 카테고리 간 \'건수\'가 아니라 \'누가 그 분야를 이끄는지\'를 봅니다(숫자는 표본 내 등장 횟수).</p>'
+      + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '</div>';
 }
 
