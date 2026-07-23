@@ -20,6 +20,7 @@ from pathlib import Path
 
 import news_config as ncfg
 import patent_config as pcfg
+import insights as _insights
 
 KST = timezone(timedelta(hours=9))
 
@@ -174,6 +175,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
     feed = {
         "generated": generated,
         "title": SITE_TITLE, "tagline": SITE_TAGLINE,
+        "insights": _insights.build(news_days, patent_weeks),
         "news": _news_feed(news_days),
         "patents": _patent_feed(patent_weeks),
     }
@@ -243,6 +245,45 @@ a{color:inherit}
 .sparkwrap{display:flex;flex-direction:column;justify-content:space-between}
 .sparkwrap svg{width:100%;height:38px;display:block;margin-top:4px}
 .sparkwrap .k b{color:var(--accent)}
+/* 트렌드 인사이트 바 */
+.insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
+.insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;box-shadow:var(--shadow);min-width:0}
+.insights h3{font-size:12px;font-weight:800;letter-spacing:.01em;margin:0 0 2px;display:flex;
+  align-items:center;gap:6px}
+.insights .isub{color:var(--muted);font-size:11px;margin:0 0 10px}
+.kwrap{display:flex;flex-wrap:wrap;gap:6px}
+.kw{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--chipbg);color:var(--ink);
+  border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
+.kw:hover{border-color:var(--accent);transform:translateY(-1px)}
+.kw .c{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+.kw .up{color:var(--accent);font-weight:800;font-size:10.5px}
+.kw.hot{border-color:var(--accent)}
+.trend{display:flex;flex-direction:column;gap:7px}
+.trend .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;font-size:12.5px;
+  cursor:pointer;border-radius:6px;padding:2px 4px;margin:0 -4px}
+.trend .row:hover{background:var(--bg)}
+.trend .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend .d{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;white-space:nowrap}
+.trend .d .n{color:var(--muted);font-weight:600}
+.trend .up{color:var(--accent)}.trend .dn{color:var(--muted)}.trend .fl{color:var(--muted)}
+.cross{display:flex;flex-direction:column;gap:8px}
+.cross .row{display:grid;grid-template-columns:1fr;gap:3px;cursor:pointer;border-radius:6px;padding:3px 4px;margin:0 -4px}
+.cross .row:hover{background:var(--bg)}
+.cross .top{display:flex;justify-content:space-between;align-items:center;font-size:12.5px}
+.cross .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cross .b{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--bg)}
+.cross .bn{background:var(--accent);height:100%}
+.cross .bp{background:var(--accent2);height:100%}
+.cross .mini{font-size:10.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cross .both{color:var(--accent);font-weight:800;margin-left:5px}
+.ilegend{display:flex;gap:12px;font-size:10.5px;color:var(--muted);margin-top:9px}
+.ilegend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;
+  margin-right:4px;vertical-align:middle}
+.ilegend .ln::before{background:var(--accent)}
+.ilegend .lp::before{background:var(--accent2)}
+.iempty{color:var(--muted);font-size:12px}
+@media (max-width:820px){ .insights{grid-template-columns:1fr} }
 /* 컨트롤 */
 .controls{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;
   position:sticky;top:0;z-index:5;background:var(--bg);padding-top:8px}
@@ -379,6 +420,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <button data-view="list" aria-pressed="true">목록</button>
     <button data-view="stats" aria-pressed="false">📊 통계</button>
   </div>
+  <section class="insights" id="insights" aria-label="트렌드 인사이트" hidden></section>
   <section class="overview" id="overview" aria-label="개요"></section>
   <div class="controls">
     <div class="searchrow">
@@ -539,6 +581,57 @@ function sparkline(series){
   return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이(막대 클릭 시 그 기간만)">'+bars+'</svg>';
 }
 
+function renderInsights(){
+  const box = $('#insights');
+  const ins = FEED.insights;
+  // 인사이트는 뉴스 홈에서만 노출(뉴스 흐름 + 특허 교차). 특허 탭에선 숨김.
+  if(state.tab!=='news' || !ins || !ins.asOf){ box.hidden=true; box.innerHTML=''; return; }
+  box.hidden=false;
+  const w = ins.window || {recentDays:7, recentWeeks:4};
+
+  // 1) 최근 많이 언급된 키워드 (클릭 → 검색)
+  const kws = (ins.trending||[]);
+  const kwHtml = kws.length ? kws.map(k=>{
+    const up = k.rising ? '<span class="up" title="이전 대비 증가">▲'+(k.count-k.prev)+'</span>' : '';
+    return '<button class="kw'+(k.rising?' hot':'')+'" data-kw="'+esc(k.term)+'" title="'+esc(k.term)
+      +' — 검색">'+esc(k.term)+'<span class="c">'+k.count+'</span>'+up+'</button>';
+  }).join('') : '<span class="iempty">데이터가 쌓이면 표시됩니다.</span>';
+
+  // 2) 이슈 흐름 (카테고리 최근 vs 이전)
+  const ct = (ins.catTrend||[]).slice(0,6);
+  const ctHtml = ct.length ? ct.map(r=>{
+    const d=r.delta; const cls=d>0?'up':(d<0?'dn':'fl'); const sym=d>0?'▲':(d<0?'▼':'–');
+    const dd=d===0?'':(' '+sym+Math.abs(d));
+    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터"><div class="nm">'
+      +r.emoji+' '+esc(r.name)+'</div><div class="d">'+r.recent+'<span class="n">건</span>'
+      +'<span class="'+cls+'">'+dd+'</span></div></div>';
+  }).join('') : '<span class="iempty">–</span>';
+
+  // 3) 뉴스↔특허 교차 (둘 다 활발한 주제)
+  const cx = (ins.cross||[]).filter(r=>r.news||r.patent).slice(0,6);
+  const maxAll = Math.max(1, ...cx.map(r=>Math.max(r.news, r.patent)));
+  const cxHtml = cx.length ? cx.map(r=>{
+    const wn=(r.news/maxAll*100).toFixed(0), wp=(r.patent/maxAll*100).toFixed(0);
+    const both=r.both?'<span class="both" title="뉴스·특허 동시 활발">◆</span>':'';
+    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터">'
+      +'<div class="top"><div class="nm">'+r.emoji+' '+esc(r.name)+both+'</div>'
+      +'<div class="mini">📰'+r.news+' · 📄'+r.patent+'</div></div>'
+      +'<div class="b"><div class="bn" style="width:'+wn+'%"></div><div class="bp" style="width:'+wp+'%"></div></div></div>';
+  }).join('') : '<span class="iempty">–</span>';
+
+  box.innerHTML =
+    '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
+    + '<p class="isub">최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색</p>'
+    + '<div class="kwrap">'+kwHtml+'</div></div>'
+    + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
+    + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비)</p>'
+    + '<div class="trend">'+ctHtml+'</div></div>'
+    + '<div class="ipanel"><h3>🔀 뉴스 × 특허</h3>'
+    + '<p class="isub">최근 '+w.recentDays+'일 뉴스 · '+w.recentWeeks+'주 특허. <b>◆</b>=둘 다 활발</p>'
+    + '<div class="cross">'+cxHtml+'</div>'
+    + '<div class="ilegend"><span class="ln">뉴스</span><span class="lp">특허</span></div></div>';
+}
+
 function renderOverview(){
   const f = FEED[state.tab];
   const total = f.items.length;
@@ -597,6 +690,7 @@ function renderSource(){
 }
 
 function render(){
+  renderInsights();
   renderOverview();
   renderPeriodBar(); renderSource();
   const list = filtered();
@@ -782,6 +876,17 @@ function wire(){
     const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
+  $('#insights').onclick = e=>{
+    const kw=e.target.closest('[data-kw]');
+    if(kw){ state.q=kw.getAttribute('data-kw'); $('#q').value=state.q; state.limit=PAGE;
+      render(); $('#results').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    const row=e.target.closest('[data-cat]');
+    if(row){ const k=row.getAttribute('data-cat');
+      state.cats.has(k)?state.cats.delete(k):state.cats.add(k);
+      const chip=document.querySelector('#catChips [data-cat="'+k+'"]');
+      if(chip) chip.setAttribute('aria-pressed', state.cats.has(k));
+      state.limit=PAGE; render(); $('#results').scrollIntoView({behavior:'smooth',block:'start'}); }
+  };
   $('#results').addEventListener('click', e=>{
     const sb=e.target.closest('[data-save]');
     if(sb){ e.preventDefault(); const u=sb.getAttribute('data-save');
