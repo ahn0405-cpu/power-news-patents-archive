@@ -1,0 +1,74 @@
+name: 전력 이슈 뉴스 아카이브
+
+# ── 실행 시점 ───────────────────────────────────────────────
+# cron 은 UTC 기준. "0 23 * * *" = 매일 23:00 UTC = 08:00 KST(다음날) → 아침에 갱신.
+# 시간을 바꾸려면 원하는 KST 시각에서 9시간을 뺀 값을 UTC로 넣으세요.
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 08:00 KST 매일
+  workflow_dispatch: {}    # Actions 탭에서 손으로 즉시 실행
+
+# gh-pages 브랜치에 사이트를 push 하려면 write 필요
+permissions:
+  contents: write
+
+# 동시에 두 번 돌아 gh-pages 를 서로 덮어쓰지 않도록 직렬화
+concurrency:
+  group: power-news-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # gh-pages 브랜치 접근용
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+        # 의존성 없음 — news_* 모듈은 표준 라이브러리만 사용
+
+      - name: 이전 아카이브 복원 (gh-pages → _prev)
+        run: |
+          mkdir -p _prev
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git archive FETCH_HEAD | tar -x -C _prev
+            echo "이전 아카이브 복원 완료"
+          else
+            echo "gh-pages 브랜치 없음 → 첫 실행(빈 아카이브에서 시작)"
+          fi
+
+      - name: 전력 뉴스 수집 + 사이트 생성
+        env:
+          NEWS_PREV_DIR: _prev     # 이전 날짜들 로드
+          NEWS_SITE_DIR: site      # 전체 사이트 재생성 대상
+          NEWS_MOCK: "off"         # 실데이터 강제 (러너는 외부망 정상)
+        run: python news_main.py
+
+      - name: gh-pages 로 배포 (사이트 = 브랜치 루트)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch site/.nojekyll        # Jekyll 처리 비활성화(정적 그대로 서빙)
+          cd site
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "전력 뉴스 아카이브 갱신 ($(date -u +%F))"
+          # 매번 단일 커밋(orphan)으로 강제 푸시 → 히스토리 누적 없이 데이터는 유지.
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
+      - name: 사이트 아티팩트 업로드 (백업)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: power-news-site-${{ github.run_id }}
+          path: site/
+          retention-days: 14
