@@ -284,6 +284,29 @@ a{color:inherit}
 .empty{color:var(--muted);font-size:14px;padding:40px 0;text-align:center;border:1px dashed var(--line);border-radius:9px}
 .more{display:block;margin:14px auto 0;font:inherit;font-size:13px;font-weight:600;color:var(--ink);
   background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 18px;cursor:pointer}
+.selects .toggle[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+/* 저장 별표 / 읽음 / 검색어 하이라이트 */
+.card{padding-right:38px}
+.card .star{position:absolute;top:10px;right:10px;background:none;border:0;cursor:pointer;
+  font-size:17px;line-height:1;color:var(--muted);padding:2px;transition:color .12s}
+.card .star:hover{color:var(--accent)}
+.card .star.on{color:var(--accent)}
+.card.isread{opacity:.5}
+.card.isread .t{color:var(--muted)}
+.card mark{background:rgba(232,163,61,.38);color:inherit;border-radius:2px;padding:0 1px}
+/* 날짜 그룹 헤더 */
+.dgroup{font-size:13.5px;font-weight:800;color:var(--ink);margin:18px 2px 9px;display:flex;
+  align-items:baseline;gap:8px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.dgroup:first-child{margin-top:2px}
+.dgroup .d{font-weight:500;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dgroup .n{margin-left:auto;font-weight:600;color:var(--muted);font-size:11.5px}
+.sparkwrap svg rect{cursor:pointer}
+.sparkwrap svg rect.sel{fill:var(--accent2)}
+/* 맨 위로 버튼 */
+.totop{position:fixed;right:18px;bottom:18px;z-index:20;width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:19px;cursor:pointer;
+  box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.totop:hover{border-color:var(--accent)}
 .foot{color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px;margin-top:32px;line-height:1.7}
 .foot a{color:var(--accent2)}
 /* 목록/통계 토글 */
@@ -368,9 +391,13 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
           <option value="new">최신순</option>
           <option value="old">오래된순</option>
         </select>
+        <select id="source" aria-label="출처 필터" hidden></select>
         <button class="toggle" id="newonly" aria-pressed="false" title="지난 방문 이후 새 항목만">✨ 새 항목</button>
+        <button class="toggle" id="savedonly" aria-pressed="false" title="저장한 기사만">⭐ 저장</button>
+        <button class="toggle" id="unreadonly" aria-pressed="false" title="안 읽은 기사만">👁 안읽음</button>
       </div>
     </div>
+    <div class="chips" id="periodBar" aria-label="기간 필터" hidden></div>
     <div class="chips" id="countryChips" aria-label="국가 필터" hidden></div>
     <div class="chips" id="catChips" aria-label="카테고리 필터"></div>
   </div>
@@ -382,6 +409,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
   <button class="more" id="more" hidden>더 보기</button>
   <footer class="foot" id="foot"></footer>
 </div>
+<button id="toTop" class="totop" aria-label="맨 위로" title="맨 위로 (스크롤)" hidden>↑</button>
 <script id="feed" type="application/json">__FEED__</script>
 <script>__JS__</script>
 </body></html>"""
@@ -405,11 +433,42 @@ const CGRID = {
   IN:{f:'🇮🇳',n:'인도',c:8,r:3}, TW:{f:'🇹🇼',n:'대만',c:10,r:3}, SG:{f:'🇸🇬',n:'싱가포르',c:9,r:4}, AU:{f:'🇦🇺',n:'호주',c:10,r:5}
 };
 
-const state = { tab:'news', view:'list', q:'', cats:new Set(), countries:new Set(), sort:'new', newonly:false, limit:PAGE };
+const LS_SAVE='pnp_saved', LS_READ='pnp_read';
+let saved = new Set(JSON.parse(localStorage.getItem(LS_SAVE)||'[]'));
+let read  = new Set(JSON.parse(localStorage.getItem(LS_READ)||'[]'));
+function persist(){ localStorage.setItem(LS_SAVE,JSON.stringify([...saved])); localStorage.setItem(LS_READ,JSON.stringify([...read])); }
+
+const state = { tab:'news', view:'list', q:'', cats:new Set(), countries:new Set(),
+  sort:'new', newonly:false, period:'all', source:'', savedOnly:false, unreadOnly:false, limit:PAGE };
 
 function catMap(tab){ const m={}; FEED[tab].categories.forEach(c=>m[c.key]=c); return m; }
 function itemTime(it){ const d = it.published || it.pub_date || it.date || it.week || ''; const t = Date.parse(d); return isNaN(t)?0:t; }
 function isNew(it){ return lastVisit>0 && itemTime(it) > lastVisit; }
+
+function latestNewsDate(){ const p=FEED.news.perDay; return p.length? p[p.length-1].x : ''; }
+function shiftDate(d, delta){ const t=new Date(d+'T00:00:00'); if(isNaN(t)) return d;
+  t.setDate(t.getDate()+delta); const p=n=>String(n).padStart(2,'0');
+  return t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate()); }
+function dayLabel(d){ const L=latestNewsDate(); if(d===L) return '오늘'; if(d===shiftDate(L,-1)) return '어제'; return d; }
+function weekday(d){ const t=new Date(d+'T00:00:00'); return isNaN(t)?'':'일월화수목금토'[t.getDay()]; }
+function inPeriod(it){
+  if(state.period==='all') return true;
+  if(state.tab==='news'){
+    const L=latestNewsDate();
+    if(state.period==='today') return it.date===L;
+    if(state.period==='7d')  return it.date >= shiftDate(L,-6);
+    if(state.period==='30d') return it.date >= shiftDate(L,-29);
+    return it.date===state.period;          // 특정일(스파크라인 클릭)
+  }
+  return it.week===state.period;            // 특허: 특정 주(스파크라인 클릭)
+}
+function hl(text){
+  const e=esc(text);
+  const terms=state.q.toLowerCase().split(/\s+/).filter(Boolean)
+    .map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  if(!terms.length) return e;
+  try{ return e.replace(new RegExp('('+terms.join('|')+')','gi'),'<mark>$1</mark>'); }catch(_){ return e; }
+}
 
 function filtered(){
   const f = FEED[state.tab];
@@ -417,6 +476,10 @@ function filtered(){
   let out = f.items.filter(it=>{
     if(state.cats.size && !state.cats.has(it.category)) return false;
     if(state.tab==='patents' && state.countries.size && !state.countries.has(it.country)) return false;
+    if(!inPeriod(it)) return false;
+    if(state.tab==='news' && state.source && it.source!==state.source) return false;
+    if(state.savedOnly && !saved.has(it.url)) return false;
+    if(state.unreadOnly && read.has(it.url)) return false;
     if(state.newonly && !isNew(it)) return false;
     if(terms.length){
       const hay = (it.title+' '+(it.summary||'')+' '+(it.source||'')+' '+(it.assignee||'')+' '+(it.number||'')).toLowerCase();
@@ -450,10 +513,11 @@ function card(it, cm){
   }
   const mock = it.mock ? ' <span class="mockflag">샘플</span>' : '';
   const meta = bits.join(' <span aria-hidden="true">·</span> ');
-  const sum = it.summary ? '<div class="sum">'+esc(it.summary)+'</div>' : '';
-  return '<article class="card'+(nw?' isnew':'')+'">'
-    + (nw?'<span class="newdot" title="새 항목"></span>':'')
-    + '<a class="t" href="'+esc(it.url)+'" target="_blank" rel="noopener">'+esc(it.title||'(제목 없음)')+'</a>'
+  const sum = it.summary ? '<div class="sum">'+hl(it.summary)+'</div>' : '';
+  const isS = saved.has(it.url), isR = read.has(it.url);
+  return '<article class="card'+(nw?' isnew':'')+(isR?' isread':'')+'">'
+    + '<button class="star'+(isS?' on':'')+'" data-save="'+esc(it.url)+'" aria-label="저장" title="저장">'+(isS?'★':'☆')+'</button>'
+    + '<a class="t" href="'+esc(it.url)+'" target="_blank" rel="noopener" data-read="'+esc(it.url)+'">'+hl(it.title||'(제목 없음)')+'</a>'
     + '<div class="meta">'+meta+mock+'<span class="tag">'+(c.emoji||'')+' '+esc(c.name)+'</span></div>'
     + sum + '</article>';
 }
@@ -468,10 +532,11 @@ function sparkline(series){
   pts.forEach((p,i)=>{
     const h = Math.max(1, Math.round(p.y/max*H));
     const x = i*(bw+gap), y = H-h;
-    bars += '<rect x="'+x.toFixed(1)+'" y="'+y+'" width="'+bw.toFixed(1)+'" height="'+h
-      +'" rx="1.5" fill="var(--spark)"><title>'+esc(p.x)+' · '+p.y+'건</title></rect>';
+    const sel = state.period===p.x ? ' class="sel"' : '';
+    bars += '<rect'+sel+' data-x="'+esc(p.x)+'" x="'+x.toFixed(1)+'" y="'+y+'" width="'+bw.toFixed(1)+'" height="'+h
+      +'" rx="1.5" fill="var(--spark)"><title>'+esc(p.x)+' · '+p.y+'건 (클릭해 필터)</title></rect>';
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이">'+bars+'</svg>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이(막대 클릭 시 그 기간만)">'+bars+'</svg>';
 }
 
 function renderOverview(){
@@ -509,10 +574,34 @@ function renderChips(){
   } else { cc.hidden = true; cc.innerHTML=''; }
 }
 
+function renderPeriodBar(){
+  const pb=$('#periodBar');
+  if(state.tab!=='news'){ pb.hidden=true; pb.innerHTML=''; return; }
+  pb.hidden=false;
+  const opts=[['all','전체'],['today','오늘'],['7d','최근 7일'],['30d','최근 30일']];
+  let html=opts.map(o=>'<button class="f" data-period="'+o[0]+'" aria-pressed="'+(state.period===o[0])+'">'+o[1]+'</button>').join('');
+  if(state.period!=='all' && !opts.some(o=>o[0]===state.period))
+    html+='<button class="f" data-period="'+esc(state.period)+'" aria-pressed="true">📅 '+esc(state.period)+' ✕</button>';
+  pb.innerHTML=html;
+}
+function renderSource(){
+  const sel=$('#source');
+  if(state.tab!=='news'){ sel.hidden=true; return; }
+  sel.hidden=false;
+  if(!sel.dataset.built){
+    const srcs=[...new Set(FEED.news.items.map(n=>n.source).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML='<option value="">전체 출처</option>'+srcs.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
+    sel.dataset.built='1';
+  }
+  sel.value=state.source;
+}
+
 function render(){
   renderOverview();
+  renderPeriodBar(); renderSource();
   const list = filtered();
-  const active = state.q || state.cats.size || state.countries.size || state.newonly;
+  const active = state.q || state.cats.size || state.countries.size || state.newonly
+    || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
   $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
     + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
   $('#reset').hidden = !active;
@@ -523,9 +612,22 @@ function render(){
   }
   const cm = catMap(state.tab);
   const shown = list.slice(0, state.limit);
-  $('#results').innerHTML = shown.length
-    ? shown.map(it=>card(it,cm)).join('')
-    : '<div class="empty">조건에 맞는 항목이 없습니다.</div>';
+  if(!shown.length){
+    $('#results').innerHTML = '<div class="empty">조건에 맞는 항목이 없습니다.</div>';
+  } else if(state.tab==='news'){
+    // 날짜별 그룹 헤더
+    const byDay={}; const order=[];
+    shown.forEach(it=>{ const d=it.date||'?'; if(!(d in byDay)){byDay[d]=[]; order.push(d);} byDay[d].push(it); });
+    $('#results').innerHTML = order.map(d=>{
+      const lbl=dayLabel(d), wd=weekday(d);
+      const dateSpan = (lbl!==d? '<span class="d">'+esc(d)+'</span>':'') + (wd? '<span class="d">('+wd+')</span>':'');
+      return '<div class="dgroup">'+esc(lbl)+dateSpan
+        + '<span class="n">'+byDay[d].length+'건</span></div>'
+        + byDay[d].map(it=>card(it,cm)).join('');
+    }).join('');
+  } else {
+    $('#results').innerHTML = shown.map(it=>card(it,cm)).join('');
+  }
   $('#more').hidden = list.length <= state.limit;
   $('#more').textContent = '더 보기 ('+(list.length-state.limit)+'개 남음)';
   syncHash();
@@ -628,6 +730,10 @@ function syncHash(){
   if(state.countries.size) p.set('co', [...state.countries].join(','));
   if(state.sort!=='new') p.set('sort', state.sort);
   if(state.newonly) p.set('new','1');
+  if(state.period!=='all') p.set('period', state.period);
+  if(state.source) p.set('src', state.source);
+  if(state.savedOnly) p.set('saved','1');
+  if(state.unreadOnly) p.set('unread','1');
   if(state.tab==='patents' && state.view==='stats') p.set('view','stats');
   const h = p.toString();
   history.replaceState(null,'', h? '#'+h : location.pathname);
@@ -639,13 +745,18 @@ function loadHash(){
   state.q = p.get('q')||'';
   state.sort = p.get('sort')==='old'?'old':'new';
   state.newonly = p.get('new')==='1';
+  state.period = p.get('period')||'all';
+  state.source = p.get('src')||'';
+  state.savedOnly = p.get('saved')==='1';
+  state.unreadOnly = p.get('unread')==='1';
   if(p.get('cat')) p.get('cat').split(',').forEach(c=>state.cats.add(c));
   if(p.get('co')) p.get('co').split(',').forEach(c=>state.countries.add(c));
 }
 
 function setTab(t){
   if(state.tab===t) return;
-  state.tab=t; state.view='list'; state.cats.clear(); state.countries.clear(); state.limit=PAGE;
+  state.tab=t; state.view='list'; state.cats.clear(); state.countries.clear();
+  state.period='all'; state.source=''; state.limit=PAGE;
   document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===t));
   updateViewToggle(); renderChips(); render();
 }
@@ -664,9 +775,34 @@ function wire(){
     const k=b.dataset.country; state.countries.has(k)?state.countries.delete(k):state.countries.add(k);
     b.setAttribute('aria-pressed',state.countries.has(k)); state.limit=PAGE; render(); };
   $('#more').onclick = ()=>{ state.limit+=PAGE; render(); };
+  $('#savedonly').onclick = e=>{ state.savedOnly=!state.savedOnly; e.currentTarget.setAttribute('aria-pressed',state.savedOnly); state.limit=PAGE; render(); };
+  $('#unreadonly').onclick = e=>{ state.unreadOnly=!state.unreadOnly; e.currentTarget.setAttribute('aria-pressed',state.unreadOnly); state.limit=PAGE; render(); };
+  $('#source').onchange = e=>{ state.source=e.target.value; state.limit=PAGE; render(); };
+  $('#periodBar').onclick = e=>{ const b=e.target.closest('[data-period]'); if(!b) return;
+    const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
+  $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
+    const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
+  $('#results').addEventListener('click', e=>{
+    const sb=e.target.closest('[data-save]');
+    if(sb){ e.preventDefault(); const u=sb.getAttribute('data-save');
+      saved.has(u)?saved.delete(u):saved.add(u); persist(); render(); return; }
+    const a=e.target.closest('a.t[data-read]');
+    if(a){ const u=a.getAttribute('data-read'); if(!read.has(u)){ read.add(u); persist();
+      const cd=a.closest('.card'); if(cd) cd.classList.add('isread'); } }
+  });
   $('#reset').onclick = ()=>{ state.q=''; state.cats.clear(); state.countries.clear(); state.newonly=false;
-    state.limit=PAGE; $('#q').value=''; $('#newonly').setAttribute('aria-pressed','false');
+    state.period='all'; state.source=''; state.savedOnly=false; state.unreadOnly=false;
+    state.limit=PAGE; $('#q').value='';
+    ['newonly','savedonly','unreadonly'].forEach(id=>$('#'+id).setAttribute('aria-pressed','false'));
     document.querySelectorAll('.chips .f').forEach(b=>b.setAttribute('aria-pressed','false')); render(); };
+  const toTop=$('#toTop');
+  addEventListener('scroll', ()=>{ toTop.hidden = scrollY < 500; }, {passive:true});
+  toTop.onclick = ()=> scrollTo({top:0, behavior:'smooth'});
+  addEventListener('keydown', e=>{
+    const tag=(document.activeElement&&document.activeElement.tagName)||'';
+    if(e.key==='/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)){ e.preventDefault(); $('#q').focus(); }
+    else if(e.key==='Escape' && document.activeElement===$('#q')){ $('#q').blur(); }
+  });
 }
 
 $('#foot').innerHTML = '뉴스: Google 뉴스 RSS · 특허: Google Patents 공개 데이터에서 전력 키워드로 자동 수집. '
@@ -678,6 +814,8 @@ loadHash();
 $('#q').value = state.q;
 $('#sort').value = state.sort;
 $('#newonly').setAttribute('aria-pressed', state.newonly);
+$('#savedonly').setAttribute('aria-pressed', state.savedOnly);
+$('#unreadonly').setAttribute('aria-pressed', state.unreadOnly);
 document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===state.tab));
 updateViewToggle(); renderChips(); wire(); render();
 localStorage.setItem(LS_KEY, Date.now());
