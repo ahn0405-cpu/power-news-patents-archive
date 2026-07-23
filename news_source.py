@@ -78,8 +78,12 @@ def _parse_items(xml_bytes: bytes) -> list[dict]:
             continue
         title, src_from_title = _split_title_source(title_raw)
         source_el = it.find("source")
-        source = (source_el.text.strip() if source_el is not None and source_el.text
-                  else src_from_title)
+        src_tag = (source_el.text.strip() if source_el is not None and source_el.text else "")
+        # <source> 가 포털 도메인(v.daum.net 등)이면 제목 꼬리의 실제 매체명을 우선.
+        if _looks_like_domain(src_tag) and src_from_title:
+            source = src_from_title
+        else:
+            source = src_tag or src_from_title
         items.append({
             "title": title,
             "url": link,
@@ -95,10 +99,28 @@ def _norm_key(title: str) -> str:
     return re.sub(r"[\s\W_]+", "", title.lower())
 
 
+def _looks_like_domain(s: str) -> bool:
+    return bool(s) and " " not in s and bool(re.match(r"^[\w.-]+\.[a-z]{2,}$", s.lower()))
+
+
+def _bigrams(title: str) -> set[str]:
+    """제목의 문자 2-gram 집합(공백·기호 제거). 유사 기사 판정용."""
+    s = re.sub(r"[^0-9a-z가-힣]+", "", title.lower())
+    return {s[i:i + 2] for i in range(len(s) - 1)} if len(s) > 2 else {s}
+
+
+def _similar(a: set[str], b: set[str]) -> float:
+    """두 2-gram 집합의 자카드 유사도."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
 def _live_collect() -> list[dict]:
     """카테고리별 RSS 수집 → 카테고리 태깅 + 카테고리 내 중복 제거."""
     collected: list[dict] = []
     seen: set[str] = set()
+    kept_bg: list[set[str]] = []   # 지금까지 채택한 제목의 2-gram (유사 기사 판정용)
     errors = 0
     for cat in cfg.CATEGORIES:
         query = " OR ".join(f'"{q}"' for q in cat["queries"])
@@ -113,7 +135,12 @@ def _live_collect() -> list[dict]:
             key = _norm_key(it["title"])
             if not key or key in seen:
                 continue
+            # 같은 사건을 다른 매체가 조금씩 다른 제목으로 낸 경우(유사도) 제외.
+            bg = _bigrams(it["title"])
+            if any(_similar(bg, k) >= cfg.DEDUP_SIM for k in kept_bg):
+                continue
             seen.add(key)
+            kept_bg.append(bg)
             it["category"] = cat["key"]
             collected.append(it)
             added += 1
