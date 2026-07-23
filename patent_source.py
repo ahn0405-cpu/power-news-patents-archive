@@ -23,7 +23,6 @@ import patent_config as cfg
 _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
        "Chrome/124.0 Safari/537.36")
 _BASE = "https://patents.google.com/xhr/query"
-_DEBUG_DONE = False
 
 
 def _build_url(term: str, country: str) -> str:
@@ -52,16 +51,7 @@ def _fetch(term: str, country: str) -> list[dict]:
         "Referer": "https://patents.google.com/",
     })
     with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        raw = r.read()
-    data = _parse_json(raw)
-    global _DEBUG_DONE
-    if not _DEBUG_DONE:
-        _DEBUG_DONE = True
-        res = data.get("results", {}) if isinstance(data, dict) else {}
-        print(f"  [debug] topkeys={list(data.keys()) if isinstance(data,dict) else type(data).__name__} "
-              f"reskeys={list(res.keys()) if isinstance(res,dict) else '-'} "
-              f"total={res.get('total_num_results') if isinstance(res,dict) else '?'} rawlen={len(raw)}")
-        print("  [debug] snippet=" + raw[:500].decode('utf-8', 'replace').replace('\n', ' '))
+        data = _parse_json(r.read())
     out = []
     clusters = (data.get("results", {}) or {}).get("cluster", []) or []
     for cl in clusters:
