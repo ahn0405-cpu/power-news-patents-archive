@@ -1,0 +1,15 @@
+name: (임시) 특허 출원인 지역 프로브
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: 지역 출원인 프로브
+        run: python probe_regions.py
