@@ -43,27 +43,45 @@ MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)          # auto | on | off
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)
 # q   : Google Patents assignee= 검색어(영문; 프로브로 매칭 확인)
 # 편집 가능: 지역별로 추가/삭제. 요청 예산(출원인수 × 8) 은 ~100 이하 권장.
+# ※ ✔ 표시는 프로브로 assignee 검색 매칭 실측 확인. 미표시(특히 국내 강소기업)는
+#   Google 색인 이름과 안 맞으면 0건이 나올 수 있어 실수집 후 이름 튜닝이 필요할 수 있다.
 APPLICANTS = [
     # 🇺🇸 미국
-    {"name": "General Electric", "region": "US", "flag": "🇺🇸", "q": "General Electric"},
-    {"name": "GE Vernova", "region": "US", "flag": "🇺🇸", "q": "GE Vernova"},
+    {"name": "General Electric", "region": "US", "flag": "🇺🇸", "q": "General Electric"},      # ✔
+    {"name": "GE Vernova", "region": "US", "flag": "🇺🇸", "q": "GE Vernova"},                  # ✔
+    {"name": "Eaton", "region": "US", "flag": "🇺🇸", "q": "Eaton"},                            # ✔
+    {"name": "Caterpillar", "region": "US", "flag": "🇺🇸", "q": "Caterpillar"},
+    {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower"},
     # 🇰🇷 한국
-    {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},
+    {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
-    {"name": "HD현대일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "Hyundai Electric"},
-    {"name": "효성중공업", "region": "KR", "flag": "🇰🇷", "q": "Hyosung Heavy Industries"},
-    {"name": "LS일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "LS Electric"},
-    {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},
+    {"name": "HD현대일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "Hyundai Electric"},            # ✔
+    {"name": "효성중공업", "region": "KR", "flag": "🇰🇷", "q": "Hyosung Heavy Industries"},       # ✔
+    {"name": "LS일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "LS Electric"},                    # ✔
+    {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
+    {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
+    {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan Cable"},
+    {"name": "산일전기", "region": "KR", "flag": "🇰🇷", "q": "Sanil Electric"},
+    {"name": "제룡전기", "region": "KR", "flag": "🇰🇷", "q": "Jeryong Electric"},
+    {"name": "그리드위즈", "region": "KR", "flag": "🇰🇷", "q": "Gridwiz"},
     # 🇨🇳 중국
-    {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},
-    {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": "Huawei"},
-    {"name": "CATL", "region": "CN", "flag": "🇨🇳", "q": "Contemporary Amperex Technology"},
+    {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},  # ✔
+    {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": "Huawei"},                          # ✔
+    {"name": "CATL", "region": "CN", "flag": "🇨🇳", "q": "Contemporary Amperex Technology"},   # ✔
     # 🇯🇵 일본
-    {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵", "q": "Mitsubishi Electric"},
+    {"name": "Hitachi Energy", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Energy"},          # ✔
+    {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵", "q": "Mitsubishi Electric"},# ✔
+    {"name": "Toshiba", "region": "JP", "flag": "🇯🇵", "q": "Toshiba"},                        # ✔
+    {"name": "Panasonic", "region": "JP", "flag": "🇯🇵", "q": "Panasonic"},                    # ✔
+    {"name": "Kyocera", "region": "JP", "flag": "🇯🇵", "q": "Kyocera"},
+    {"name": "Toyota", "region": "JP", "flag": "🇯🇵", "q": "Toyota"},
+    {"name": "Sumitomo Electric", "region": "JP", "flag": "🇯🇵", "q": "Sumitomo Electric"},    # ✔
+    {"name": "Furukawa Electric", "region": "JP", "flag": "🇯🇵", "q": "Furukawa Electric"},
     # 🇪🇺 유럽
-    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens"},
-    {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},
-    {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},
+    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens"},                        # ✔
+    {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
+    {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
+    {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
 ]
 
 # ── 분야(기술 카테고리) — 제목 정확검색용 영문 용어(분야당 1개, 무선전력 오탐 회피) ──
