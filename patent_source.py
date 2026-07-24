@@ -104,12 +104,16 @@ def _is_offtopic(p: dict) -> bool:
     return bool(_EXCLUDE_TITLE.search(p.get("title", "")))
 
 
-def _live_collect() -> list[dict]:
+def _live_collect(rotate: int = 0) -> list[dict]:
     collected: list[dict] = []
     seen: set[str] = set()
     errors = 0
     total_q = 0
-    for ap in cfg.APPLICANTS:
+    # 무키 엔드포인트는 실행당 ~수십~100요청 뒤 차단한다 → 매 실행 시작점을 회전시켜
+    # 매주 다른 출원인 부분집합을 수집하고, 아카이브(주별 누적)로 매트릭스를 채운다.
+    n = len(cfg.APPLICANTS)
+    order = cfg.APPLICANTS[rotate % n:] + cfg.APPLICANTS[:rotate % n] if n else []
+    for ap in order:
         ap_added = 0
         for cat in cfg.CATEGORIES:
             pair_added = 0            # (출원인×분야) 조합 상한
@@ -194,15 +198,33 @@ def _mock_collect(today: datetime) -> list[dict]:
     return collected
 
 
+def _rotation(today: datetime) -> int:
+    """이번 실행의 출원인 시작 오프셋. PATENT_ROTATE 지정 시 그 값, 없으면 주차 기반.
+
+    주차 기반이면 매주 목록의 절반씩 앞으로 당겨(스로틀로 뒤가 잘려도 다음 주에 커버).
+    """
+    import os
+    env = os.getenv("PATENT_ROTATE")
+    if env not in (None, ""):
+        try:
+            return int(env)
+        except ValueError:
+            pass
+    week = today.isocalendar()[1]
+    half = max(1, len(cfg.APPLICANTS) // 2)
+    return (week * half) % max(1, len(cfg.APPLICANTS))
+
+
 def collect(today: datetime) -> tuple[list[dict], bool]:
     """(출원인×분야) 최신 특허 목록과 mock 여부를 반환.
 
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
+    출원인 시작점은 회전(주차 기반 또는 PATENT_ROTATE)해 매주 다른 부분집합을 모은다.
     """
     if cfg.is_mock():
         return _mock_collect(today), True
     try:
-        return _live_collect(), False
+        return _live_collect(_rotation(today)), False
     except Exception as e:
         if cfg.force_live():
             raise
