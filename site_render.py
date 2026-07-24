@@ -148,18 +148,20 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
         per_week[wk] = len(pats)
         mock = bool(patent_weeks[wk].get("mock"))
         for p in pats:
-            # 출원인은 이제 수집 시 명시(우리가 조회한 주체) → 그 값을 우선 사용.
+            # 출원인은 수집 시 명시(우리가 조회한 주체) → 그 값을 우선 사용.
             # 옛 데이터(applicant 없음)는 이름 정규화로 대체(하위호환).
             ap = p.get("applicant") or ""
             aname = ap or _canon_assignee(p.get("assignee", ""))
-            acountry = p.get("country", "") if ap else \
+            region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
+            flag = p.get("flag") or (pcfg.REGION_LABEL.get(region, ("", ""))[0])
             items.append({
                 "title": p.get("title", ""), "url": p.get("url", ""),
                 "assignee": p.get("assignee", ""), "number": p.get("number", ""),
-                "aName": aname, "aCountry": acountry, "applicant": ap,
+                "aName": aname, "aCountry": region, "aFlag": flag, "applicant": ap,
+                "office": p.get("office", ""),
                 "pub_date": p.get("pub_date"), "summary": p.get("snippet", ""),
-                "category": p.get("category", "etc"), "country": p.get("country", ""),
+                "category": p.get("category", "etc"), "country": region,
                 "week": wk, "mock": mock,
             })
     return {
@@ -436,6 +438,11 @@ a{color:inherit}
 .pmx td.c.has{color:var(--ink);cursor:pointer}
 .pmx td.c.has:hover{outline:2px solid var(--accent)}
 .pmx td.c.tot{font-weight:800;color:var(--ink);background:transparent}
+.rgsec{margin-bottom:14px}
+.rgsec:last-child{margin-bottom:0}
+.rghead{font-size:12.5px;font-weight:700;margin:0 0 5px;padding-bottom:3px;border-bottom:1px solid var(--line);
+  display:flex;align-items:baseline;gap:6px}
+.rghead .rgn{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)}
 .catlead{display:flex;flex-direction:column;gap:11px}
 .catlead .crow{display:flex;flex-direction:column;gap:5px}
 .catlead .clab{font-size:12.5px;font-weight:700}
@@ -733,27 +740,9 @@ function kpiHTML(){
 
 function matrixMiniHTML(){
   const list=FEED.patents.items; if(!list.length) return '';
-  const cats=FEED.patents.categories, countries=FEED.patents.countries;
-  const flag=iso=>(countries.find(c=>c.code===iso)||{emoji:''}).emoji;
-  const byA={};
-  list.forEach(it=>{ const nm=it.aName||'(미상)';
-    const o=byA[nm]||(byA[nm]={cnt:0,iso:it.aCountry||it.country||'',grid:{}});
-    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; });
-  const ranked=Object.keys(byA).map(nm=>Object.assign({name:nm},byA[nm]))
-    .sort((a,b)=>b.cnt-a.cnt||a.name.localeCompare(b.name)).slice(0,7);
-  if(!ranked.length) return '';
-  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
-  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')+'</tr>';
-  const body=ranked.map(r=>{
-    const cells=cats.map(c=>{ const v=r.grid[c.key]||0; const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
-      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
-      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
-      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
-    return '<tr><td class="lab">'+flag(r.iso)+' '+esc(r.name)+'</td>'+cells+'</tr>';
-  }).join('');
   return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">주요 출원인이 어느 분야에 특허를 내는지(상위 '+ranked.length+'). 칸을 누르면 특허 탭 상세.</p>'
-    + '<div class="mxmini"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></div>';
+    + '<p class="sub">발행국/지역별 주요 출원인이 어느 분야에 특허를 내는지. 칸을 누르면 특허 탭 상세.</p>'
+    + '<div class="mxmini">'+regionMatrixHTML(list, {})+'</div></div>';
 }
 
 function timelineHTML(){
@@ -889,76 +878,82 @@ function render(){
   syncHash();
 }
 
+// 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순
+function _rankApplicants(list){
+  const byA={};
+  list.forEach(it=>{ const nm=it.aName||'(미상)';
+    const o=byA[nm]||(byA[nm]={cnt:0, flag:it.aFlag||'', region:it.aCountry||'', grid:{}});
+    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; if(!o.flag)o.flag=it.aFlag||''; });
+  return Object.keys(byA).map(nm=>Object.assign({name:nm}, byA[nm]))
+    .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
+}
+// 한 지역(부분집합)의 출원인×분야 표. opts.total → 합계 열
+function matrixTableHTML(ranked, opts){
+  const cats=FEED.patents.categories; opts=opts||{};
+  if(!ranked.length) return '';
+  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
+  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')
+    +(opts.total?'<th>합계</th>':'')+'</tr>';
+  const body=ranked.map(r=>{
+    const cells=cats.map(c=>{ const v=r.grid[c.key]||0; const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
+      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
+      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
+      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
+    return '<tr><td class="lab">'+(r.flag||'')+' '+esc(r.name)+'</td>'+cells
+      +(opts.total?'<td class="c tot">'+r.cnt+'</td>':'')+'</tr>';
+  }).join('');
+  return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+// 발행국/지역별로 나눈 매트릭스(미국·한국·중국·일본·유럽 순, 있는 지역만)
+function regionMatrixHTML(list, opts){
+  const html=FEED.patents.countries.map(rg=>{
+    const sub=list.filter(it=>it.aCountry===rg.code);
+    if(!sub.length) return '';
+    const ranked=_rankApplicants(sub);
+    return '<div class="rgsec"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
+      + ' <span class="rgn">'+sub.length+'건 · 출원인 '+ranked.length+'</span></div>'
+      + matrixTableHTML(ranked, opts)+'</div>';
+  }).filter(Boolean).join('');
+  return html || '<p class="sub" style="margin:0">수집된 특허가 없습니다(주별 회전 수집으로 채워집니다).</p>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
-  const countries = FEED.patents.countries;
-  const cats = FEED.patents.categories;
-  const catByKey = {}; cats.forEach(c=>catByKey[c.key]=c);
-  const flag = iso => (countries.find(c=>c.code===iso)||{emoji:''}).emoji;
-
-  // 출원인 집계 + 출원인×분야 그리드
-  const byA = {};   // name -> {cnt, iso, grid:{field:count}}
-  list.forEach(it=>{ const nm=it.aName||'(미상)';
-    const o=byA[nm]||(byA[nm]={cnt:0, iso:it.aCountry||it.country||'', grid:{}});
-    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1;
-    if(!o.iso) o.iso=it.aCountry||it.country||''; });
-  const ranked = Object.keys(byA).map(nm=>Object.assign({name:nm}, byA[nm]))
-    .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
-  const uniq = ranked.length;
-  const topA = ranked[0];
-  const krN = ranked.filter(r=>r.iso==='KR').length;
-  const usN = ranked.filter(r=>r.iso==='US').length;
-
-  // ── 출원인 × 분야 매트릭스 (핵심) ──
-  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
-  const head='<tr><th class="cnr">출원인 \\ 분야</th>'
-    + cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')+'<th>합계</th></tr>';
-  const body=ranked.map(r=>{
-    const cells=cats.map(c=>{ const v=r.grid[c.key]||0;
-      const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
-      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
-      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(catByKey[c.key].name)+' '+v+'건 (클릭해 보기)"'):' class="c"';
-      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>';
-    }).join('');
-    return '<tr><td class="lab">'+flag(r.iso)+' '+esc(r.name)+'</td>'+cells+'<td class="c tot">'+r.cnt+'</td></tr>';
+  const cats=FEED.patents.categories, regions=FEED.patents.countries;
+  const ranked=_rankApplicants(list);
+  const uniq=ranked.length, topA=ranked[0];
+  const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
+  const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ');
+  // 분야별 주요 출원인
+  const byCatA={}; list.forEach(it=>{const k=it.category,nm=it.aName||'(미상)'; (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1;});
+  const catLeadRows=cats.filter(c=>byCatA[c.key]).map(c=>{
+    const entries=Object.entries(byCatA[c.key]).filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    const chips=entries.slice(0,3).map(([n,v])=>'<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
+    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div><div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
   }).join('');
-
-  // ── 분야별 주요 출원인 ──
-  const byCatA = {};
-  list.forEach(it=>{ const k=it.category, nm=it.aName||'(미상)';
-    (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1; });
-  const catLeadRows = cats.filter(c=>byCatA[c.key]).map(c=>{
-    const entries=Object.entries(byCatA[c.key])
-      .filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-    const chips=entries.slice(0,3).map(([n,v])=>
-      '<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
-    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div>'
-      + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
-  }).join('');
-
-  // ── 출원인 랭킹(총 출원 표본 수) ──
-  const top=ranked.slice(0,15); const maxA=top[0].cnt||1;
+  // 랭킹(전 지역 통합)
+  const top=ranked.slice(0,15), maxA=top[0].cnt||1;
   const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.cnt/maxA*100);
     return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'+(i+1)+'</span>'
-      + flag(r.iso)+' '+esc(r.name)+'</div><div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
+      + (r.flag||'')+' '+esc(r.name)+'</div><div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
       + '<div class="val">'+r.cnt+'</div></div>'; }).join('');
 
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
       + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
-        + ' <span style="font-size:12px;color:var(--muted)">🇰🇷'+krN+' 🇺🇸'+usN+'</span></div></div>'
+        + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
-      + '<div><div class="k">최다 출원인</div><div class="v">'+flag(topA.iso)+' '+esc(topA.name)
+      + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
       + '</div></div>'
-    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스</h3>'
-      + '<p class="sub">주요 출원인이 <b>어느 분야에</b> 최근 특허를 냈는지(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허를 봅니다. 열 머리글에 마우스를 올리면 분야명이 보입니다.</p>'
-      + '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></div>'
+    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">발행국/지역별</span></h3>'
+      + '<p class="sub">각 지역(미국·한국·중국·일본·유럽) 주요 출원인이 <b>어느 분야에</b> 최근 특허를 냈는지(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허를 봅니다.</p>'
+      + regionMatrixHTML(list, {total:true}) + '</div>'
     + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
       + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'</span></h3>'
-      + '<p class="sub">현재 필터 기준 표본 내 총 출원 수.</p>'
+      + '<p class="sub">전 지역 통합 · 표본 내 총 출원 수.</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
     + '</div>';
 }

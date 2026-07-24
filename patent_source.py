@@ -28,10 +28,11 @@ _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 _BASE = "https://patents.google.com/xhr/query"
 
 
-def _build_url(assignee_q: str, country: str, term: str) -> str:
+def _build_url(assignee_q: str, term: str) -> str:
     # 내부 검색질의를 통째로 url= 에 '한 번만' 인코딩. assignee 전용 파라미터(정밀)와
-    # 제목 정확검색 TI= 을 AND 로 결합한다. (프로브로 문법·정밀도 확인함)
-    inner = f'assignee={assignee_q}&q=TI="{term}"&country={country}&sort=new'
+    # 제목 정확검색 TI= 을 AND 로 결합한다. country 미지정 → 전 세계 공개에서 조회(재현율↑,
+    # 중/일/유럽 특허도 Google 영문 제목으로 색인). (프로브로 문법·재현율 확인함)
+    inner = f'assignee={assignee_q}&q=TI="{term}"&sort=new'
     return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
 
 
@@ -56,7 +57,13 @@ def _fmt_date(yyyymmdd: str | None) -> str | None:
     return None
 
 
-def _normalize(pat: dict, pid: str, country: str) -> dict:
+def _office(num: str) -> str:
+    """공개번호 접두 2글자로 실제 발행 특허청 추정(US/KR/CN/JP/EP/WO...)."""
+    m = re.match(r"[A-Za-z]{2}", num or "")
+    return m.group(0).upper() if m else ""
+
+
+def _normalize(pat: dict, pid: str) -> dict:
     num = pat.get("publication_number") or ""
     link = (f"https://patents.google.com/{pid}" if pid
             else f"https://patents.google.com/patent/{num}/en" if num
@@ -69,13 +76,13 @@ def _normalize(pat: dict, pid: str, country: str) -> dict:
         "pub_date": _fmt_date(pat.get("publication_date")),
         "filing_date": _fmt_date(pat.get("filing_date")),
         "snippet": _clean(pat.get("snippet", ""))[:220],
-        "country": country,
+        "office": _office(num),     # 실제 발행 특허청(참고용)
         "url": link,
     }
 
 
-def _fetch(assignee_q: str, country: str, term: str) -> list[dict]:
-    url = _build_url(assignee_q, country, term)
+def _fetch(assignee_q: str, term: str) -> list[dict]:
+    url = _build_url(assignee_q, term)
     req = urllib.request.Request(url, headers={
         "User-Agent": _UA, "Accept": "application/json",
         "Referer": "https://patents.google.com/",
@@ -88,7 +95,7 @@ def _fetch(assignee_q: str, country: str, term: str) -> list[dict]:
         for res in cl.get("result", []) or []:
             pat = res.get("patent", {}) or {}
             pid = res.get("id", "")
-            out.append(_normalize(pat, pid, country))
+            out.append(_normalize(pat, pid))
     return out
 
 
@@ -120,7 +127,7 @@ def _live_collect(rotate: int = 0) -> list[dict]:
             for term in cat["terms"]:
                 total_q += 1
                 try:
-                    items = _fetch(ap["q"], ap["iso"], term)
+                    items = _fetch(ap["q"], term)
                 except Exception as e:
                     errors += 1
                     print(f"  ! [{ap['name']}/{cat['key']}] '{term}' 실패: {e}")
@@ -136,6 +143,8 @@ def _live_collect(rotate: int = 0) -> list[dict]:
                     seen.add(key)
                     it["category"] = cat["key"]      # 질의어 = 분야 태그
                     it["applicant"] = ap["name"]      # 큐레이션 대표명(우리가 조회한 주체)
+                    it["country"] = ap["region"]      # 지역 그룹(미국·한국·중국·일본·유럽)
+                    it["flag"] = ap["flag"]           # 행 국기(국적)
                     collected.append(it)
                     pair_added += 1
                     ap_added += 1
@@ -145,7 +154,7 @@ def _live_collect(rotate: int = 0) -> list[dict]:
                     time.sleep(cfg.REQUEST_DELAY)
                 if pair_added >= cfg.PER_PAIR_LIMIT:
                     break
-        print(f"  · {ap['name']} ({ap['iso']}): {ap_added}건")
+        print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {ap_added}건")
     if not collected and errors >= max(1, total_q):
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected
@@ -154,17 +163,16 @@ def _live_collect(rotate: int = 0) -> list[dict]:
 # ── MOCK (오프라인/차단 시 폴백) — 출원인 × 분야 표본 합성 ─────────────
 # 각 출원인에게 '그 회사다운' 분야 몇 개를 배정해 매트릭스가 채워지게 한다.
 _AP_FIELDS = {
-    "삼성전자": ["mega", "renew"], "삼성SDI": ["renew"], "LG에너지솔루션": ["renew"],
-    "LG전자": ["datacenter", "mega"], "SK하이닉스": ["mega"], "SK온": ["renew"],
-    "현대자동차": ["renew", "mega"], "현대일렉트릭": ["grid", "industry"],
-    "LS일렉트릭": ["grid", "industry", "meter"], "LS전선": ["grid"],
-    "효성중공업": ["grid", "industry"], "두산에너빌리티": ["nuclear", "grid"],
-    "한국전력공사": ["grid", "supply", "meter"], "한국수력원자력": ["nuclear"],
-    "한국전기연구원": ["grid", "supply"], "한화솔루션": ["renew"],
-    "General Electric": ["nuclear", "grid"], "Westinghouse": ["nuclear"],
-    "Tesla": ["renew", "datacenter"], "First Solar": ["renew"],
-    "Eaton": ["industry", "datacenter"], "GE Vernova": ["grid", "nuclear"],
+    "General Electric": ["nuclear", "grid", "industry"], "GE Vernova": ["grid", "nuclear"],
+    "한국전력공사": ["grid", "supply", "meter"], "한국전력기술": ["nuclear"],
+    "HD현대일렉트릭": ["grid", "industry"], "효성중공업": ["grid", "industry"],
+    "LS일렉트릭": ["grid", "industry", "meter"], "삼성전자": ["mega", "renew", "datacenter"],
+    "State Grid": ["grid", "supply", "meter"], "Huawei": ["datacenter", "mega"],
+    "CATL": ["renew"], "Mitsubishi Electric": ["mega", "grid"],
+    "Siemens": ["grid", "industry", "supply"], "ABB": ["grid", "industry"],
+    "Schneider Electric": ["datacenter", "industry", "supply"],
 }
+_PREFIX = {"US": "US2026", "KR": "KR102026", "CN": "CN2026", "JP": "JP2026", "EU": "EP2026"}
 
 
 def _mock_collect(today: datetime) -> list[dict]:
@@ -180,8 +188,7 @@ def _mock_collect(today: datetime) -> list[dict]:
             days_ago = (seed + ai * 3 + fi * 5) % max(1, cfg.LOOKBACK_DAYS)
             pub = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
             serial = 10000 + (seed + ai * 37 + fi * 101) % 90000
-            num = (f"KR1020260{serial}A" if ap["iso"] == "KR"
-                   else f"US2026{serial}A1")
+            num = f"{_PREFIX.get(ap['region'], 'US2026')}{serial}A1"
             collected.append({
                 "number": num,
                 "title": f"[{ap['name']}] {term} related apparatus",
@@ -190,8 +197,9 @@ def _mock_collect(today: datetime) -> list[dict]:
                 "pub_date": pub,
                 "filing_date": None,
                 "snippet": "[샘플 데이터] 네트워크 차단/오프라인 환경의 미리보기용 항목입니다.",
-                "country": ap["iso"],
-                "url": "https://patents.google.com/?assignee=" + urllib.parse.quote(ap["q"]),
+                "office": _office(num),
+                "country": ap["region"],
+                "flag": ap["flag"],
                 "category": fkey,
                 "applicant": ap["name"],
             })
