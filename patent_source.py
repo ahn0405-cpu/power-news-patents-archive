@@ -96,6 +96,14 @@ def _dedup_key(p: dict) -> str:
     return (p.get("number") or "").upper() or re.sub(r"[\s\W_]+", "", p.get("title", "").lower())
 
 
+# 무선전력전송(Qi 충전 등)은 우리 주제(전력계통)와 무관한데 'power transmission'에 걸린다 → 제외.
+_EXCLUDE_TITLE = re.compile(r"wireless|무선", re.I)
+
+
+def _is_offtopic(p: dict) -> bool:
+    return bool(_EXCLUDE_TITLE.search(p.get("title", "")))
+
+
 def _live_collect() -> list[dict]:
     collected: list[dict] = []
     seen: set[str] = set()
@@ -118,6 +126,8 @@ def _live_collect() -> list[dict]:
                 for it in items:
                     key = _dedup_key(it)
                     if not key or key in seen:
+                        continue
+                    if _is_offtopic(it):             # 무선전력 등 무관 특허 배제
                         continue
                     seen.add(key)
                     it["category"] = cat["key"]      # 질의어 = 분야 태그
