@@ -148,11 +148,16 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
         per_week[wk] = len(pats)
         mock = bool(patent_weeks[wk].get("mock"))
         for p in pats:
+            # 출원인은 이제 수집 시 명시(우리가 조회한 주체) → 그 값을 우선 사용.
+            # 옛 데이터(applicant 없음)는 이름 정규화로 대체(하위호환).
+            ap = p.get("applicant") or ""
+            aname = ap or _canon_assignee(p.get("assignee", ""))
+            acountry = p.get("country", "") if ap else \
+                _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
             items.append({
                 "title": p.get("title", ""), "url": p.get("url", ""),
                 "assignee": p.get("assignee", ""), "number": p.get("number", ""),
-                "aName": _canon_assignee(p.get("assignee", "")),
-                "aCountry": _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", "")),
+                "aName": aname, "aCountry": acountry, "applicant": ap,
                 "pub_date": p.get("pub_date"), "summary": p.get("snippet", ""),
                 "category": p.get("category", "etc"), "country": p.get("country", ""),
                 "week": wk, "mock": mock,
@@ -394,6 +399,16 @@ a{color:inherit}
 .dist .row{display:grid;grid-template-columns:88px 1fr auto;align-items:center;gap:10px;font-size:13px}
 .dist .bar{height:16px;background:var(--accent2);border-radius:0 4px 4px 0;min-width:2px}
 .dist .val{font-weight:700;font-variant-numeric:tabular-nums}
+.pmxwrap{overflow-x:auto}
+.pmx{border-collapse:separate;border-spacing:2px;font-size:12.5px;min-width:100%}
+.pmx th{font-weight:600;color:var(--muted);text-align:center;padding:3px 4px;font-size:13px;white-space:nowrap}
+.pmx th.cnr{text-align:left;font-size:11px;font-weight:600}
+.pmx td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px;font-size:12px}
+.pmx td.c{text-align:center;border-radius:5px;font-variant-numeric:tabular-nums;min-width:34px;
+  padding:5px 4px;color:var(--muted);background:var(--bg)}
+.pmx td.c.has{color:var(--ink);cursor:pointer}
+.pmx td.c.has:hover{outline:2px solid var(--accent)}
+.pmx td.c.tot{font-weight:800;color:var(--ink);background:transparent}
 .catlead{display:flex;flex-direction:column;gap:11px}
 .catlead .crow{display:flex;flex-direction:column;gap:5px}
 .catlead .clab{font-size:12.5px;font-weight:700}
@@ -549,7 +564,7 @@ function filtered(){
     if(state.unreadOnly && read.has(it.url)) return false;
     if(state.newonly && !isNew(it)) return false;
     if(terms.length){
-      const hay = (it.title+' '+(it.summary||'')+' '+(it.source||'')+' '+(it.assignee||'')+' '+(it.number||'')).toLowerCase();
+      const hay = (it.title+' '+(it.summary||'')+' '+(it.source||'')+' '+(it.assignee||'')+' '+(it.aName||'')+' '+(it.number||'')).toLowerCase();
       if(!terms.every(t=>hay.includes(t))) return false;
     }
     return true;
@@ -795,83 +810,73 @@ function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const countries = FEED.patents.countries;
   const cats = FEED.patents.categories;
-  // 출원인 집계 {name:{cnt, co:{KR,US}}}
-  const byA = {};
-  list.forEach(it=>{ const nm=it.aName||'(출원인 미상)'; const o=byA[nm]||(byA[nm]={cnt:0,co:{}});
-    o.cnt++; o.co[it.country]=(o.co[it.country]||0)+1; });
-  const ranked = Object.keys(byA).map(nm=>({name:nm, cnt:byA[nm].cnt, co:byA[nm].co}))
+  const catByKey = {}; cats.forEach(c=>catByKey[c.key]=c);
+  const flag = iso => (countries.find(c=>c.code===iso)||{emoji:''}).emoji;
+
+  // 출원인 집계 + 출원인×분야 그리드
+  const byA = {};   // name -> {cnt, iso, grid:{field:count}}
+  list.forEach(it=>{ const nm=it.aName||'(미상)';
+    const o=byA[nm]||(byA[nm]={cnt:0, iso:it.aCountry||it.country||'', grid:{}});
+    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1;
+    if(!o.iso) o.iso=it.aCountry||it.country||''; });
+  const ranked = Object.keys(byA).map(nm=>Object.assign({name:nm}, byA[nm]))
     .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
   const uniq = ranked.length;
   const topA = ranked[0];
-  const top = ranked.slice(0,15);
-  const maxA = top[0].cnt || 1;
-  const leadRows = top.map((r,i)=>{
-    const w = Math.max(2, r.cnt/maxA*100);
-    const co = countries.filter(c=>r.co[c.code]).map(c=>c.emoji+r.co[c.code]).join(' ');
-    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'+(i+1)+'</span>'+esc(r.name)+'</div>'
-      + '<div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
-      + '<div class="val">'+r.cnt+'<span class="co">'+co+'</span></div></div>';
+  const krN = ranked.filter(r=>r.iso==='KR').length;
+  const usN = ranked.filter(r=>r.iso==='US').length;
+
+  // ── 출원인 × 분야 매트릭스 (핵심) ──
+  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
+  const head='<tr><th class="cnr">출원인 \\ 분야</th>'
+    + cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')+'<th>합계</th></tr>';
+  const body=ranked.map(r=>{
+    const cells=cats.map(c=>{ const v=r.grid[c.key]||0;
+      const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
+      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
+      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(catByKey[c.key].name)+' '+v+'건 (클릭해 보기)"'):' class="c"';
+      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>';
+    }).join('');
+    return '<tr><td class="lab">'+flag(r.iso)+' '+esc(r.name)+'</td>'+cells+'<td class="c tot">'+r.cnt+'</td></tr>';
   }).join('');
-  // 공개청 분포
-  const byC = {}; list.forEach(it=> byC[it.country]=(byC[it.country]||0)+1);
-  const maxC = Math.max(1, ...Object.values(byC));
-  const distRows = countries.filter(c=>byC[c.code]).sort((a,b)=>(byC[b.code]||0)-(byC[a.code]||0)).map(c=>{
-    const v=byC[c.code]||0, w=Math.max(2,v/maxC*100), pct=(v/list.length*100).toFixed(0);
-    return '<div class="row"><span>'+c.emoji+' '+esc(c.name)+'</span>'
-      + '<div class="bar" style="width:'+w+'%"></div><span class="val">'+v
-      + ' <span style="color:var(--muted);font-weight:500">('+pct+'%)</span></span></div>';
-  }).join('');
-  // 카테고리별 주요 출원인 — 각 분야 표본에서 자주 등장한 출원인(상한 영향 적음).
-  // (카테고리 간 '건수' 비교는 수집 상한으로 포화돼 의미가 없어, '누가'로 대체)
+
+  // ── 분야별 주요 출원인 ──
   const byCatA = {};
-  list.forEach(it=>{ const k=it.category, nm=it.aName||'(출원인 미상)';
+  list.forEach(it=>{ const k=it.category, nm=it.aName||'(미상)';
     (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1; });
   const catLeadRows = cats.filter(c=>byCatA[c.key]).map(c=>{
     const entries=Object.entries(byCatA[c.key])
-      .filter(([n])=>n!=='(출원인 미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+      .filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
     const chips=entries.slice(0,3).map(([n,v])=>
       '<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
     return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div>'
-      + '<div class="ctops">'+(chips||'<span class="unknown">출원인 미상</span>')+'</div></div>';
+      + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
   }).join('');
 
-  // 출원인 국적(추정) — 타일 그리드 지도 + 국가 랭킹
-  const byN={}; let unknown=0;
-  list.forEach(it=>{ const c=it.aCountry; if(!c){unknown++;return;} byN[c]=(byN[c]||0)+1; });
-  const maxN=Math.max(1,...Object.values(byN));
-  const cells=Object.keys(CGRID).map(iso=>{ const g=CGRID[iso], v=byN[iso]||0;
-    const bg=v?('background:rgba(232,163,61,'+(0.2+v/maxN*0.72).toFixed(2)+');border-color:transparent'):'';
-    return '<div class="cell" style="grid-column:'+g.c+';grid-row:'+g.r+';'+bg+'" title="'+g.n+' '+v+'건">'
-      + g.f+'<span class="cv">'+(v||'')+'</span></div>'; }).join('');
-  const natRanked=Object.entries(byN).sort((a,b)=>b[1]-a[1]);
-  const denom=list.length||1;
-  const natRows=natRanked.map(([iso,v])=>{ const g=CGRID[iso]||{f:'🏳️',n:iso};
-    const w=Math.max(2,v/maxN*100), pct=(v/denom*100).toFixed(0);
-    return '<div class="row"><span>'+g.f+' '+esc(g.n)+'</span><div class="bar" style="width:'+w+'%"></div>'
-      + '<span class="val">'+v+' <span style="color:var(--muted);font-weight:500">('+pct+'%)</span></span></div>'; }).join('');
+  // ── 출원인 랭킹(총 출원 표본 수) ──
+  const top=ranked.slice(0,15); const maxA=top[0].cnt||1;
+  const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.cnt/maxA*100);
+    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'+(i+1)+'</span>'
+      + flag(r.iso)+' '+esc(r.name)+'</div><div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
+      + '<div class="val">'+r.cnt+'</div></div>'; }).join('');
 
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
-      + '<div><div class="k">대상 특허</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
-      + '<div><div class="k">고유 출원인</div><div class="v mono">'+uniq.toLocaleString()+'</div></div>'
-      + '<div><div class="k">최다 출원인</div><div class="v">'+esc(topA.name)
+      + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
+        + ' <span style="font-size:12px;color:var(--muted)">🇰🇷'+krN+' 🇺🇸'+usN+'</span></div></div>'
+      + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
+      + '<div><div class="k">최다 출원인</div><div class="v">'+flag(topA.iso)+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
       + '</div></div>'
-    + '<div class="panel wide"><h3>🗺️ 출원인 국적 (추정)</h3>'
-      + '<p class="sub">출원인 이름으로 추정한 국적(대기업 매핑 + 한글명은 한국). 위 \'공개청\'과는 다른 개념입니다.'
-        + (unknown? ' · 추정 미상 '+unknown+'건' : '') + '</p>'
-      + '<div class="natwrap"><div class="tilemap">'+cells+'</div>'
-      + '<div class="natbars">'+(natRows||'<span class="unknown">추정 가능한 국적이 없습니다.</span>')
-        + (unknown? '<div class="unknown">🏳️ 미상 '+unknown+'건 (매핑 안 된 출원인)</div>':'') + '</div></div></div>'
-    + '<div class="panel wide"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'명</span></h3>'
-      + '<p class="sub">현재 필터(카테고리·국가·검색) 기준 누적 출원 건수. 오른쪽은 공개청별 내역.</p>'
-      + '<div class="lead">'+leadRows+'</div></div>'
-    + '<div class="panel"><h3>🌐 공개청 분포</h3><p class="sub">특허가 공개된 특허청 기준(출원인 국적과 다를 수 있음). '
-      + '국가별 수집 상한이 있어 필터가 없으면 KR·US가 비슷하게 나옵니다.</p>'
-      + '<div class="dist">'+distRows+'</div></div>'
-    + '<div class="panel"><h3>🏭 카테고리별 주요 출원인</h3>'
-      + '<p class="sub">각 분야 표본에서 자주 등장한 출원인. 카테고리 간 \'건수\'가 아니라 \'누가 그 분야를 이끄는지\'를 봅니다(숫자는 표본 내 등장 횟수).</p>'
+    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스</h3>'
+      + '<p class="sub">주요 출원인이 <b>어느 분야에</b> 최근 특허를 냈는지(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허를 봅니다. 열 머리글에 마우스를 올리면 분야명이 보입니다.</p>'
+      + '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></div>'
+    + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
+      + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
+    + '<div class="panel"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'</span></h3>'
+      + '<p class="sub">현재 필터 기준 표본 내 총 출원 수.</p>'
+      + '<div class="lead">'+leadRows+'</div></div>'
     + '</div>';
 }
 
@@ -956,6 +961,12 @@ function wire(){
       state.limit=PAGE; render(); $('#results').scrollIntoView({behavior:'smooth',block:'start'}); }
   };
   $('#results').addEventListener('click', e=>{
+    // 매트릭스 칸 클릭 → 그 출원인·분야로 좁혀 목록 보기
+    const mc=e.target.closest('.pmx td.has[data-ap]');
+    if(mc){ state.q=mc.getAttribute('data-ap'); $('#q').value=state.q;
+      state.cats=new Set([mc.getAttribute('data-cat')]); state.view='list';
+      state.limit=PAGE; updateViewToggle(); renderChips(); render();
+      $('#results').scrollIntoView({behavior:'smooth',block:'start'}); return; }
     const sb=e.target.closest('[data-save]');
     if(sb){ e.preventDefault(); const u=sb.getAttribute('data-save');
       saved.has(u)?saved.delete(u):saved.add(u); persist(); render(); return; }

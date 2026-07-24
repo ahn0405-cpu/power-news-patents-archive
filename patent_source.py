@@ -1,12 +1,14 @@
-"""전력 특허 수집 (Google Patents 비공식 JSON, 무API·무키).
+"""전력 특허 수집 (Google Patents 비공식 JSON, 무API·무키) — 출원인 × 분야.
 
-Google Patents 프런트엔드가 쓰는 xhr/query 엔드포인트를 사용한다. 카테고리·국가별로
-'최근 N일 공개(publication)' 특허를 키워드로 조회 → 표준 dict 로 반환한다.
+큐레이션한 주요 출원인마다, 8개 전력 분야의 제목 키워드로 교집합 조회한다:
+  assignee="<출원인>" & q=TI="<분야 용어>" & country=<국적> & sort=new
+→ '그 출원인이 그 분야에 낸 최신 특허'를 정밀하게 얻는다(질의어가 곧 분야 태그).
 
-비공식 엔드포인트라 언제든 막힐 수 있으므로 실패에 관대하다:
-  - 개별 쿼리 실패는 건너뛴다.
-  - 전부 실패(차단/오프라인)하거나 PATENT_MOCK=on 이면 재현 가능한 MOCK 으로 폴백한다.
-  → 특허 수집이 실패해도 사이트(특히 뉴스 탭)는 항상 정상 빌드된다.
+프로브(Actions)로 실측 확인한 문법이며, KR 특허도 Google 은 영문 제목으로 색인하므로
+분야 키워드는 영어 하나로 KR/US 공통 사용한다. 검색 결과에 CPC 는 없다.
+
+비공식 엔드포인트라 실패에 관대하다(개별 실패는 건너뛰고, 전부 실패/오프라인이거나
+PATENT_MOCK=on 이면 재현 가능한 MOCK 으로 폴백). 특허가 비어도 뉴스 탭은 정상 빌드된다.
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import hashlib
 import html
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
@@ -25,20 +28,10 @@ _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 _BASE = "https://patents.google.com/xhr/query"
 
 
-def _build_url(term: str, country: str, cpc: str = "") -> str:
-    # 내부 검색 질의(q=키워드&country=..&sort=new)를 통째로 url= 파라미터에 '한 번만'
-    # 인코딩해 넣는다. urlencode 로 미리 인코딩한 뒤 다시 quote 하면 특수문자가
-    # 이중 인코딩돼 엔드포인트가 500 을 반환한다.
-    #
-    # 절대 날짜창(before/after=publication:...) 대신 sort=new(최신 공개순)를 쓴다.
-    # 날짜창은 실행 환경 시계가 실제와 어긋나면(미래 날짜) 결과가 0이 되기 때문.
-    # '최신순 상위 N + 아카이브 중복제거'로 매주 새로 공개된 특허만 누적한다.
-    # 제목 필드 정확검색: q=TI="용어" → 제목에 그 용어가 있어야 매칭.
-    # (Actions 프로브로 지원·정밀도 실측 확인. 무선통신·AI 특허는 제목이 달라 배제됨.)
-    # cpc 는 옵션(제공 시 AND 로 추가 잠금). 콤마 멀티CPC 는 AND(교집합)라 쓰지 않는다.
-    inner = f'q=TI="{term}"&country={country}&sort=new'
-    if cpc:
-        inner += f"&cpc={cpc}"
+def _build_url(assignee_q: str, country: str, term: str) -> str:
+    # 내부 검색질의를 통째로 url= 에 '한 번만' 인코딩. assignee 전용 파라미터(정밀)와
+    # 제목 정확검색 TI= 을 AND 로 결합한다. (프로브로 문법·정밀도 확인함)
+    inner = f'assignee={assignee_q}&q=TI="{term}"&country={country}&sort=new'
     return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
 
 
@@ -49,26 +42,8 @@ def _parse_json(raw: bytes) -> dict:
     return json.loads(text)
 
 
-def _fetch(term: str, country: str, cpc: str = "") -> list[dict]:
-    url = _build_url(term, country, cpc)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": _UA, "Accept": "application/json",
-        "Referer": "https://patents.google.com/",
-    })
-    with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        data = _parse_json(r.read())
-    out = []
-    clusters = (data.get("results", {}) or {}).get("cluster", []) or []
-    for cl in clusters:
-        for res in cl.get("result", []) or []:
-            pat = res.get("patent", {}) or {}
-            pid = res.get("id", "")   # 예: "patent/KR20260012345A/en"
-            out.append(_normalize(pat, pid, country))
-    return out
-
-
 def _clean(text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", text or "")
+    text = re.sub(r"<[^>]+>", "", text or "")   # <b> 하이라이트 등 제거
     return html.unescape(text).strip()
 
 
@@ -99,6 +74,24 @@ def _normalize(pat: dict, pid: str, country: str) -> dict:
     }
 
 
+def _fetch(assignee_q: str, country: str, term: str) -> list[dict]:
+    url = _build_url(assignee_q, country, term)
+    req = urllib.request.Request(url, headers={
+        "User-Agent": _UA, "Accept": "application/json",
+        "Referer": "https://patents.google.com/",
+    })
+    with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
+        data = _parse_json(r.read())
+    out = []
+    clusters = (data.get("results", {}) or {}).get("cluster", []) or []
+    for cl in clusters:
+        for res in cl.get("result", []) or []:
+            pat = res.get("patent", {}) or {}
+            pid = res.get("id", "")
+            out.append(_normalize(pat, pid, country))
+    return out
+
+
 def _dedup_key(p: dict) -> str:
     return (p.get("number") or "").upper() or re.sub(r"[\s\W_]+", "", p.get("title", "").lower())
 
@@ -108,87 +101,91 @@ def _live_collect() -> list[dict]:
     seen: set[str] = set()
     errors = 0
     total_q = 0
-    for cat in cfg.CATEGORIES:
-        cat_added = 0
-        for country in cfg.COUNTRIES:
-            # 국가별로 상한을 따로 둔다 → 먼저 조회한 나라가 카테고리 몫을 독식하지 않게.
-            added_c = 0
-            terms = cat["kr"] if country == "KR" else cat["en"]
-            for term in terms:
+    for ap in cfg.APPLICANTS:
+        ap_added = 0
+        for cat in cfg.CATEGORIES:
+            pair_added = 0            # (출원인×분야) 조합 상한
+            for term in cat["terms"]:
                 total_q += 1
                 try:
-                    items = _fetch(term, country, cat.get("cpc", ""))
+                    items = _fetch(ap["q"], ap["iso"], term)
                 except Exception as e:
                     errors += 1
-                    print(f"  ! [{cat['name']}/{country}] '{term}' 실패: {e}")
+                    print(f"  ! [{ap['name']}/{cat['key']}] '{term}' 실패: {e}")
+                    if cfg.REQUEST_DELAY:
+                        time.sleep(cfg.REQUEST_DELAY)
                     continue
                 for it in items:
                     key = _dedup_key(it)
                     if not key or key in seen:
                         continue
                     seen.add(key)
-                    it["category"] = cat["key"]
+                    it["category"] = cat["key"]      # 질의어 = 분야 태그
+                    it["applicant"] = ap["name"]      # 큐레이션 대표명(우리가 조회한 주체)
                     collected.append(it)
-                    added_c += 1
-                    cat_added += 1
-                    if added_c >= cfg.PER_COUNTRY_LIMIT:
+                    pair_added += 1
+                    ap_added += 1
+                    if pair_added >= cfg.PER_PAIR_LIMIT:
                         break
-                if added_c >= cfg.PER_COUNTRY_LIMIT:
+                if cfg.REQUEST_DELAY:
+                    time.sleep(cfg.REQUEST_DELAY)
+                if pair_added >= cfg.PER_PAIR_LIMIT:
                     break
-        print(f"  · {cat['emoji']} {cat['name']}: {cat_added}건")
-    if not collected and errors >= total_q:
+        print(f"  · {ap['name']} ({ap['iso']}): {ap_added}건")
+    if not collected and errors >= max(1, total_q):
         raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
     return collected
 
 
-# ── MOCK (오프라인/차단 시 폴백) ──────────────────────────────────
-_MOCK = {
-    "supply": [("전력 수요 예측 기반 부하 분산 제어 장치 및 방법", "가상전력연구원", "KR"),
-               ("Demand response controller for grid load balancing", "MockGrid Inc.", "US")],
-    "grid": [("초고압 직류 송전용 전력변환 장치", "가상중공업", "KR"),
-             ("Fault detection method for power substation", "MockPower Corp.", "US")],
-    "nuclear": [("소형모듈원자로의 피동 냉각 계통", "가상원자력", "KR"),
-                ("Passive cooling system for small modular reactor", "MockNuclear LLC", "US")],
-    "renew": [("리튬이온 에너지저장장치의 열관리 시스템", "가상배터리", "KR"),
-              ("Grid-tied photovoltaic inverter control", "MockSolar Inc.", "US")],
-    "datacenter": [("데이터센터용 무정전 전원공급 장치", "가상전자", "KR"),
-                   ("Power distribution unit for data center racks", "MockDC Systems", "US")],
-    "mega": [("전력반도체 모듈의 방열 구조", "가상반도체", "KR"),
-             ("Silicon carbide power semiconductor device", "MockSemi Ltd.", "US")],
-    "meter": [("양방향 스마트 전력량계 및 통신 방법", "가상계량", "KR"),
-              ("Smart metering system with anomaly detection", "MockMeter Co.", "US")],
-    "industry": [("가스절연 개폐장치용 차단기", "가상전기", "KR"),
-                 ("High voltage circuit breaker assembly", "MockSwitch Corp.", "US")],
+# ── MOCK (오프라인/차단 시 폴백) — 출원인 × 분야 표본 합성 ─────────────
+# 각 출원인에게 '그 회사다운' 분야 몇 개를 배정해 매트릭스가 채워지게 한다.
+_AP_FIELDS = {
+    "삼성전자": ["mega", "renew"], "삼성SDI": ["renew"], "LG에너지솔루션": ["renew"],
+    "LG전자": ["datacenter", "mega"], "SK하이닉스": ["mega"], "SK온": ["renew"],
+    "현대자동차": ["renew", "mega"], "현대일렉트릭": ["grid", "industry"],
+    "LS일렉트릭": ["grid", "industry", "meter"], "LS전선": ["grid"],
+    "효성중공업": ["grid", "industry"], "두산에너빌리티": ["nuclear", "grid"],
+    "한국전력공사": ["grid", "supply", "meter"], "한국수력원자력": ["nuclear"],
+    "한국전기연구원": ["grid", "supply"], "한화솔루션": ["renew"],
+    "General Electric": ["nuclear", "grid"], "Westinghouse": ["nuclear"],
+    "Tesla": ["renew", "datacenter"], "First Solar": ["renew"],
+    "Eaton": ["industry", "datacenter"], "GE Vernova": ["grid", "nuclear"],
 }
 
 
 def _mock_collect(today: datetime) -> list[dict]:
     seed = int(hashlib.md5(today.strftime("%Y-%m-%d").encode()).hexdigest()[:8], 16)
     collected = []
-    for ci, cat in enumerate(cfg.CATEGORIES):
-        for i, (title, assignee, country) in enumerate(_MOCK.get(cat["key"], [])):
-            days_ago = (seed + ci * 2 + i * 3) % max(1, cfg.LOOKBACK_DAYS)
+    for ai, ap in enumerate(cfg.APPLICANTS):
+        fields = _AP_FIELDS.get(ap["name"], ["grid"])
+        for fi, fkey in enumerate(fields):
+            cat = cfg.CATEGORY_BY_KEY.get(fkey)
+            if not cat:
+                continue
+            term = cat["terms"][0]
+            days_ago = (seed + ai * 3 + fi * 5) % max(1, cfg.LOOKBACK_DAYS)
             pub = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-            serial = 10000 + (seed + ci * 37 + i * 101) % 90000
-            num = (f"KR1020260{serial}A" if country == "KR"
+            serial = 10000 + (seed + ai * 37 + fi * 101) % 90000
+            num = (f"KR1020260{serial}A" if ap["iso"] == "KR"
                    else f"US2026{serial}A1")
             collected.append({
                 "number": num,
-                "title": title,
-                "assignee": assignee,
+                "title": f"[{ap['name']}] {term} related apparatus",
+                "assignee": ap["name"],
                 "inventor": "",
                 "pub_date": pub,
                 "filing_date": None,
                 "snippet": "[샘플 데이터] 네트워크 차단/오프라인 환경의 미리보기용 항목입니다.",
-                "country": country,
-                "url": "https://patents.google.com/?q=" + urllib.parse.quote(title),
-                "category": cat["key"],
+                "country": ap["iso"],
+                "url": "https://patents.google.com/?assignee=" + urllib.parse.quote(ap["q"]),
+                "category": fkey,
+                "applicant": ap["name"],
             })
     return collected
 
 
 def collect(today: datetime) -> tuple[list[dict], bool]:
-    """최신 공개 특허(키워드별 최신순 상위 N)와 mock 여부를 반환.
+    """(출원인×분야) 최신 특허 목록과 mock 여부를 반환.
 
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
     """
