@@ -26,6 +26,7 @@ import news_source
 import news_archive
 import patent_archive
 import patent_source
+import brief_archive
 import site_render
 
 
@@ -81,11 +82,17 @@ def main() -> None:
     # ── 저장 + 전체 사이트 재생성 ──
     news_archive.save(ncfg.SITE_DIR, news_days, generated)
     patent_archive.save(ncfg.SITE_DIR, patent_weeks, generated)
-    brief = _load_brief()
-    if brief:
-        print(f"  브리핑: {brief.get('date', '?')} — {brief.get('headline', '')[:40]}…")
+
+    # 서술형 브리핑: 이전 아카이브 로드 → 현재 brief.json 병합(날짜별 누적) → 저장.
+    briefs = brief_archive.load_briefs(source_dir)
+    current = _load_brief()
+    brief_archive.merge(briefs, current)
+    brief_archive.save(ncfg.SITE_DIR, briefs)
+    brief_list = brief_archive.sorted_list(briefs)
+    if brief_list:
+        print(f"  브리핑: {len(brief_list)}개 (최신 {brief_list[0].get('date','?')})")
     index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
-                                   generated, brief=brief)
+                                   generated, briefs=brief_list)
 
     nt = sum(len(d.get("articles", [])) for d in news_days.values())
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())

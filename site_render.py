@@ -114,8 +114,8 @@ def _canon_assignee(name: str) -> str:
                   r"S\.?A\.?|N\.?V\.?|A\.?G\.?)\s*$", "", s, flags=re.I).strip().strip(",.")
     return disp or s
 
-SITE_TITLE = "전력 이슈 뉴스·특허 아카이브"
-SITE_TAGLINE = "반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대의 전력 이슈 — 뉴스(매일)·특허(매주)"
+SITE_TITLE = "IP·Power"
+SITE_TAGLINE = "전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대"
 
 
 def _news_feed(news_days: dict[str, dict]) -> dict:
@@ -174,14 +174,16 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
 
 def render_all(site_dir: Path, news_days: dict[str, dict],
                patent_weeks: dict[str, dict], generated: str,
-               brief: dict | None = None) -> Path:
+               briefs: list[dict] | None = None) -> Path:
     site_dir = Path(site_dir)
     site_dir.mkdir(parents=True, exist_ok=True)
 
+    briefs = briefs or []
     feed = {
         "generated": generated,
         "title": SITE_TITLE, "tagline": SITE_TAGLINE,
-        "brief": brief or None,
+        "brief": briefs[0] if briefs else None,   # 최신(홈 상단)
+        "briefs": briefs,                          # 최신순 전체(타임라인)
         "insights": _insights.build(news_days, patent_weeks),
         "news": _news_feed(news_days),
         "patents": _patent_feed(patent_weeks),
@@ -232,7 +234,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
   line-height:1.55;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SFMono-Regular",Menlo,monospace}
-.wrap{max-width:1080px;margin:0 auto;padding:24px 20px 72px}
+.wrap{max-width:1600px;margin:0 auto;padding:22px 32px 72px}
+/* 상세(뉴스·특허) 목록은 가독성을 위해 읽기 폭을 가운데 정렬로 제한. 홈/통계는 전체 폭. */
+.readcol{max-width:1120px;margin-left:auto;margin-right:auto}
 .mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0}
 .mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;display:flex;gap:9px;align-items:center}
 .mast h1 .bolt{color:var(--accent)}
@@ -275,6 +279,29 @@ a{color:inherit}
 .brief .btoggle{margin-left:auto;background:none;border:0;color:var(--accent2);font:inherit;font-size:11px;cursor:pointer}
 .brief.collapsed .bbody,.brief.collapsed .bpoints{display:none}
 @media (max-width:820px){ .brief .bpoints{grid-template-columns:1fr} }
+/* 홈(대시보드) */
+.homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,
+.homemode #more,.homemode #viewToggle{display:none!important}
+.home{display:flex;flex-direction:column;gap:16px}
+.home .sec{font-size:12px;font-weight:800;margin:4px 2px 2px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.homekpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.homebot{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
+.homepanel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px 16px;box-shadow:var(--shadow);min-width:0}
+.homepanel h3{font-size:14px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:7px}
+.homepanel .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
+.homepanel .morelink{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--accent2);cursor:pointer}
+.timeline{display:flex;flex-direction:column}
+.timeline .tl{border-left:2px solid var(--line);padding:0 0 14px 15px;position:relative}
+.timeline .tl:last-child{padding-bottom:2px}
+.timeline .tl::before{content:"";position:absolute;left:-5px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.timeline .tld{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.timeline .tlh{font-size:13px;font-weight:700;margin:2px 0 3px;cursor:pointer;line-height:1.4}
+.timeline .tlh:hover{color:var(--accent2)}
+.timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
+.timeline .tl.open .tlb{display:block}
+.mxmini{overflow-x:auto}
+@media (max-width:1100px){ .homebot{grid-template-columns:1fr} }
+@media (max-width:720px){ .homekpi{grid-template-columns:repeat(2,1fr)} }
 /* 트렌드 인사이트 바 */
 .insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
 .insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
@@ -451,15 +478,15 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <p class="tag">__TAGLINE__</p>
   </header>
   <nav class="tabs" role="tablist" aria-label="보기 전환">
-    <button role="tab" id="tab-news" aria-selected="true" data-tab="news">📰 뉴스</button>
+    <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
+    <button role="tab" id="tab-news" aria-selected="false" data-tab="news">📰 뉴스</button>
     <button role="tab" id="tab-patents" aria-selected="false" data-tab="patents">📄 특허</button>
   </nav>
+  <section class="home" id="home" aria-label="대시보드" hidden></section>
   <div class="viewseg" id="viewToggle" role="group" aria-label="특허 보기 방식">
     <button data-view="list" aria-pressed="true">목록</button>
     <button data-view="stats" aria-pressed="false">📊 통계</button>
   </div>
-  <section class="brief" id="brief" aria-label="오늘의 브리핑" hidden></section>
-  <section class="insights" id="insights" aria-label="트렌드 인사이트" hidden></section>
   <section class="overview" id="overview" aria-label="개요"></section>
   <div class="controls">
     <div class="searchrow">
@@ -520,7 +547,7 @@ let read  = new Set(JSON.parse(localStorage.getItem(LS_READ)||'[]'));
 let briefCollapsed = localStorage.getItem('pnp_briefClosed')==='1';
 function persist(){ localStorage.setItem(LS_SAVE,JSON.stringify([...saved])); localStorage.setItem(LS_READ,JSON.stringify([...read])); }
 
-const state = { tab:'news', view:'list', q:'', cats:new Set(), countries:new Set(),
+const state = { tab:'home', view:'list', q:'', cats:new Set(), countries:new Set(),
   sort:'new', newonly:false, period:'all', source:'', savedOnly:false, unreadOnly:false, limit:PAGE };
 
 function catMap(tab){ const m={}; FEED[tab].categories.forEach(c=>m[c.key]=c); return m; }
@@ -621,13 +648,9 @@ function sparkline(series){
   return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이(막대 클릭 시 그 기간만)">'+bars+'</svg>';
 }
 
-function renderBrief(){
-  const box = $('#brief');
-  const b = FEED.brief;
-  // 서술형 브리핑은 뉴스 홈에서만. 반자동(사람이 갱신·커밋)이라 없을 수도 있다.
-  if(state.tab!=='news' || !b || !(b.headline || (b.body&&b.body.length))){
-    box.hidden=true; box.innerHTML=''; return; }
-  box.hidden=false;
+function briefHTML(){
+  const b = FEED.brief;   // 최신 브리핑(홈 상단)
+  if(!b || !(b.headline || (b.body&&b.body.length))) return '';
   // 최신 뉴스일과 브리핑 기준일 차이 → 오래된 브리핑이면 정직하게 표시.
   let stale='';
   const L=latestNewsDate();
@@ -640,9 +663,8 @@ function renderBrief(){
   if(b.author) foot.push('✍️ '+esc(b.author)+(b.mode?' · '+esc(b.mode):''));
   if(b.basis) foot.push('<span class="sep">·</span> '+esc(b.basis));
   if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
-  box.className='brief'+(briefCollapsed?' collapsed':'');
-  box.innerHTML =
-    '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
+  return '<div class="brief'+(briefCollapsed?' collapsed':'')+'">'
+    + '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
     + (b.date?'<span class="bdate">'+esc(b.date)+' 기준</span>':'') + stale
     + '<button class="btoggle" id="briefToggle">'+(briefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
     + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
@@ -651,12 +673,9 @@ function renderBrief(){
     + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'');
 }
 
-function renderInsights(){
-  const box = $('#insights');
+function insightsHTML(){
   const ins = FEED.insights;
-  // 인사이트는 뉴스 홈에서만 노출(뉴스 흐름 + 특허 교차). 특허 탭에선 숨김.
-  if(state.tab!=='news' || !ins || !ins.asOf){ box.hidden=true; box.innerHTML=''; return; }
-  box.hidden=false;
+  if(!ins || !ins.asOf) return '';
   const w = ins.window || {recentDays:7, recentWeeks:4};
 
   // 1) 최근 많이 언급된 키워드 (클릭 → 검색)
@@ -688,16 +707,75 @@ function renderInsights(){
       +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
   }).join('') : '<span class="iempty">이번 주 공개 특허가 아직 없습니다.</span>';
 
-  box.innerHTML =
-    '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
+  return '<div class="insights">'
+    + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
     + '<p class="isub">최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색</p>'
     + '<div class="kwrap">'+kwHtml+'</div></div>'
     + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
-    + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비)</p>'
+    + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터</p>'
     + '<div class="trend">'+ctHtml+'</div></div>'
     + '<div class="ipanel"><h3>📄 이번 주 공개 특허</h3>'
     + '<p class="isub">최근 공개분 일부 · 무엇을/누가 출원했는지 (건수 아님) · 클릭 시 원문</p>'
-    + '<div class="ppick">'+pkHtml+'</div></div>';
+    + '<div class="ppick">'+pkHtml+'</div></div></div>';
+}
+
+function kpiHTML(){
+  const n=FEED.news, p=FEED.patents;
+  const nL = n.perDay.length? n.perDay[n.perDay.length-1] : {x:'-',y:0};
+  const pL = p.perWeek.length? p.perWeek[p.perWeek.length-1] : {x:'-',y:0};
+  return '<div class="homekpi">'
+    + tile('📰 뉴스 누적', n.items.length.toLocaleString())
+    + tile('📰 최근일', nL.y+'<small>건 · '+esc(nL.x)+'</small>')
+    + tile('📄 특허 누적', p.items.length.toLocaleString())
+    + tile('📄 최근주', pL.y+'<small>건 · '+esc(pL.x)+'</small>')
+    + '</div>';
+}
+
+function matrixMiniHTML(){
+  const list=FEED.patents.items; if(!list.length) return '';
+  const cats=FEED.patents.categories, countries=FEED.patents.countries;
+  const flag=iso=>(countries.find(c=>c.code===iso)||{emoji:''}).emoji;
+  const byA={};
+  list.forEach(it=>{ const nm=it.aName||'(미상)';
+    const o=byA[nm]||(byA[nm]={cnt:0,iso:it.aCountry||it.country||'',grid:{}});
+    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; });
+  const ranked=Object.keys(byA).map(nm=>Object.assign({name:nm},byA[nm]))
+    .sort((a,b)=>b.cnt-a.cnt||a.name.localeCompare(b.name)).slice(0,7);
+  if(!ranked.length) return '';
+  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
+  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')+'</tr>';
+  const body=ranked.map(r=>{
+    const cells=cats.map(c=>{ const v=r.grid[c.key]||0; const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
+      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
+      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
+      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
+    return '<tr><td class="lab">'+flag(r.iso)+' '+esc(r.name)+'</td>'+cells+'</tr>';
+  }).join('');
+  return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
+    + '<p class="sub">주요 출원인이 어느 분야에 특허를 내는지(상위 '+ranked.length+'). 칸을 누르면 특허 탭 상세.</p>'
+    + '<div class="mxmini"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></div>';
+}
+
+function timelineHTML(){
+  const past=(FEED.briefs||[]).slice(1);   // 최신은 위에 크게 노출, 나머지를 타임라인으로
+  const inner = past.length ? past.map((b,i)=>{
+    const body=(b.body||[]).slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('');
+    return '<div class="tl" data-ti="'+i+'"><div class="tld">'+esc(b.date||'')+'</div>'
+      + '<div class="tlh">'+esc(b.headline||'(제목 없음)')+'</div>'
+      + '<div class="tlb">'+body+'</div></div>';
+  }).join('') : '<p class="homehint">지난 브리핑이 쌓이면 여기 타임라인으로 보여요(매주 갱신).</p>';
+  return '<div class="homepanel"><h3>🗓️ 지난 브리핑</h3>'
+    + '<p class="sub">제목을 누르면 요지가 펼쳐집니다.</p>'
+    + '<div class="timeline">'+inner+'</div></div>';
+}
+
+function renderHome(){
+  const parts=[];
+  const bh=briefHTML(); if(bh) parts.push(bh);
+  parts.push(kpiHTML());
+  const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
+  parts.push('<div class="homebot">'+(matrixMiniHTML()||'')+timelineHTML()+'</div>');
+  $('#home').innerHTML = parts.join('');
 }
 
 function latestPatentWeek(){ const p=FEED.patents.perWeek; return p.length? p[p.length-1].x : ''; }
@@ -730,6 +808,7 @@ function renderOverview(){
 function tile(k,v){ return '<div class="tile"><div class="k">'+k+'</div><div class="v mono">'+v+'</div></div>'; }
 
 function renderChips(){
+  if(state.tab==='home'){ $('#catChips').innerHTML=''; const cc=$('#countryChips'); cc.hidden=true; cc.innerHTML=''; return; }
   const f = FEED[state.tab], cm = {};
   f.items.forEach(it=> cm[it.category]=(cm[it.category]||0)+1);
   $('#catChips').innerHTML = f.categories.filter(c=>cm[c.key]).map(c=>
@@ -768,8 +847,10 @@ function renderSource(){
 }
 
 function render(){
-  renderBrief();
-  renderInsights();
+  const home = state.tab==='home';
+  document.querySelector('.wrap').classList.toggle('homemode', home);
+  $('#home').hidden = !home;
+  if(home){ renderHome(); updateViewToggle(); syncHash(); return; }
   renderOverview();
   renderPeriodBar(); renderSource();
   const list = filtered();
@@ -778,7 +859,9 @@ function render(){
   $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
     + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
   $('#reset').hidden = !active;
-  if(state.tab==='patents' && state.view==='stats'){
+  const isStats = state.tab==='patents' && state.view==='stats';
+  $('#results').classList.toggle('readcol', !isStats);   // 목록=읽기폭, 통계=전체폭
+  if(isStats){
     $('#results').innerHTML = renderStats(list);
     $('#more').hidden = true;
     syncHash(); return;
@@ -904,7 +987,7 @@ function syncHash(){
 }
 function loadHash(){
   const p = new URLSearchParams(location.hash.replace(/^#/,''));
-  if(p.get('tab')==='patents') state.tab='patents';
+  const t=p.get('tab'); if(t==='news'||t==='patents'||t==='home') state.tab=t;
   if(state.tab==='patents' && p.get('view')==='stats') state.view='stats';
   state.q = p.get('q')||'';
   state.sort = p.get('sort')==='old'?'old':'new';
@@ -917,11 +1000,25 @@ function loadHash(){
   if(p.get('co')) p.get('co').split(',').forEach(c=>state.countries.add(c));
 }
 
+function syncTabsUI(){ document.querySelectorAll('.tabs button')
+  .forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===state.tab)); }
+
+// 홈에서 특정 탭으로 이동하며 필터를 적용(키워드→검색, 카테고리·매트릭스→필터)
+function gotoTab(t, opts){ opts=opts||{};
+  state.tab=t; state.view=opts.view||'list';
+  state.cats.clear(); state.countries.clear(); state.period='all'; state.source='';
+  state.q=opts.q||''; if(opts.cat) state.cats.add(opts.cat);
+  state.limit=PAGE;
+  const q=$('#q'); if(q) q.value=state.q;
+  syncTabsUI(); updateViewToggle(); renderChips(); render();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
 function setTab(t){
   if(state.tab===t) return;
   state.tab=t; state.view='list'; state.cats.clear(); state.countries.clear();
   state.period='all'; state.source=''; state.limit=PAGE;
-  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===t));
+  syncTabsUI();
   updateViewToggle(); renderChips(); render();
 }
 
@@ -946,19 +1043,22 @@ function wire(){
     const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
-  $('#brief').onclick = e=>{ if(e.target.closest('#briefToggle')){
-    briefCollapsed=!briefCollapsed; localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0');
-    renderBrief(); } };
-  $('#insights').onclick = e=>{
-    const kw=e.target.closest('[data-kw]');
-    if(kw){ state.q=kw.getAttribute('data-kw'); $('#q').value=state.q; state.limit=PAGE;
-      render(); $('#results').scrollIntoView({behavior:'smooth',block:'start'}); return; }
-    const row=e.target.closest('[data-cat]');
-    if(row){ const k=row.getAttribute('data-cat');
-      state.cats.has(k)?state.cats.delete(k):state.cats.add(k);
-      const chip=document.querySelector('#catChips [data-cat="'+k+'"]');
-      if(chip) chip.setAttribute('aria-pressed', state.cats.has(k));
-      state.limit=PAGE; render(); $('#results').scrollIntoView({behavior:'smooth',block:'start'}); }
+  $('#home').onclick = e=>{
+    // 브리핑 접기/펼치기
+    if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
+      localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0'); renderHome(); return; }
+    // 지난 브리핑 타임라인 펼치기
+    const tl=e.target.closest('.tl'); if(tl && !e.target.closest('[data-go]')){ tl.classList.toggle('open'); return; }
+    // 키워드 → 뉴스 탭에서 검색
+    const kw=e.target.closest('[data-kw]'); if(kw){ gotoTab('news', {q:kw.getAttribute('data-kw')}); return; }
+    // 특허 통계 전체 보기
+    const go=e.target.closest('[data-go]'); if(go){ gotoTab('patents', {view:'stats'}); return; }
+    // 매트릭스 칸 → 특허 탭에서 그 출원인·분야
+    const mc=e.target.closest('.pmx td.has[data-ap]');
+    if(mc){ gotoTab('patents', {q:mc.getAttribute('data-ap'), cat:mc.getAttribute('data-cat')}); return; }
+    // 이슈 흐름 행 → 뉴스 탭 카테고리 필터
+    const row=e.target.closest('.trend [data-cat]');
+    if(row){ gotoTab('news', {cat:row.getAttribute('data-cat')}); return; }
   };
   $('#results').addEventListener('click', e=>{
     // 매트릭스 칸 클릭 → 그 출원인·분야로 좁혀 목록 보기
