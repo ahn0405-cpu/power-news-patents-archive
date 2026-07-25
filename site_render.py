@@ -470,6 +470,12 @@ a{color:inherit}
 .stats .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 17px;box-shadow:var(--shadow)}
 .stats .panel.wide{grid-column:1 / -1}
 .stats h3{font-size:14px;font-weight:700;margin:0 0 4px;display:flex;align-items:center;gap:7px}
+.rankseg{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.rankseg button{font:inherit;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--card);border:0;padding:4px 10px;cursor:pointer}
+.rankseg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.rgrank{margin-bottom:13px}
+.rgrank:last-child{margin-bottom:0}
+.rgrank .rghead{font-size:12px;margin-bottom:5px}
 .stats .sub{color:var(--muted);font-size:12px;margin:0 0 13px}
 .lead{display:flex;flex-direction:column;gap:9px}
 .lead .row{display:grid;grid-template-columns:170px 1fr auto;align-items:center;gap:10px}
@@ -1030,6 +1036,31 @@ function regionMatrixHTML(list, opts){
   return html || '<p class="sub" style="margin:0">아직 수집된 특허가 없습니다.</p>';
 }
 
+// 랭킹 보기 방식: 'region'(국적별) | 'all'(전 지역 통합)
+let rankMode = localStorage.getItem('pnp_rankMode')==='all' ? 'all' : 'region';
+
+function rankRowsHTML(rows, maxOverride){
+  const maxA = maxOverride || (rows[0] ? rows[0].total : 1) || 1;
+  return rows.map((r,i)=>{ const w=Math.max(2,r.total/maxA*100);
+    return '<div class="row"><div class="nm" title="'+esc(r.name)
+      + (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')+'">'
+      + '<span class="rk">'+(i+1)+'</span>'+(r.flag||'')+' '+esc(r.name)+'</div>'
+      + '<div class="bar'+(r.sampled?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
+      + '<div class="val">'+r.total+'</div></div>'; }).join('');
+}
+
+// 국적별 다출원 기업 — "미국에서 1등, 한국에서 1등" 을 한 화면에서 비교
+function regionRankHTML(ranked){
+  const out = FEED.patents.countries.map(rg=>{
+    const sub = ranked.filter(r=>r.region===rg.code);
+    if(!sub.length) return '';
+    return '<div class="rgrank"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
+      + ' <span class="rgn">'+sub.length+'곳</span></div>'
+      + rankRowsHTML(sub.slice(0,5)) + '</div>';
+  }).filter(Boolean).join('');
+  return out || '<span class="unknown">—</span>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const cats=FEED.patents.categories, regions=FEED.patents.countries;
@@ -1046,15 +1077,13 @@ function renderStats(list){
   }).join('');
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
-  const top=ranked.slice(0,15), maxA=top[0].total||1;
   const nSampled=ranked.filter(r=>r.sampled).length;
-  const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.total/maxA*100);
-    return '<div class="row"><div class="nm" title="'+esc(r.name)
-      + (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')+'">'
-      + '<span class="rk">'+(i+1)+'</span>'+(r.flag||'')+' '+esc(r.name)+'</div>'
-      + '<div class="bar'+(r.sampled?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
-      + '<div class="val">'+r.total+'</div></div>'; }).join('');
-  const rankSub = '전 지역 통합 · <b>실제 공개 건수</b> 기준(수집 상한과 무관).'
+  const leadRows = rankMode==='region'
+    ? regionRankHTML(ranked) : rankRowsHTML(ranked.slice(0,15));
+  const rankSub = (rankMode==='region'
+      ? '국적별로 그 나라 기업 중 다출원 순서(지역별 상위 5)'
+      : '전 지역 통합 상위 15')
+    + ' · <b>실제 공개 건수</b> 기준(수집 상한과 무관).'
     + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '');
 
   return '<div class="stats">'
@@ -1072,7 +1101,10 @@ function renderStats(list){
     + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
       + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
-    + '<div class="panel"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'</span></h3>'
+    + '<div class="panel"><h3>🏆 출원인 랭킹'
+      + '<span class="rankseg">'
+      + '<button data-rank="region" aria-pressed="'+(rankMode==='region')+'">국적별</button>'
+      + '<button data-rank="all" aria-pressed="'+(rankMode==='all')+'">전체</button></span></h3>'
       + '<p class="sub">'+rankSub+'</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
     + '</div>';
@@ -1192,6 +1224,10 @@ function wire(){
     if(row){ gotoTab('news', {cat:row.getAttribute('data-cat')}); return; }
   };
   $('#results').addEventListener('click', e=>{
+    // 랭킹 보기 토글(국적별 / 전체)
+    const rb=e.target.closest('[data-rank]');
+    if(rb){ rankMode=rb.getAttribute('data-rank');
+      localStorage.setItem('pnp_rankMode', rankMode); render(); return; }
     // 매트릭스 칸 클릭 → 그 출원인·분야로 좁혀 목록 보기
     const mc=e.target.closest('.pmx td.has[data-ap]');
     if(mc){ state.q=mc.getAttribute('data-ap'); $('#q').value=state.q;
