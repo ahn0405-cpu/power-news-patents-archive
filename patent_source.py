@@ -1,19 +1,20 @@
-"""전력 특허 수집 (Google Patents 비공식 JSON, 무API·무키) — 출원인 × 분야.
+"""전력 특허 수집 — EPO OPS(공식 API) 기반, 출원인 × 분야(CPC).
 
-큐레이션한 주요 출원인마다, 8개 전력 분야의 제목 키워드로 교집합 조회한다:
-  assignee="<출원인>" & q=TI="<분야 용어>" & country=<국적> & sort=new
-→ '그 출원인이 그 분야에 낸 최신 특허'를 정밀하게 얻는다(질의어가 곧 분야 태그).
+무키 Google Patents 프런트엔드에서 EPO OPS 공식 API 로 전환했다:
+  - 실행당 ~100요청 차단이 없어 회전 수집 불필요(출원인당 1~2요청).
+  - 응답에 CPC 가 있어 분야 분류가 정확하다(제목 키워드 추정 → CPC 분류).
+  - @country 로 실제 발행국(US/KR/CN/JP/EP/DE...)을 얻어 발행국별 매트릭스가 정확하다.
 
-프로브(Actions)로 실측 확인한 문법이며, KR 특허도 Google 은 영문 제목으로 색인하므로
-분야 키워드는 영어 하나로 KR/US 공통 사용한다. 검색 결과에 CPC 는 없다.
+질의: pa="<출원인>" and pd within "<시작> <끝>" and (cpc="H02J" or cpc="H02M" ...)
+      → 최근 N일 발행 + 전력 CPC 특허를 출원인별로 수집 → CPC 로 8개 분야에 분류.
 
-비공식 엔드포인트라 실패에 관대하다(개별 실패는 건너뛰고, 전부 실패/오프라인이거나
-PATENT_MOCK=on 이면 재현 가능한 MOCK 으로 폴백). 특허가 비어도 뉴스 탭은 정상 빌드된다.
+키는 GitHub Secret(OPS_KEY/OPS_SECRET). 키가 없거나 실패하면 MOCK 으로 폴백해
+뉴스 탭과 사이트 빌드는 항상 정상 동작한다.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
-import html
 import json
 import re
 import time
@@ -23,218 +24,278 @@ from datetime import datetime, timedelta
 
 import patent_config as cfg
 
-_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-       "Chrome/124.0 Safari/537.36")
-_BASE = "https://patents.google.com/xhr/query"
+AUTH_URL = "https://ops.epo.org/3.2/auth/accesstoken"
+SEARCH_URL = "https://ops.epo.org/3.2/rest-services/published-data/search/biblio"
 
 
-def _build_url(assignee_q: str, term: str) -> str:
-    # 내부 검색질의를 통째로 url= 에 '한 번만' 인코딩. assignee 전용 파라미터(정밀)와
-    # 제목 정확검색 TI= 을 AND 로 결합한다. country 미지정 → 전 세계 공개에서 조회(재현율↑,
-    # 중/일/유럽 특허도 Google 영문 제목으로 색인). (프로브로 문법·재현율 확인함)
-    inner = f'assignee={assignee_q}&q=TI="{term}"&sort=new'
-    return f"{_BASE}?url={urllib.parse.quote(inner, safe='')}&exp="
-
-
-def _parse_json(raw: bytes) -> dict:
-    text = raw.decode("utf-8", "replace").lstrip()
-    if text.startswith(")]}'"):      # XSSI 보호 프리픽스 제거
-        text = text.split("\n", 1)[-1]
-    return json.loads(text)
-
-
-def _clean(text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", text or "")   # <b> 하이라이트 등 제거
-    return html.unescape(text).strip()
-
-
-def _fmt_date(yyyymmdd: str | None) -> str | None:
-    if not yyyymmdd:
-        return None
-    s = str(yyyymmdd).replace("-", "")
-    if len(s) == 8 and s.isdigit():
-        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
-    return None
-
-
-def _office(num: str) -> str:
-    """공개번호 접두 2글자로 실제 발행 특허청 추정(US/KR/CN/JP/EP/WO...)."""
-    m = re.match(r"[A-Za-z]{2}", num or "")
-    return m.group(0).upper() if m else ""
-
-
-def _normalize(pat: dict, pid: str) -> dict:
-    num = pat.get("publication_number") or ""
-    link = (f"https://patents.google.com/{pid}" if pid
-            else f"https://patents.google.com/patent/{num}/en" if num
-            else "https://patents.google.com/")
-    return {
-        "number": num,
-        "title": _clean(pat.get("title", "")),
-        "assignee": _clean(pat.get("assignee", "")),
-        "inventor": _clean(pat.get("inventor", "")),
-        "pub_date": _fmt_date(pat.get("publication_date")),
-        "filing_date": _fmt_date(pat.get("filing_date")),
-        "snippet": _clean(pat.get("snippet", ""))[:220],
-        "office": _office(num),     # 실제 발행 특허청(참고용)
-        "url": link,
-    }
-
-
-def _fetch(assignee_q: str, term: str) -> list[dict]:
-    url = _build_url(assignee_q, term)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": _UA, "Accept": "application/json",
-        "Referer": "https://patents.google.com/",
-    })
+# ── OPS 접근 ─────────────────────────────────────────────────────
+def _get_token() -> str:
+    cred = base64.b64encode(f"{cfg.OPS_KEY}:{cfg.OPS_SECRET}".encode()).decode()
+    req = urllib.request.Request(
+        AUTH_URL, data=b"grant_type=client_credentials",
+        headers={"Authorization": "Basic " + cred,
+                 "Content-Type": "application/x-www-form-urlencoded"})
     with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        data = _parse_json(r.read())
+        return json.loads(r.read())["access_token"]
+
+
+def _search(token: str, cql: str, start: int, end: int) -> dict:
+    url = SEARCH_URL + "?q=" + urllib.parse.quote(cql)
+    req = urllib.request.Request(url, headers={
+        "Authorization": "Bearer " + token,
+        "Accept": "application/json",
+        "X-OPS-Range": f"{start}-{end}"})
+    with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
+        return json.loads(r.read())
+
+
+# ── 응답 파싱 (OPS JSON 은 값이 {"$": ...} 로 감싸여 있다) ──────────
+def _v(node, *path):
+    cur = node
+    for p in path:
+        if cur is None:
+            return None
+        cur = cur.get(p) if isinstance(cur, dict) else None
+    if isinstance(cur, dict) and "$" in cur:
+        return cur["$"]
+    return cur
+
+
+def _as_list(x) -> list:
+    if x is None:
+        return []
+    return x if isinstance(x, list) else [x]
+
+
+def _docs(data: dict) -> list[dict]:
+    try:
+        sr = data["ops:world-patent-data"]["ops:biblio-search"]["ops:search-result"]
+    except Exception:
+        return []
     out = []
-    clusters = (data.get("results", {}) or {}).get("cluster", []) or []
-    for cl in clusters:
-        for res in cl.get("result", []) or []:
-            pat = res.get("patent", {}) or {}
-            pid = res.get("id", "")
-            out.append(_normalize(pat, pid))
+    for d in _as_list(sr.get("exchange-documents")):
+        doc = d.get("exchange-document") if isinstance(d, dict) else None
+        for one in _as_list(doc):
+            if isinstance(one, dict):
+                out.append(one)
     return out
 
 
-def _dedup_key(p: dict) -> str:
-    return (p.get("number") or "").upper() or re.sub(r"[\s\W_]+", "", p.get("title", "").lower())
+def _title(bib: dict) -> str:
+    for t in _as_list(bib.get("invention-title")):
+        if isinstance(t, dict) and t.get("@lang") == "en":
+            return str(_v(t) or "").strip()
+    for t in _as_list(bib.get("invention-title")):   # 영어가 없으면 아무거나
+        if isinstance(t, dict):
+            return str(_v(t) or "").strip()
+    return ""
 
 
-# 무선전력전송(Qi 충전 등)은 우리 주제(전력계통)와 무관한데 'power transmission'에 걸린다 → 제외.
-_EXCLUDE_TITLE = re.compile(r"wireless|무선", re.I)
+def _applicant_name(bib: dict) -> str:
+    apps = _as_list(_v(bib, "parties", "applicants", "applicant"))
+    orig, epo = "", ""
+    for a in apps:
+        if not isinstance(a, dict):
+            continue
+        nm = str(_v(a, "applicant-name", "name") or "").strip()
+        if a.get("@data-format") == "original" and nm:
+            orig = nm
+        elif nm and not epo:
+            epo = nm
+    return orig or epo
 
 
-def _is_offtopic(p: dict) -> bool:
-    return bool(_EXCLUDE_TITLE.search(p.get("title", "")))
+def _cpc_codes(bib: dict) -> list[str]:
+    """patent-classifications(CPC) + IPC 를 'H02J3' 형태 문자열로."""
+    out = []
+    for pc in _as_list(_v(bib, "patent-classifications", "patent-classification")):
+        if not isinstance(pc, dict):
+            continue
+        sec, cls, sub = _v(pc, "section"), _v(pc, "class"), _v(pc, "subclass")
+        grp = _v(pc, "main-group")
+        if sec and cls and sub:
+            out.append(f"{sec}{cls}{sub}{grp or ''}")
+    for ip in _as_list(_v(bib, "classifications-ipcr", "classification-ipcr")):
+        if isinstance(ip, dict):
+            txt = str(_v(ip, "text") or "")
+            m = re.match(r"([A-H]\d{2}[A-Z])\s*(\d+)", txt.replace(" ", " "))
+            if m:
+                out.append(m.group(1) + m.group(2))
+    return out
 
 
-def _live_collect(rotate: int = 0) -> list[dict]:
+def _pub_ref(bib: dict) -> tuple[str, str, str]:
+    """(발행국, 문서번호, 발행일 YYYY-MM-DD)."""
+    country = number = date = ""
+    for d in _as_list(_v(bib, "publication-reference", "document-id")):
+        if not isinstance(d, dict):
+            continue
+        if d.get("@document-id-type") == "docdb":
+            country = str(_v(d, "country") or "")
+            number = country + str(_v(d, "doc-number") or "") + str(_v(d, "kind") or "")
+            date = str(_v(d, "date") or "")
+        elif d.get("@document-id-type") == "epodoc" and not number:
+            number = str(_v(d, "doc-number") or "")
+            date = date or str(_v(d, "date") or "")
+    if len(date) == 8 and date.isdigit():
+        date = f"{date[:4]}-{date[4:6]}-{date[6:]}"
+    return country, number, date
+
+
+def _classify(cpcs: list[str]) -> str | None:
+    """CPC 접두로 분야 결정(CATEGORIES 순서 = 우선순위). 해당 없으면 None."""
+    for cat in cfg.CATEGORIES:
+        for pref in cat["match"]:
+            if any(c.startswith(pref) for c in cpcs):
+                return cat["key"]
+    return None
+
+
+def _normalize(doc: dict) -> dict | None:
+    bib = doc.get("bibliographic-data") or {}
+    country, number, date = _pub_ref(bib)
+    if not number:
+        return None
+    cpcs = _cpc_codes(bib)
+    cat = _classify(cpcs)
+    if not cat:
+        return None                      # 전력 분야로 분류 안 되면 제외
+    return {
+        "number": number,
+        "title": _title(bib) or "(제목 없음)",
+        "assignee": _applicant_name(bib),
+        "inventor": "",
+        "pub_date": date or None,
+        "filing_date": None,
+        "snippet": "",
+        "office": country,               # 실제 발행 특허청
+        "cpc": cpcs[:6],
+        "category": cat,
+        "url": f"https://worldwide.espacenet.com/patent/search?q={urllib.parse.quote(number)}",
+    }
+
+
+# ── 수집 ─────────────────────────────────────────────────────────
+def _cql(applicant_q: str, days: int) -> str:
+    end = datetime.utcnow().date()
+    start = end - timedelta(days=days)
+    cpc_or = " or ".join(f'cpc="{c}"'
+                         for cat in cfg.CATEGORIES for c in cat["cpc"])
+    return (f'pa="{applicant_q}" and pd within '
+            f'"{start.strftime("%Y%m%d")} {end.strftime("%Y%m%d")}" and ({cpc_or})')
+
+
+def _live_collect() -> list[dict]:
+    if not (cfg.OPS_KEY and cfg.OPS_SECRET):
+        raise RuntimeError("OPS 키 없음(OPS_KEY/OPS_SECRET)")
+    token = _get_token()
     collected: list[dict] = []
     seen: set[str] = set()
     errors = 0
-    total_q = 0
-    # 무키 엔드포인트는 실행당 ~수십~100요청 뒤 차단한다 → 매 실행 시작점을 회전시켜
-    # 매주 다른 출원인 부분집합을 수집하고, 아카이브(주별 누적)로 매트릭스를 채운다.
-    n = len(cfg.APPLICANTS)
-    order = cfg.APPLICANTS[rotate % n:] + cfg.APPLICANTS[:rotate % n] if n else []
-    for ap in order:
-        ap_added = 0
-        for cat in cfg.CATEGORIES:
-            pair_added = 0            # (출원인×분야) 조합 상한
-            for term in cat["terms"]:
-                total_q += 1
-                try:
-                    items = _fetch(ap["q"], term)
-                except Exception as e:
+    for ap in cfg.APPLICANTS:
+        added = 0
+        cql = _cql(ap["q"], cfg.LOOKBACK_DAYS)
+        start = 1
+        while added < cfg.PER_APPLICANT_LIMIT:
+            end = min(start + 24, cfg.PER_APPLICANT_LIMIT)   # OPS 범위는 25건 단위
+            try:
+                data = _search(token, cql, start, end)
+            except Exception as e:
+                # 결과 없음(404)·범위 초과는 정상 종료로 취급
+                msg = str(e)
+                if "404" not in msg and "400" not in msg:
                     errors += 1
-                    print(f"  ! [{ap['name']}/{cat['key']}] '{term}' 실패: {e}")
-                    if cfg.REQUEST_DELAY:
-                        time.sleep(cfg.REQUEST_DELAY)
+                    print(f"  ! [{ap['name']}] 검색 실패: {e}")
+                break
+            docs = _docs(data)
+            if not docs:
+                break
+            for d in docs:
+                it = _normalize(d)
+                if not it:
                     continue
-                for it in items:
-                    key = _dedup_key(it)
-                    if not key or key in seen:
-                        continue
-                    if _is_offtopic(it):             # 무선전력 등 무관 특허 배제
-                        continue
-                    seen.add(key)
-                    it["category"] = cat["key"]      # 질의어 = 분야 태그
-                    it["applicant"] = ap["name"]      # 큐레이션 대표명(우리가 조회한 주체)
-                    it["country"] = ap["region"]      # 지역 그룹(미국·한국·중국·일본·유럽)
-                    it["flag"] = ap["flag"]           # 행 국기(국적)
-                    collected.append(it)
-                    pair_added += 1
-                    ap_added += 1
-                    if pair_added >= cfg.PER_PAIR_LIMIT:
-                        break
-                if cfg.REQUEST_DELAY:
-                    time.sleep(cfg.REQUEST_DELAY)
-                if pair_added >= cfg.PER_PAIR_LIMIT:
+                key = it["number"].upper()
+                if key in seen:
+                    continue
+                seen.add(key)
+                it["applicant"] = ap["name"]
+                it["country"] = ap["region"]     # 지역 그룹(표시축)
+                it["flag"] = ap["flag"]
+                collected.append(it)
+                added += 1
+                if added >= cfg.PER_APPLICANT_LIMIT:
                     break
-        print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {ap_added}건")
-    if not collected and errors >= max(1, total_q):
-        raise RuntimeError("모든 특허 쿼리 실패(차단/오프라인 추정)")
+            if len(docs) < (end - start + 1):
+                break
+            start = end + 1
+            if cfg.REQUEST_DELAY:
+                time.sleep(cfg.REQUEST_DELAY)
+        print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {added}건")
+        if cfg.REQUEST_DELAY:
+            time.sleep(cfg.REQUEST_DELAY)
+    if not collected and errors:
+        raise RuntimeError("OPS 수집 실패(모든 출원인)")
     return collected
 
 
-# ── MOCK (오프라인/차단 시 폴백) — 출원인 × 분야 표본 합성 ─────────────
-# 각 출원인에게 '그 회사다운' 분야 몇 개를 배정해 매트릭스가 채워지게 한다.
+# ── MOCK (키 없음/오프라인 폴백) ──────────────────────────────────
 _AP_FIELDS = {
     "General Electric": ["nuclear", "grid", "industry"], "GE Vernova": ["grid", "nuclear"],
+    "Eaton": ["industry", "datacenter"], "Caterpillar": ["supply"], "Dynapower": ["mega"],
     "한국전력공사": ["grid", "supply", "meter"], "한국전력기술": ["nuclear"],
     "HD현대일렉트릭": ["grid", "industry"], "효성중공업": ["grid", "industry"],
     "LS일렉트릭": ["grid", "industry", "meter"], "삼성전자": ["mega", "renew", "datacenter"],
+    "일진전기": ["grid"], "대한전선": ["grid"], "산일전기": ["grid"], "제룡전기": ["grid"],
+    "그리드위즈": ["supply", "meter"],
     "State Grid": ["grid", "supply", "meter"], "Huawei": ["datacenter", "mega"],
-    "CATL": ["renew"], "Mitsubishi Electric": ["mega", "grid"],
+    "CATL": ["renew"], "Hitachi Energy": ["grid", "industry"],
+    "Mitsubishi Electric": ["mega", "grid"], "Toshiba": ["nuclear", "supply"],
+    "Panasonic": ["renew", "meter"], "Kyocera": ["supply", "renew"], "Toyota": ["renew"],
+    "Sumitomo Electric": ["grid"], "Furukawa Electric": ["grid"],
     "Siemens": ["grid", "industry", "supply"], "ABB": ["grid", "industry"],
-    "Schneider Electric": ["datacenter", "industry", "supply"],
+    "Schneider Electric": ["datacenter", "industry", "supply"], "Bosch": ["mega"],
 }
-_PREFIX = {"US": "US2026", "KR": "KR102026", "CN": "CN2026", "JP": "JP2026", "EU": "EP2026"}
+_PREFIX = {"US": "US", "KR": "KR", "CN": "CN", "JP": "JP", "EU": "EP"}
 
 
 def _mock_collect(today: datetime) -> list[dict]:
     seed = int(hashlib.md5(today.strftime("%Y-%m-%d").encode()).hexdigest()[:8], 16)
     collected = []
     for ai, ap in enumerate(cfg.APPLICANTS):
-        fields = _AP_FIELDS.get(ap["name"], ["grid"])
-        for fi, fkey in enumerate(fields):
+        for fi, fkey in enumerate(_AP_FIELDS.get(ap["name"], ["grid"])):
             cat = cfg.CATEGORY_BY_KEY.get(fkey)
             if not cat:
                 continue
-            term = cat["terms"][0]
             days_ago = (seed + ai * 3 + fi * 5) % max(1, cfg.LOOKBACK_DAYS)
             pub = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
             serial = 10000 + (seed + ai * 37 + fi * 101) % 90000
-            num = f"{_PREFIX.get(ap['region'], 'US2026')}{serial}A1"
+            num = f"{_PREFIX.get(ap['region'], 'US')}{serial}A1"
             collected.append({
                 "number": num,
-                "title": f"[{ap['name']}] {term} related apparatus",
-                "assignee": ap["name"],
-                "inventor": "",
-                "pub_date": pub,
-                "filing_date": None,
-                "snippet": "[샘플 데이터] 네트워크 차단/오프라인 환경의 미리보기용 항목입니다.",
-                "office": _office(num),
-                "country": ap["region"],
-                "flag": ap["flag"],
-                "category": fkey,
-                "applicant": ap["name"],
+                "title": f"[{ap['name']}] {cat['name']} 관련 장치 및 방법",
+                "assignee": ap["name"], "inventor": "",
+                "pub_date": pub, "filing_date": None,
+                "snippet": "[샘플 데이터] 키 없음/오프라인 환경의 미리보기용 항목입니다.",
+                "office": _PREFIX.get(ap["region"], "US"),
+                "cpc": cat["cpc"][:2],
+                "category": fkey, "applicant": ap["name"],
+                "country": ap["region"], "flag": ap["flag"],
+                "url": "https://worldwide.espacenet.com/",
             })
     return collected
 
 
-def _rotation(today: datetime) -> int:
-    """이번 실행의 출원인 시작 오프셋. PATENT_ROTATE 지정 시 그 값, 없으면 주차 기반.
-
-    주차 기반이면 매주 목록의 절반씩 앞으로 당겨(스로틀로 뒤가 잘려도 다음 주에 커버).
-    """
-    import os
-    env = os.getenv("PATENT_ROTATE")
-    if env not in (None, ""):
-        try:
-            return int(env)
-        except ValueError:
-            pass
-    week = today.isocalendar()[1]
-    half = max(1, len(cfg.APPLICANTS) // 2)
-    return (week * half) % max(1, len(cfg.APPLICANTS))
-
-
 def collect(today: datetime) -> tuple[list[dict], bool]:
-    """(출원인×분야) 최신 특허 목록과 mock 여부를 반환.
+    """(출원인×분야) 특허 목록과 mock 여부를 반환.
 
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
-    출원인 시작점은 회전(주차 기반 또는 PATENT_ROTATE)해 매주 다른 부분집합을 모은다.
     """
     if cfg.is_mock():
         return _mock_collect(today), True
     try:
-        return _live_collect(_rotation(today)), False
+        return _live_collect(), False
     except Exception as e:
         if cfg.force_live():
             raise
-        print(f"⚠️ 특허 라이브 수집 실패 → MOCK 폴백: {e}")
+        print(f"⚠️ 특허 라이브(OPS) 수집 실패 → MOCK 폴백: {e}")
         return _mock_collect(today), True

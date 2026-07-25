@@ -31,13 +31,16 @@ REGION_LABEL = {
 COUNTRIES = REGIONS
 COUNTRY_LABEL = REGION_LABEL
 
-# (출원인, 분야) 조합마다 담을 최신 특허 수(조합당 상한 = '분야 활동 유무 + 표본').
-PER_PAIR_LIMIT = int(os.getenv("PATENT_PER_PAIR", "6"))
-REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "25"))
-# 무키 엔드포인트는 실행당 ~100요청 뒤 차단 → 넉넉히 지연. (요청수 = 출원인수 × 분야수)
-REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "1.0"))
-LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "7"))   # MOCK 날짜 분산용
-MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)          # auto | on | off
+# ── 수집(EPO OPS) ────────────────────────────────────────────────
+# 출원인마다 '최근 N일 발행 + 전력 CPC' 특허를 한 번에 받아 CPC로 분야를 분류한다.
+# (무키 시절의 출원인×분야 개별 조회가 아니라 출원인당 1~2요청 → 회전 불필요)
+OPS_KEY = os.getenv("OPS_KEY", "")
+OPS_SECRET = os.getenv("OPS_SECRET", "")
+PER_APPLICANT_LIMIT = int(os.getenv("PATENT_PER_APPLICANT", "50"))  # 출원인당 최대 수집
+LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "90"))        # 최근 N일 발행분
+REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "40"))
+REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "0.4"))         # OPS 쿼터 배려
+MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on | off
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)
@@ -84,16 +87,32 @@ APPLICANTS = [
     {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
 ]
 
-# ── 분야(기술 카테고리) — 제목 정확검색용 영문 용어(분야당 1개, 무선전력 오탐 회피) ──
+# ── 분야(기술 카테고리) — CPC 분류 기반 ────────────────────────────
+# EPO OPS 는 CPC 를 주므로, 제목 키워드 대신 CPC 로 검색·분류한다(정확도↑).
+#   cpc   : OPS CQL 검색에 쓸 CPC 접두(여러 개면 OR)
+#   match : 응답 CPC 를 분야로 되분류할 때 쓰는 접두(우선순위는 CATEGORIES 순서)
+# 전력 분야 CPC 요약:
+#   H02J 전력 공급/분배 계통   H02M 전력 변환   H01L 반도체(전력소자)
+#   H01H 개폐기·차단기        H02B 배전반      H01F 변압기
+#   G21 원자력                H02S 태양광      H01M 전지(저장)
+#   G01R 계측(전력량계)       Y04S 스마트그리드 ICT   Y02E 에너지 감축기술
 CATEGORIES = [
-    {"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리", "terms": ["demand response"]},
-    {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망", "terms": ["power transmission line"]},
-    {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR", "terms": ["nuclear reactor"]},
-    {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장", "terms": ["energy storage"]},
-    {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·전원장치", "terms": ["uninterruptible power"]},
-    {"key": "mega", "emoji": "🏗️", "name": "전력반도체·전력변환", "terms": ["power semiconductor"]},
-    {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드", "terms": ["smart grid"]},
-    {"key": "industry", "emoji": "🏭", "name": "전력설비·기기", "terms": ["switchgear"]},
+    {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
+     "cpc": ["G21C", "G21D"], "match": ["G21"]},
+    {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장",
+     "cpc": ["H02S", "H01M10", "F03D"], "match": ["H02S", "F03D", "H01M"]},
+    {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드",
+     "cpc": ["Y04S", "G01R21", "G01R22"], "match": ["Y04S", "G01R21", "G01R22"]},
+    {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·무정전전원",
+     "cpc": ["H02J9"], "match": ["H02J9"]},
+    {"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리",
+     "cpc": ["H02J3"], "match": ["H02J3", "H02J13"]},
+    {"key": "mega", "emoji": "🏗️", "name": "전력반도체·전력변환",
+     "cpc": ["H02M", "H01L29"], "match": ["H02M", "H01L", "H03K17"]},
+    {"key": "industry", "emoji": "🏭", "name": "전력설비·기기",
+     "cpc": ["H01H33", "H02B"], "match": ["H01H", "H02B"]},
+    {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망",
+     "cpc": ["H02G", "H01F27", "H02J1"], "match": ["H02G", "H01F", "H02J"]},
 ]
 
 CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
