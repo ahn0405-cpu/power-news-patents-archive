@@ -225,6 +225,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
         "lookbackDays": pcfg.LOOKBACK_DAYS,
+        "perApplicantLimit": pcfg.PER_APPLICANT_LIMIT,   # 표본 상한(랭킹의 '이상' 표기용)
         "applicants": len(pcfg.APPLICANTS),
         "items": items,
     }
@@ -1001,11 +1002,15 @@ function _rankApplicants(list){
   list.forEach(it=>{ const nm=it.aName||'(미상)';
     const o=byA[nm]||(byA[nm]={cnt:0, flag:it.aFlag||'', region:it.aCountry||'', grid:{}});
     o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; if(!o.flag)o.flag=it.aFlag||''; });
+  const CAP = FEED.patents.perApplicantLimit || 0;
   return Object.keys(byA).map(nm=>{
     const o=Object.assign({name:nm}, byA[nm]);
     // total: OPS 가 알려준 실제 전체 건수(있으면). cnt: 저장된 표본 수.
-    o.total = T[nm] || o.cnt;
-    o.sampled = o.total > o.cnt;    // 상한에 걸려 일부만 저장된 경우
+    o.exact = T[nm] != null;                 // 집계가 아직 안 돈 출원인은 false
+    o.total = o.exact ? T[nm] : o.cnt;
+    // 실제 건수를 모르는데 표본이 상한까지 찼으면 그 수는 '최소값'이다 →
+    // 정확한 값처럼 보이지 않게 표본 표시(사선 막대 + '+')를 붙인다.
+    o.sampled = o.exact ? (o.total > o.cnt) : (CAP > 0 && o.cnt >= CAP);
     return o;
   }).sort((a,b)=> b.total-a.total || a.name.localeCompare(b.name));
 }
@@ -1056,11 +1061,12 @@ let rankMode = RANK_MODES.includes(localStorage.getItem('pnp_rankMode'))
 function rankRowsHTML(rows, maxOverride){
   const maxA = maxOverride || (rows[0] ? rows[0].total : 1) || 1;
   return rows.map((r,i)=>{ const w=Math.max(2,r.total/maxA*100);
-    return '<div class="row"><div class="nm" title="'+esc(r.name)
-      + (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')+'">'
+    const tip = r.exact ? (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')
+      : (r.sampled? ' — 수집 상한까지 저장돼 실제는 '+r.cnt+'건 이상(정확 집계 대기)':'');
+    return '<div class="row"><div class="nm" title="'+esc(r.name)+tip+'">'
       + '<span class="rk">'+(i+1)+'</span>'+(r.flag||'')+' '+esc(r.name)+'</div>'
       + '<div class="bar'+(r.sampled?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
-      + '<div class="val">'+r.total+'</div></div>'; }).join('');
+      + '<div class="val">'+r.total+(r.exact?'':(r.sampled?'+':''))+'</div></div>'; }).join('');
 }
 
 // 국적별 다출원 기업 — "미국에서 1등, 한국에서 1등" 을 한 화면에서 비교
