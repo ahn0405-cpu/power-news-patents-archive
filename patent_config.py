@@ -54,7 +54,7 @@ APPLICANTS = [
     {"name": "GE Vernova", "region": "US", "flag": "🇺🇸", "q": "GE Vernova"},                  # ✔
     {"name": "Eaton", "region": "US", "flag": "🇺🇸", "q": "Eaton"},                            # ✔
     {"name": "Caterpillar", "region": "US", "flag": "🇺🇸", "q": "Caterpillar"},
-    {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower"},
+    {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower Company"},
     # 🇰🇷 한국
     {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
@@ -63,9 +63,9 @@ APPLICANTS = [
     {"name": "LS일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "LS Electric"},                    # ✔
     {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
     {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
-    {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan Cable"},
-    {"name": "산일전기", "region": "KR", "flag": "🇰🇷", "q": "Sanil Electric"},
-    {"name": "제룡전기", "region": "KR", "flag": "🇰🇷", "q": "Jeryong Electric"},
+    {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan"},
+    {"name": "산일전기", "region": "KR", "flag": "🇰🇷", "q": "Sanil"},
+    {"name": "제룡전기", "region": "KR", "flag": "🇰🇷", "q": "Jeryong"},
     {"name": "그리드위즈", "region": "KR", "flag": "🇰🇷", "q": "Gridwiz"},
     # 🇨🇳 중국
     {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},  # ✔
