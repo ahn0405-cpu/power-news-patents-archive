@@ -1,0 +1,879 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IP·Power</title>
+<meta name="description" content="전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대">
+<style>
+:root{
+  --bg:#F4F5F3; --card:#FFFFFF; --ink:#16181C; --muted:#6A6E76;
+  --line:#E2E4E0; --accent:#E8A33D; --accent2:#3A6FB0; --chipbg:#FFFFFF;
+  --shadow:0 1px 2px rgba(0,0,0,.05); --spark:#E8A33D;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0F1114; --card:#181B20; --ink:#E8EAED; --muted:#9AA0A8;
+    --line:#262A31; --accent:#F0B65A; --accent2:#6FA0DC; --chipbg:#1E2127;
+    --shadow:0 1px 2px rgba(0,0,0,.3); --spark:#F0B65A;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;
+  line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SFMono-Regular",Menlo,monospace}
+.wrap{max-width:1600px;margin:0 auto;padding:22px 32px 72px}
+/* 상세(뉴스·특허) 목록은 가독성을 위해 읽기 폭을 가운데 정렬로 제한. 홈/통계는 전체 폭. */
+.readcol{max-width:1120px;margin-left:auto;margin-right:auto}
+.mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0}
+.mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;display:flex;gap:9px;align-items:center}
+.mast h1 .bolt{color:var(--accent)}
+.mast .tag{color:var(--muted);font-size:13px;margin:0}
+.tabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--line)}
+.tabs button{padding:11px 18px;font:inherit;font-weight:700;font-size:14.5px;color:var(--muted);
+  background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+/* 개요 */
+.overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) 1.6fr;gap:12px;margin:2px 0 18px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:11px 13px;box-shadow:var(--shadow)}
+.tile .k{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-size:22px;font-weight:800;margin-top:3px}
+.tile .v small{font-size:12px;font-weight:600;color:var(--muted)}
+.tile.spark{grid-column:span 1}
+.sparkwrap{display:flex;flex-direction:column;justify-content:space-between}
+.sparkwrap svg{width:100%;height:38px;display:block;margin-top:4px}
+.sparkwrap .k b{color:var(--accent)}
+/* 서술형 브리핑 */
+.brief{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:11px;padding:16px 18px 14px;box-shadow:var(--shadow);margin:2px 0 14px}
+.brief .bhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 0 3px}
+.brief .btag{font-size:10.5px;font-weight:800;letter-spacing:.03em;color:var(--accent);
+  border:1px solid var(--accent);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.brief .bdate{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.brief .bstale{color:#b06a1d;font-size:11px;font-weight:700}
+@media (prefers-color-scheme:dark){ .brief .bstale{color:var(--accent)} }
+.brief h2{font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.4;margin:2px 0 9px}
+.brief .bbody{font-size:13.5px;line-height:1.75;color:var(--ink);margin:0}
+.brief .bbody p{margin:0 0 7px}
+.brief .bbody p:last-child{margin-bottom:0}
+.brief .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:12px 0 2px}
+.brief .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.brief .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.brief .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
+.brief .bfoot{color:var(--muted);font-size:11px;margin-top:11px;padding-top:9px;border-top:1px solid var(--line);
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.brief .bfoot .sep{opacity:.5}
+.brief .btoggle{margin-left:auto;background:none;border:0;color:var(--accent2);font:inherit;font-size:11px;cursor:pointer}
+.brief.collapsed .bbody,.brief.collapsed .bpoints{display:none}
+@media (max-width:820px){ .brief .bpoints{grid-template-columns:1fr} }
+/* 홈(대시보드) */
+.homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,
+.homemode #more,.homemode #viewToggle{display:none!important}
+.home{display:flex;flex-direction:column;gap:16px}
+.home .sec{font-size:12px;font-weight:800;margin:4px 2px 2px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.homekpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.homebot{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
+.homepanel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px 16px;box-shadow:var(--shadow);min-width:0}
+.homepanel h3{font-size:14px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:7px}
+.homepanel .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
+.homepanel .morelink{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--accent2);cursor:pointer}
+.timeline{display:flex;flex-direction:column}
+.timeline .tl{border-left:2px solid var(--line);padding:0 0 14px 15px;position:relative}
+.timeline .tl:last-child{padding-bottom:2px}
+.timeline .tl::before{content:"";position:absolute;left:-5px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.timeline .tld{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.timeline .tlh{font-size:13px;font-weight:700;margin:2px 0 3px;cursor:pointer;line-height:1.4}
+.timeline .tlh:hover{color:var(--accent2)}
+.timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
+.timeline .tl.open .tlb{display:block}
+.mxmini{overflow-x:auto}
+@media (max-width:1100px){ .homebot{grid-template-columns:1fr} }
+@media (max-width:720px){ .homekpi{grid-template-columns:repeat(2,1fr)} }
+/* 트렌드 인사이트 바 */
+.insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
+.insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;box-shadow:var(--shadow);min-width:0}
+.insights h3{font-size:12px;font-weight:800;letter-spacing:.01em;margin:0 0 2px;display:flex;
+  align-items:center;gap:6px}
+.insights .isub{color:var(--muted);font-size:11px;margin:0 0 10px}
+.kwrap{display:flex;flex-wrap:wrap;gap:6px}
+.kw{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--chipbg);color:var(--ink);
+  border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
+.kw:hover{border-color:var(--accent);transform:translateY(-1px)}
+.kw .c{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+.kw .up{color:var(--accent);font-weight:800;font-size:10.5px}
+.kw.hot{border-color:var(--accent)}
+.trend{display:flex;flex-direction:column;gap:7px}
+.trend .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;font-size:12.5px;
+  cursor:pointer;border-radius:6px;padding:2px 4px;margin:0 -4px}
+.trend .row:hover{background:var(--bg)}
+.trend .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend .d{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;white-space:nowrap}
+.trend .d .n{color:var(--muted);font-weight:600}
+.trend .up{color:var(--accent)}.trend .dn{color:var(--muted)}.trend .fl{color:var(--muted)}
+.ppick{display:flex;flex-direction:column;gap:2px}
+.ppick .pk{display:flex;gap:8px;align-items:flex-start;text-decoration:none;color:var(--ink);
+  padding:6px 4px;border-radius:6px;margin:0 -4px;border-bottom:1px solid var(--line)}
+.ppick .pk:last-child{border-bottom:0}
+.ppick .pk:hover{background:var(--bg)}
+.ppick .pf{font-size:13px;line-height:1.5;flex:none}
+.ppick .pt2{font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.ppick .pk:hover .pt2{color:var(--accent2)}
+.ppick .who{color:var(--muted);font-size:11px;margin-left:6px;white-space:nowrap}
+.iempty{color:var(--muted);font-size:12px}
+@media (max-width:820px){ .insights{grid-template-columns:1fr} }
+/* 컨트롤 */
+.controls{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;
+  position:sticky;top:0;z-index:5;background:var(--bg);padding-top:8px}
+.searchrow{display:flex;gap:8px;align-items:center}
+.search{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);
+  border:1px solid var(--line);border-radius:9px;padding:9px 13px}
+.search input{flex:1;border:0;background:none;color:var(--ink);font:inherit;font-size:15px;outline:none}
+.search .ico{color:var(--muted)}
+.selects{display:flex;gap:8px;flex-wrap:wrap}
+.selects select,.selects button.toggle{font:inherit;font-size:13px;color:var(--ink);
+  background:var(--chipbg);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chips .f{font-size:12.5px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;
+  background:var(--chipbg);color:var(--ink);cursor:pointer;user-select:none;font:inherit;transition:all .12s}
+.chips .f[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips .f .n{color:var(--muted);margin-left:5px}
+.chips .f[aria-pressed="true"] .n{color:var(--bg);opacity:.7}
+.chips .f.co[aria-pressed="true"]{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.resline{display:flex;justify-content:space-between;align-items:center;color:var(--muted);
+  font-size:12.5px;margin:2px 2px 12px}
+.resline .reset{color:var(--accent2);cursor:pointer;background:none;border:0;font:inherit;font-size:12.5px}
+/* 결과 카드 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px 15px;
+  margin-bottom:9px;box-shadow:var(--shadow);transition:border-color .12s,transform .12s;position:relative}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card .t{font-size:15.5px;font-weight:650;line-height:1.4;margin:0 0 5px;text-decoration:none;display:block}
+.card .t:hover{color:var(--accent2)}
+.card .meta{color:var(--muted);font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card .meta .src{color:var(--ink);font-weight:600}
+.card .meta .num{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.card .sum{color:var(--muted);font-size:13px;margin-top:6px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:auto}
+.card .newdot{position:absolute;top:14px;right:14px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent)}
+.card.isnew{border-left:3px solid var(--accent)}
+.mockflag{background:var(--accent);color:#1a1a1a;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px}
+.empty{color:var(--muted);font-size:14px;padding:40px 0;text-align:center;border:1px dashed var(--line);border-radius:9px}
+.more{display:block;margin:14px auto 0;font:inherit;font-size:13px;font-weight:600;color:var(--ink);
+  background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 18px;cursor:pointer}
+.selects .toggle[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+/* 저장 별표 / 읽음 / 검색어 하이라이트 */
+.card{padding-right:38px}
+.card .star{position:absolute;top:10px;right:10px;background:none;border:0;cursor:pointer;
+  font-size:17px;line-height:1;color:var(--muted);padding:2px;transition:color .12s}
+.card .star:hover{color:var(--accent)}
+.card .star.on{color:var(--accent)}
+.card.isread{opacity:.5}
+.card.isread .t{color:var(--muted)}
+.card mark{background:rgba(232,163,61,.38);color:inherit;border-radius:2px;padding:0 1px}
+/* 날짜 그룹 헤더 */
+.dgroup{font-size:13.5px;font-weight:800;color:var(--ink);margin:18px 2px 9px;display:flex;
+  align-items:baseline;gap:8px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.dgroup:first-child{margin-top:2px}
+.dgroup .d{font-weight:500;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dgroup .n{margin-left:auto;font-weight:600;color:var(--muted);font-size:11.5px}
+.sparkwrap svg rect{cursor:pointer}
+.sparkwrap svg rect.sel{fill:var(--accent2)}
+/* 맨 위로 버튼 */
+.totop{position:fixed;right:18px;bottom:18px;z-index:20;width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:19px;cursor:pointer;
+  box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.totop:hover{border-color:var(--accent)}
+.foot{color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px;margin-top:32px;line-height:1.7}
+.foot a{color:var(--accent2)}
+/* 목록/통계 토글 */
+.viewseg{display:none;gap:0;margin:0 0 14px;border:1px solid var(--line);border-radius:9px;
+  overflow:hidden;width:max-content}
+.viewseg.on{display:inline-flex}
+.viewseg button{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:var(--card);
+  border:0;padding:8px 16px;cursor:pointer}
+.viewseg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+/* 통계 뷰 */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.stats .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 17px;box-shadow:var(--shadow)}
+.stats .panel.wide{grid-column:1 / -1}
+.stats h3{font-size:14px;font-weight:700;margin:0 0 4px;display:flex;align-items:center;gap:7px}
+.stats .sub{color:var(--muted);font-size:12px;margin:0 0 13px}
+.lead{display:flex;flex-direction:column;gap:9px}
+.lead .row{display:grid;grid-template-columns:170px 1fr auto;align-items:center;gap:10px}
+.lead .nm{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead .nm .rk{color:var(--muted);font-weight:700;margin-right:6px;font-variant-numeric:tabular-nums}
+.lead .bar{height:15px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.lead .val{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lead .val .co{color:var(--muted);font-weight:500;font-size:11.5px;margin-left:5px}
+.dist{display:flex;flex-direction:column;gap:12px}
+.dist .row{display:grid;grid-template-columns:88px 1fr auto;align-items:center;gap:10px;font-size:13px}
+.dist .bar{height:16px;background:var(--accent2);border-radius:0 4px 4px 0;min-width:2px}
+.dist .val{font-weight:700;font-variant-numeric:tabular-nums}
+.pmxwrap{overflow-x:auto}
+.pmx{border-collapse:separate;border-spacing:2px;font-size:12.5px;min-width:100%}
+.pmx th{font-weight:600;color:var(--muted);text-align:center;padding:3px 4px;font-size:13px;white-space:nowrap}
+.pmx th.cnr{text-align:left;font-size:11px;font-weight:600}
+.pmx td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px;font-size:12px}
+.pmx td.c{text-align:center;border-radius:5px;font-variant-numeric:tabular-nums;min-width:34px;
+  padding:5px 4px;color:var(--muted);background:var(--bg)}
+.pmx td.c.has{color:var(--ink);cursor:pointer}
+.pmx td.c.has:hover{outline:2px solid var(--accent)}
+.pmx td.c.tot{font-weight:800;color:var(--ink);background:transparent}
+.rgsec{margin-bottom:14px}
+.rgsec:last-child{margin-bottom:0}
+.rghead{font-size:12.5px;font-weight:700;margin:0 0 5px;padding-bottom:3px;border-bottom:1px solid var(--line);
+  display:flex;align-items:baseline;gap:6px}
+.rghead .rgn{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)}
+.catlead{display:flex;flex-direction:column;gap:11px}
+.catlead .crow{display:flex;flex-direction:column;gap:5px}
+.catlead .clab{font-size:12.5px;font-weight:700}
+.catlead .ctops{display:flex;flex-wrap:wrap;gap:5px}
+.catlead .cta{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;
+  display:inline-flex;align-items:center;gap:5px;background:var(--bg)}
+.catlead .cta .ctn{color:var(--accent2);font-weight:700;font-variant-numeric:tabular-nums;font-size:10.5px}
+.statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
+.statkpi .k{color:var(--muted);font-size:11.5px}
+.statkpi .v{font-size:19px;font-weight:800}
+.natwrap{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
+.tilemap{display:grid;grid-template-columns:repeat(11,1fr);gap:3px}
+.tilemap .cell{aspect-ratio:1/.85;border-radius:5px;border:1px solid var(--line);background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1}
+.tilemap .cell .cv{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px}
+.natbars{display:flex;flex-direction:column;gap:8px}
+.natbars .row{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:9px;font-size:13px}
+.natbars .bar{height:14px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.natbars .val{font-weight:700;font-variant-numeric:tabular-nums}
+.unknown{color:var(--muted);font-size:12px;margin-top:8px}
+@media (max-width:820px){
+.stats{grid-template-columns:1fr}
+.natwrap{grid-template-columns:1fr}
+.lead .row{grid-template-columns:120px 1fr auto}
+  .overview{grid-template-columns:repeat(2,1fr)}
+  .tile.spark{grid-column:1 / -1}
+  .controls{position:static}
+}
+</style></head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <h1><span class="bolt">⚡</span> IP·Power</h1>
+    <p class="tag">전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대</p>
+  </header>
+  <nav class="tabs" role="tablist" aria-label="보기 전환">
+    <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
+    <button role="tab" id="tab-news" aria-selected="false" data-tab="news">📰 뉴스</button>
+    <button role="tab" id="tab-patents" aria-selected="false" data-tab="patents">📄 특허</button>
+  </nav>
+  <section class="home" id="home" aria-label="대시보드" hidden></section>
+  <div class="viewseg" id="viewToggle" role="group" aria-label="특허 보기 방식">
+    <button data-view="list" aria-pressed="true">목록</button>
+    <button data-view="stats" aria-pressed="false">📊 통계</button>
+  </div>
+  <section class="overview" id="overview" aria-label="개요"></section>
+  <div class="controls">
+    <div class="searchrow">
+      <label class="search">
+        <span class="ico" aria-hidden="true">🔍</span>
+        <input id="q" type="search" placeholder="제목·요약·출처·출원인·공개번호 검색" aria-label="검색">
+      </label>
+      <div class="selects">
+        <select id="sort" aria-label="정렬">
+          <option value="new">최신순</option>
+          <option value="old">오래된순</option>
+        </select>
+        <select id="source" aria-label="출처 필터" hidden></select>
+        <button class="toggle" id="newonly" aria-pressed="false" title="지난 방문 이후 새 항목만">✨ 새 항목</button>
+        <button class="toggle" id="savedonly" aria-pressed="false" title="저장한 기사만">⭐ 저장</button>
+        <button class="toggle" id="unreadonly" aria-pressed="false" title="안 읽은 기사만">👁 안읽음</button>
+      </div>
+    </div>
+    <div class="chips" id="periodBar" aria-label="기간 필터" hidden></div>
+    <div class="chips" id="countryChips" aria-label="국가 필터" hidden></div>
+    <div class="chips" id="catChips" aria-label="카테고리 필터"></div>
+  </div>
+  <div class="resline">
+    <span id="resCount" aria-live="polite"></span>
+    <button class="reset" id="reset" hidden>필터 초기화</button>
+  </div>
+  <main id="results"></main>
+  <button class="more" id="more" hidden>더 보기</button>
+  <footer class="foot" id="foot"></footer>
+</div>
+<button id="toTop" class="totop" aria-label="맨 위로" title="맨 위로 (스크롤)" hidden>↑</button>
+<script id="feed" type="application/json">{"generated": "2026-07-25 09:07 KST", "title": "IP·Power", "tagline": "전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대", "brief": {"date": "2026-07-24", "basis": "7/23~24 전력 뉴스 헤드라인을 Claude가 직접 읽고 정리", "headline": "AI 데이터센터 전력수요가 이번 주 전력 이슈의 축 — 원전·송전망·전력기기로 파장", "body": ["최근 이틀간 모은 뉴스에서 가장 굵은 흐름은 AI 데이터센터 전력수요다. 미국 데이터센터 전력 사용이 2035년 4배(전체 발전량의 약 20%)로 늘어난다는 전망과 함께, 국내 전력기기 업체들의 분기 최대 실적·소재 증설 소식이 같은 맥락에서 이어졌다.", "이 수요를 감당할 공급원으로는 원전이 다시 전면에 섰다. 월성 3호기의 정비 후 재가동, 미국의 해저·부유식 SMR 타당성 검토, ‘바다 위 원전’ 구상까지 원전·SMR이 재생에너지와 함께 가장 활발한 카테고리였다.", "반면 병목은 ‘만드는 것’보다 ‘보내는 길’에 있다. 용인 반도체 클러스터 전력공급을 11년 앞당긴다는 정부 발표와 동해안~신가평 HVDC 협약이 나온 동시에, 여러 지역에서 송전선로 입지를 둘러싼 반발이 계속됐다 — “전력기기 30년 대기, 1500GW가 계통 앞에 줄 섰다”는 표현이 상징적이다."], "points": [{"emoji": "🖥️", "label": "수요: AI 데이터센터", "text": "데이터센터 전력이 전력기기·소재·저장장치 투자까지 끌어당김. 미 데이터센터, 2035년 발전량의 20% 전망."}, {"emoji": "☢️", "label": "공급: 원전 회귀", "text": "월성 3호기 재가동, 해저·부유식 SMR 검토 등 원전이 대응책으로 재부상."}, {"emoji": "🔌", "label": "병목: 송전망", "text": "발전보다 ‘보내는 길’이 관건. 용인 공급 단축 vs 송전선로 지역 반발이 동시에."}], "author": "Claude Code", "mode": "반자동(사람 확인 후 커밋)", "note": "기술적·사실 요약 참고용이며 특정 투자·정책 판단을 권유하지 않습니다."}, "briefs": [{"date": "2026-07-24", "basis": "7/23~24 전력 뉴스 헤드라인을 Claude가 직접 읽고 정리", "headline": "AI 데이터센터 전력수요가 이번 주 전력 이슈의 축 — 원전·송전망·전력기기로 파장", "body": ["최근 이틀간 모은 뉴스에서 가장 굵은 흐름은 AI 데이터센터 전력수요다. 미국 데이터센터 전력 사용이 2035년 4배(전체 발전량의 약 20%)로 늘어난다는 전망과 함께, 국내 전력기기 업체들의 분기 최대 실적·소재 증설 소식이 같은 맥락에서 이어졌다.", "이 수요를 감당할 공급원으로는 원전이 다시 전면에 섰다. 월성 3호기의 정비 후 재가동, 미국의 해저·부유식 SMR 타당성 검토, ‘바다 위 원전’ 구상까지 원전·SMR이 재생에너지와 함께 가장 활발한 카테고리였다.", "반면 병목은 ‘만드는 것’보다 ‘보내는 길’에 있다. 용인 반도체 클러스터 전력공급을 11년 앞당긴다는 정부 발표와 동해안~신가평 HVDC 협약이 나온 동시에, 여러 지역에서 송전선로 입지를 둘러싼 반발이 계속됐다 — “전력기기 30년 대기, 1500GW가 계통 앞에 줄 섰다”는 표현이 상징적이다."], "points": [{"emoji": "🖥️", "label": "수요: AI 데이터센터", "text": "데이터센터 전력이 전력기기·소재·저장장치 투자까지 끌어당김. 미 데이터센터, 2035년 발전량의 20% 전망."}, {"emoji": "☢️", "label": "공급: 원전 회귀", "text": "월성 3호기 재가동, 해저·부유식 SMR 검토 등 원전이 대응책으로 재부상."}, {"emoji": "🔌", "label": "병목: 송전망", "text": "발전보다 ‘보내는 길’이 관건. 용인 공급 단축 vs 송전선로 지역 반발이 동시에."}], "author": "Claude Code", "mode": "반자동(사람 확인 후 커밋)", "note": "기술적·사실 요약 참고용이며 특정 투자·정책 판단을 권유하지 않습니다."}], "insights": {"asOf": "2026-07-25", "window": {"recentDays": 7, "priorDays": 21}, "trending": [{"term": "AI", "count": 46, "prev": 0, "rising": true}, {"term": "원전", "count": 42, "prev": 0, "rising": true}, {"term": "전력", "count": 41, "prev": 0, "rising": true}, {"term": "데이터센터", "count": 28, "prev": 0, "rising": true}, {"term": "전기요금", "count": 24, "prev": 0, "rising": true}, {"term": "한국전력", "count": 23, "prev": 0, "rising": true}, {"term": "해상풍력", "count": 23, "prev": 0, "rising": true}, {"term": "반도체", "count": 22, "prev": 0, "rising": true}, {"term": "송전", "count": 21, "prev": 0, "rising": true}, {"term": "한전", "count": 18, "prev": 0, "rising": true}, {"term": "LS", "count": 17, "prev": 0, "rising": true}, {"term": "송전선로", "count": 16, "prev": 0, "rising": true}], "catTrend": [{"key": "nuclear", "name": "원전·SMR", "emoji": "☢️", "recent": 38, "prev": 0, "delta": 38}, {"key": "renew", "name": "재생에너지", "emoji": "🌿", "recent": 29, "prev": 0, "delta": 29}, {"key": "grid", "name": "송·변전·전력망", "emoji": "🔌", "recent": 28, "prev": 0, "delta": 28}, {"key": "policy", "name": "전기요금·정책·한전", "emoji": "🏛️", "recent": 25, "prev": 0, "delta": 25}, {"key": "datacenter", "name": "데이터센터·AI 전력", "emoji": "🖥️", "recent": 24, "prev": 0, "delta": 24}, {"key": "supply", "name": "전력수급·전력난", "emoji": "⚡", "recent": 18, "prev": 0, "delta": 18}, {"key": "industry", "name": "전력설비·산업", "emoji": "🏭", "recent": 17, "prev": 0, "delta": 17}, {"key": "mega", "name": "반도체 클러스터·메가프로젝트", "emoji": "🏗️", "recent": 16, "prev": 0, "delta": 16}]}, "news": {"categories": [{"key": "supply", "emoji": "⚡", "name": "전력수급·전력난"}, {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망"}, {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR"}, {"key": "renew", "emoji": "🌿", "name": "재생에너지"}, {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·AI 전력"}, {"key": "mega", "emoji": "🏗️", "name": "반도체 클러스터·메가프로젝트"}, {"key": "policy", "emoji": "🏛️", "name": "전기요금·정책·한전"}, {"key": "industry", "emoji": "🏭", "name": "전력설비·산업"}], "perDay": [{"x": "2026-07-23", "y": 117}, {"x": "2026-07-24", "y": 39}, {"x": "2026-07-25", "y": 39}], "items": [{"title": "AI 전력 대란 구원투수 삼성중공업··· ‘바다 위 원전’ 띄운다", "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE9KMEROR21MUF94WTNoRkkzVGVPZlp3Qk5vU0x1YTBwWXF1M29USzd2UE5nLVFjc1MzT3JNMUoyQVhnR1RLOEVsenppTVVObjRKUU9nRmFtUzZrM2hCR2xCQzIyODdCQVJXUmxGd2ViWlBsQUU4cHRYTnJn0gF6QVVfeXFMT0owRE5HbUxQX3hZM2hGSTNUZU9mWndCTm9TTHVhMHBZcXUzb1RLN3ZQTmctUWNzUzNPck0xSjJBWGdHVEs4RWx6emlNVU5uNEpRT2dGYW1TNmszaEJHbEJDMjI4N0JBUldSbEZ3ZWJaUGxBRThwdFhOcmc?oc=5", "source": "그린포스트코리아", "published": "2026-07-23T00:56:41+00:00", "summary": "AI 전력 대란 구원투수 삼성중공업··· ‘바다 위 원전’ 띄운다 그린포스트코리아", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "“전력난 심각하네”···GE 버노바, 2030년까지 ‘주문 거의 완판’", "url": "https://news.google.com/rss/articles/CBMiuwJBVV95cUxNMGI1ZzMycnlWT1ltby1wN0J4dHlUcVVkeHVWdDNRcmoxODFEX2s5QkpzRWE5WlJZa2MzUTlwZXYxVnBBRFhTaVl0bXZPcl9IQUljblFhek1wMHY5UHRPLUpBSkRpbExmZkNJdHdCc19mUVc5YzZDcEl3U0tORW8wWm9XTHdEUWlNWFFBSWV5M3dVSGprRTJfa29nTzRhbFpZUEhBd2tiU0N6U0pOblZpR1k5Y09WSXdNa1pwaG83dDdxWmE5bkdNeEoxQlpKSmljUFlHUW9GNGRJRWtkVE1HdEN4eE5BcXI2VUJBS2FHU1JlbkxNWEpXMFdzTTQxRjZDNUtVZmo5SXIzZVhkbzZtcGh1WVpvbmRvNFZXWXJpWGFxOHo0WDdETzFVZTVkZGtJV21kWkhjdzJ0Z2s?oc=5", "source": "Benzinga", "published": "2026-07-23T04:38:05+00:00", "summary": "“전력난 심각하네”···GE 버노바, 2030년까지 ‘주문 거의 완판’ Benzinga", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "전력거래소, 여름철 수요 증가에도 전력 수급 ‘이상 無’", "url": "https://news.google.com/rss/articles/CBMiRkFVX3lxTE1BeER5bFVBTjdmeGxOR01kMXpMaHE3emhOSTRLWTBCVDRWN2JWXzB0Wk9Kc2tlMHBQaExzM0cxQUprYmJiaEE?oc=5", "source": "v.daum.net", "published": "2026-07-21T08:52:46+00:00", "summary": "전력거래소, 여름철 수요 증가에도 전력 수급 ‘이상 無’ v.daum.net", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "[EE칼럼] 요동치는 기후부의 전력 수급 정책", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE9pNTlaMkdxSktLRzlTRlN2bzU4UVFUS1Vzc1dVTmVyUFd0dmJ0ZXZlUUo0SEJSaUFVeExPWDhzb0E0SEdFeWpyUzJ5NlgwTS10cExaeXpPNTZnM3c?oc=5", "source": "에너지경제신문", "published": "2026-07-19T01:59:00+00:00", "summary": "[EE칼럼] 요동치는 기후부의 전력 수급 정책 에너지경제신문", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "추형욱 SK이노 대표, AI 전력난 겨냥 베트남에 'LNG 공급·차세대 SMR' 패키지 제안", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE9RbDNOZjFWSXBycUQxLWg0dlpiZUdRdkpvWUN3dGlLREVyMV92cGVxWU41VU5hWTB2WV9vOWdNUlZUY2xpamZncXg4VjZkUERJSjFZelFma1UtYjgzc3BwWFEwQQ?oc=5", "source": "더구루", "published": "2026-07-21T04:40:06+00:00", "summary": "추형욱 SK이노 대표, AI 전력난 겨냥 베트남에 'LNG 공급·차세대 SMR' 패키지 제안 더구루", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "쿠바, 세계 최대 시가 축제 ‘아바노 페스티벌’ 취소…전력난 여파", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9keGszY1pWdnRmcHNucEJpRlQ5YjVLNFFVdjhVTEhueEtoV3RiZmduSlpITGkwaU9RTnlmSXhJd1NQOFI1cFd4WWpyRENRSndUMjJESTVSamFUUFFaR3dZZjdxSHhkYnpUc01vRHBR?oc=5", "source": "아시아투데이", "published": "2026-07-22T05:02:11+00:00", "summary": "쿠바, 세계 최대 시가 축제 ‘아바노 페스티벌’ 취소…전력난 여파 아시아투데이", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "미국 AI 데이터센터 전력난 비상… 100GW 수급 공백 발생", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQRWlieHdkdXVwVGNpU2NjLUZUeVIwMmlmbncwdk1oMWc5NEFYLXlmMTlhdjROVmFkdTM2SVB6OWtleElPdnRLVlJ6YU5lNkNyUzdSNElxbG1fYmljMHRuWWFvdVJyWDJCNHZCcTFSbmZCMWUwQmpWUi1xM1hRVDE2b0JINXIyTDVX?oc=5", "source": "글로벌이코노믹", "published": "2026-07-21T06:30:44+00:00", "summary": "미국 AI 데이터센터 전력난 비상… 100GW 수급 공백 발생 글로벌이코노믹", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "효성중공업 변압기 최대 45대 호주 공급…AI 전력난에 전력기기 ‘생산 슬롯’ 경쟁", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE5vZ2FjVUdQWEdXcURCMW5XMlBsUkM2MnotTHdlWEdVNU5yWWFjaG5NZ3VRQ1ZwVWFsaEFLS3FxWk1VLXFaYmdOMW5YdFljSGZhdkUyR1oweXNzeGVxd05rbWRaSEhicDZa0gFsQVVfeXFMTWx3Zm9SdndMRC02RldxUlljbVczRDJEamRMMHo3ajB4WGVyWTRNN3hFS2NqRkR4SzRTOUIzaGduTTVZakQ3TWY3NlI1U1NxMGZfcjhlUGpCUDlzZC1DU0FjZkVEQ1g1NjJQNXVO?oc=5", "source": "임팩트온", "published": "2026-07-20T02:55:01+00:00", "summary": "효성중공업 변압기 최대 45대 호주 공급…AI 전력난에 전력기기 ‘생산 슬롯’ 경쟁 임팩트온", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "베이커휴즈, 코디악과 손잡고 AI 데이터센터 전력난 정면 돌파", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE50d1dkMG84VmJXOHMxMUtiUnhiS3lUSFNTX00xZTJqT3pzbUV5YjV4MkJNOURBU0E5VU8xaWdwNF90bVZQaF9YcWVjODQyNEZVT19ONUhpSkxGNjNRRm9EcGl3Q2U?oc=5", "source": "에너지안전신문", "published": "2026-07-19T00:50:47+00:00", "summary": "베이커휴즈, 코디악과 손잡고 AI 데이터센터 전력난 정면 돌파 에너지안전신문", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "한전, 여름철 전력수급 ‘컨트롤타워’ 가동", "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE5pampocFFDdENOVTZjZFR4MGc1LVM5STRVUkFnY2RiMGNLZjdzRjZVQ0FmeDlIUm5BenlmZXZpdFR2VF9DUEFNRnR6SGhPUHNwQ2w0Z1J5Q1VlNnRteW5jTzBPV3NIa3lLWW5Oc0gtcDdzeEllbnpOUWlEOA?oc=5", "source": "서울신문", "published": "2026-07-20T15:37:58+00:00", "summary": "한전, 여름철 전력수급 ‘컨트롤타워’ 가동 서울신문", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "AI 사용 시간 50% 늘렸다…LGD “탠덤 OLED, 전력난 해법” [현장+]", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE1tWF9ZSHVCbVgzMTRYYjRVTHVyUk55UHpLRHpsQlFpZ28wbUNKY2NIdVdCS3pHMWpwbU1rLVJacUZNLWZTOVAxODcwanFxRXpScDA4TFplYlg2ck12dG80UTQzaw?oc=5", "source": "쿠키뉴스", "published": "2026-07-21T09:11:20+00:00", "summary": "AI 사용 시간 50% 늘렸다…LGD “탠덤 OLED, 전력난 해법” [현장+] 쿠키뉴스", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "유럽 전력난 해소할 풍력 성장 국면…데이터센터 수요가 주가 밀어올린다", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPNFJuRlFkSE5UV1RFMVJwdHBTNkdRMTZtSFRyV09WVThGQWhsbklEaUdZb0JxdHNnT291bkVlMFBVenZnNWdkNUZtTEgyZ1g5Ym9yV3l0eTgxbGJ6NUdGVVljVFFSblUzcGdDd2pVNnVveTNna3h2RE9wdV9XM2U1aWtIM3BodkZh?oc=5", "source": "글로벌이코노믹", "published": "2026-07-19T20:27:46+00:00", "summary": "유럽 전력난 해소할 풍력 성장 국면…데이터센터 수요가 주가 밀어올린다 글로벌이코노믹", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "AI 데이터센터 전력난의 역설… 美 송전망 '강제수용' 이슈에 꽂힌 투자자들", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOZjVEMnJkSTg4Q3lJYnFvTTkwMjZlcE45eVEzNmF6YXB1QzlzUW9kQmN2VlNTYno1YjJLRnJQRFktUF9yUUVHLVNRTWZ1dk85YXhmaDBvblJfZGdYWHZFSjFBcmUxSk4tVTFfQU0wU0VicHNiR2ZjVGhRZ2s2bFNEdGE3MmlGUGFp?oc=5", "source": "글로벌이코노믹", "published": "2026-07-19T18:30:00+00:00", "summary": "AI 데이터센터 전력난의 역설… 美 송전망 '강제수용' 이슈에 꽂힌 투자자들 글로벌이코노믹", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "[이계안칼럼] 제12차 전력수급기본계획을 다시 생각하다", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9MYllhWnlmN0l0b0J6R0l6UTkzRTdWaC03UUFYNDg2aHpybTloZEFrcWJQMWc2aHF0eHYzZk5MMUd0ekVyWVpfWHFxaXhITUk?oc=5", "source": "v.daum.net", "published": "2026-07-19T09:55:03+00:00", "summary": "[이계안칼럼] 제12차 전력수급기본계획을 다시 생각하다 v.daum.net", "category": "supply", "date": "2026-07-23", "mock": false}, {"title": "홍천군-한전, 동해안~신가평 송전선로 건설 '협력' ::::: 기사", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFB2ajZHcWlhLS1nZFM3MmkzVXBGOElhb1dyYlo0RHhER0RvOU40UUh4MEJaZThtQ1hhYlQxUkZVXzd1V2FiTTYyc3NvLXVheDhvOE5BQ2NR?oc=5", "source": "춘천MBC", "published": "2026-07-23T07:59:33+00:00", "summary": "홍천군-한전, 동해안~신가평 송전선로 건설 '협력' ::::: 기사 춘천MBC", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "신영재 군수 “송전선로 건설과 주민 권익 조화”…한전과 상생 협력 강화", "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTFBVZG4yVTFzSC1IdzF4d0l3Wm9YRDZLd0JCSm0tb3lwb0gxV3oxTUpFY0NXTVo5WTQ3cE5Ic19USXJwaUgwNXNoMVRsYjRvekZFRmc4RFZHbmUxcUVTWXdVSA?oc=5", "source": "아시아경제", "published": "2026-07-23T06:42:52+00:00", "summary": "신영재 군수 “송전선로 건설과 주민 권익 조화”…한전과 상생 협력 강화 아시아경제", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "홍천군-한전, HVDC 송전선로 상생협약…주민 지원사업 추진", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBWQlpwN0tZdkgwbnZoSnYxRnA2b2thbVNTMXdpT3otWUx6cVB2WlFza1J6eGJqdzVUaHc0QXRrOHVId0U3RmtoY25PNkdhMXNKTUhEd3A5T2xHYy0tSGNZVjU3TEFwQnllTk95MkIyQkM?oc=5", "source": "신아일보", "published": "2026-07-23T06:34:43+00:00", "summary": "홍천군-한전, HVDC 송전선로 상생협약…주민 지원사업 추진 신아일보", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "[텍사스 인스트루먼트 실적] 현금부자, 그리고 800V HVDC│Global Money Club", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBRWnlRNm5iQ3JIOXlET1pwRW9wcUx6X0hXOTl6c3YzbDI5elNvNWs1RUlpcU9QZmN3RERqa3VRVUtRSjZnTVZnUDhwUFJmS3JfZlhkaE5yT3g4dGc?oc=5", "source": "중앙일보", "published": "2026-07-23T07:50:11+00:00", "summary": "[텍사스 인스트루먼트 실적] 현금부자, 그리고 800V HVDC│Global Money Club 중앙일보", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "\"한전 입지선정위 원천무효\"... 신정읍-신계룡 송전선로 반대대책위 반발", "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTFB0Nl84RkxhWjd1ZTlfUHdrSG05alZDY2xvb0ljcjZDLWg1cWpmV3dkZEdNSm0zM2xtbVNSc2V4MmxjUlFfQWhWNzE4ZzNIWjJ0aXE5OEQ2RWxMTnRPZ2dfakFIS2tsYXdtWGdYenNZeGhKUUpZVVd3?oc=5", "source": "OhmyNews", "published": "2026-07-23T07:06:00+00:00", "summary": "\"한전 입지선정위 원천무효\"... 신정읍-신계룡 송전선로 반대대책위 반발 OhmyNews", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "\"호남 클러스터, 재생 에너지 풍부하다지만 송전선로 구축은 또다른 문제\"", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFAxeHJJVjFpUzB1QjlBNXlIR2dIUXZsdTJ0YW9sWnFyMklvT3psYXA1c2wxWTRjWnhnaEZfSDlGODFrQzJ4S2V3V2g5Tk9wTmM3d1pBZDVVUmFwQQ?oc=5", "source": "파이낸셜뉴스", "published": "2026-07-23T06:48:40+00:00", "summary": "\"호남 클러스터, 재생 에너지 풍부하다지만 송전선로 구축은 또다른 문제\" 파이낸셜뉴스", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "경기도의회 국민의힘, 용인 반도체 클러스터 점검…전력망 확충 논의", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBZdzgza2tXNzhJOFNSdGtlNWdhSnBnYUJxNlg5M2d5R3FkMW9hS3VJNnFkbmRiQl9LQVdsbDVFaWxCOERCMGx1TGdYUlhGQ2hSNVYtRE4tbThKUQ?oc=5", "source": "데일리엔뉴스", "published": "2026-07-23T07:16:29+00:00", "summary": "경기도의회 국민의힘, 용인 반도체 클러스터 점검…전력망 확충 논의 데일리엔뉴스", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "담양군의회, 신광주-신임실 송전선로 노선 변경 규탄 결의", "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTE01YkxES2dIZEIyek9hdFZCSmYtbDYwRGwyTDl3Z2VVR2M3eVNFdlQzQjdGd2d3SWxHaXp1Wm4tVDRuSnVD?oc=5", "source": "일등방송", "published": "2026-07-23T12:30:00+00:00", "summary": "담양군의회, 신광주-신임실 송전선로 노선 변경 규탄 결의 일등방송", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "홍천군-한전, 500kV HVDC 송전선로 건설 상생 협약 체결", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE80NWNSWVlwalg2Y1ZvTXB0RHgyRWh1UUpReklEQ2lTc09qeFdxbGFydTYtdVlxOWRJVVNJek1GLXJaaUVmNExIOVpKV2tpeDVOZUhRSC1EeUdnV1NVeTZRaU1UT01VeUFPQ2RwcG1n?oc=5", "source": "gukjenews.com", "published": "2026-07-23T07:41:56+00:00", "summary": "홍천군-한전, 500kV HVDC 송전선로 건설 상생 협약 체결 gukjenews.com", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "LS마린솔루션, 포설선 ‘GL2030’ 개조 완료…HVDC·해상풍력 공략 박차", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9leXNzcGFLT2ltbkFZRmUyMnVRMmdFQVhYY1lTR2VXMEtyZkRFUGlIX3ZJSllkYjk2Vm9GbnZHOS1nMjlwWmcxS3hKNlhPSkd1OVpOUFJTN3NHdmJlNlNrbVlxSUFPeXpfNXk3TGxkWC3SAXBBVV95cUxPZXlzc3BhS09pbW5BWUZlMjJ1UTJnRUFYWGNZU0dlVzBLcmZERVBpSF92SUpZZGI5NlZvRm52RzktZzI5cFpnMUt4SjZYT0pHdTlaTlBSUzdzR3ZiZTZTa21ZcUlBT3l6XzV5N0xsZFgt?oc=5", "source": "전기신문", "published": "2026-07-22T07:55:26+00:00", "summary": "LS마린솔루션, 포설선 ‘GL2030’ 개조 완료…HVDC·해상풍력 공략 박차 전기신문", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "송전탑 갈등 넘어 '상생'···한전, 홍천에 지원금 지급", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE85ZkhjMk04T19Ea1pUM3pFcnU5WjJ0a0Q1X1oyUWVGNEFST0RpMmxUM2xrbnFVRFlCZlBGRWFhaHhSSGhuaVUySW44WkJVT0dPcHJWSUJtSDRnQWVxMnJLTFVmWEtzX1RKTnE1UGNxWWvSAXRBVV95cUxNOTlkd2lGQnZDeW1nSGdQeWJjSVlQT28zMDN2S3ZCTE9nT3YwcmhIa3p4ZlhURXJOOS1LRk9wRHZXUTZDUWJqUjFZQ3RYLUFrMEMxZUVud3IyeDdSVEtSYmwwcEJKbkY1bVpHZnR2eTBaeFZpMw?oc=5", "source": "이뉴스투데이", "published": "2026-07-23T08:29:00+00:00", "summary": "송전탑 갈등 넘어 '상생'···한전, 홍천에 지원금 지급 이뉴스투데이", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "담양군의회, 송전선로 노선 변경 재검토 촉구", "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE1rYXJvRDZRSG92aUlYcVZYZWhSMEdTMlQwTGRVcUY0eGppSHQxVENpc1kwVlpiM2c5ejVHMG1JVEtoblZEZnZxTTlROTVWbjlRNUVMZV92SQ?oc=5", "source": "전남인터넷신문", "published": "2026-07-23T09:07:32+00:00", "summary": "담양군의회, 송전선로 노선 변경 재검토 촉구 전남인터넷신문", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "LS마린솔루션, 해저케이블 포설선 성능 강화…해상풍력·HVDC 시장 공략 가속", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBDT2twTnBvY2dxWDdDZzNaZXdoazdLTjQ5UllXMVBWMGQ4QThQWE1XZ1ZpOTRwMHhscHFxbmpmRXJndURPRjJmSWY1X3pnNzZuQXR5b1E5d2ZpRUFEM29Lc2hfSHNSV2VQcWdr?oc=5", "source": "해사신문", "published": "2026-07-22T02:14:21+00:00", "summary": "LS마린솔루션, 해저케이블 포설선 성능 강화…해상풍력·HVDC 시장 공략 가속 해사신문", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "[기획] 백두대간 가르는 345㎸ 송전선로…연풍 주민들 \"삶의 터전 지키겠다\"", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9IZ2ZseGFTOWhxOHpDMHBncmM5YldleXlYUE15bFFUbzBOVVlFcnQza3RDSGIwanpDLWlMb19UVmFHaG9QLXlKQkRkS0g3OThIUTZUUzBXUndzUmcwUjFCOTZUU1dMQUs2eEJuNzRmeWg?oc=5", "source": "충청일보", "published": "2026-07-23T01:58:42+00:00", "summary": "[기획] 백두대간 가르는 345㎸ 송전선로…연풍 주민들 \"삶의 터전 지키겠다\" 충청일보", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "폭염 속, 한수원 사장의 현장행보… \"K-원전 경쟁력, 중소기업 기술력에 있다\"", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE9xaTlpaVFRczlSZ05vRGstd2dTNVh2YU1LZUEwUjhDYVY0bk1peDZIbDhES1QyeXBzRlRVelpGVUpWQnc0R1BlYmdPM3Y1bWM0SHlEMG91dnozMzkyeGloSjFmb0M?oc=5", "source": "에너지안전신문", "published": "2026-07-23T08:47:43+00:00", "summary": "폭염 속, 한수원 사장의 현장행보… \"K-원전 경쟁력, 중소기업 기술력에 있다\" 에너지안전신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "월성원전 3호기 299일간 정비 후 발전 재개…\"안전문제 해결\"", "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9UTGxJRGhSay1Uako5OWU0Y3lBZXB1N01xcHB5MHBJMF9WalFyenJwSkZiVngzOVpwbU5WTHlXS0tNR0kzN0FWc1pscFljdTFJU3VyYlZubHo2VVk0WDBEVNIBYEFVX3lxTE9UTGxJRGhSay1Uako5OWU0Y3lBZXB1N01xcHB5MHBJMF9WalFyenJwSkZiVngzOVpwbU5WTHlXS0tNR0kzN0FWc1pscFljdTFJU3VyYlZubHo2VVk0WDBEVA?oc=5", "source": "연합뉴스", "published": "2026-07-23T08:40:26+00:00", "summary": "월성원전 3호기 299일간 정비 후 발전 재개…\"안전문제 해결\" 연합뉴스", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "한울원자력본부·울진소방서, 원전 사고 대비 공동 대응체계 강화", "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE8yMW9tdzhscHhWTEc2WEt2SEQydThqTnVzWV9UdXF4eU9SMjhoY2Njelc3MDJKejVxQ1hEQ1l3MUFvTHU1clBBRUVjUWxnOW94TTFZWTgyc1R1dkFNWWc?oc=5", "source": "유교신문", "published": "2026-07-23T13:13:18+00:00", "summary": "한울원자력본부·울진소방서, 원전 사고 대비 공동 대응체계 강화 유교신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "원전 수출하려 ‘비핵화 안전핀’ 뽑은 트럼프…핵 도미노 우려", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1Fa2JidkpWMHBFVjNPLTlOUTJlZHBETjB0RFBpSFNPa3EzUkJEd0ZzT2hOdVhONk1EdWFBSlUzckZReWNCOFpRWVZVdVJnVUh1OGVFaDJpR3hhUdIBX0FVX3lxTFBYbGdrS1lJLUxYNWtlRHBzRzhTcWJ5SmN0NWVWRDdIQmZxRlBuT005bEx1Y0JDWnQzMmlmTmNuVEM1d2VLdFhhbXY0VFYzQU1KaXcydk9MWENRQVptOVlB?oc=5", "source": "경향신문", "published": "2026-07-23T12:54:00+00:00", "summary": "원전 수출하려 ‘비핵화 안전핀’ 뽑은 트럼프…핵 도미노 우려 경향신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "계획예방정비 마친 월성원전3호기 100% 출력 도달", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5WYnJieHlVMndwUmY1UkF1SHh0c05ZRk9vS3hvblVhOU9KT1Y1azVfTjZXOHhFLUswd1EyNDRTWU10VGlHODJzbERkdXp0WS16SU01bklGWHdYNTlF?oc=5", "source": "뉴스핌", "published": "2026-07-23T10:15:00+00:00", "summary": "계획예방정비 마친 월성원전3호기 100% 출력 도달 뉴스핌", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "美, 바다에 원전…해저 원전·부유식 SMR 타당성 검토", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE1zeFIyaDl2RkN0LU4xTk1ZeV95RUxoeUEyQzFqZkk1Wlo2YkNlcFowREFYS2pYaHBVNVF2UzRrTVZnX1BoNDU2ZWJIc1VjclVYMVFqRjlENHM2c0hGU19QSE1ITmdTOTlSQ2dSZA?oc=5", "source": "ESG경제", "published": "2026-07-23T06:16:05+00:00", "summary": "美, 바다에 원전…해저 원전·부유식 SMR 타당성 검토 ESG경제", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "원전 건설·해체 시장 도전 나선 부산 중소기업", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1fVmpzWUdKdzdtTThaMHQ5eUpTUmY5WUpJWkNNRk1jVTZ5SHJTci1DRkJ0emZrUU5WbUZTZl9yY2VJODJMOGFyZDNvLTZOXzg?oc=5", "source": "v.daum.net", "published": "2026-07-23T09:11:41+00:00", "summary": "원전 건설·해체 시장 도전 나선 부산 중소기업 v.daum.net", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "한수원, 원전 문서도 AI로 쓴다…업무혁신 시동", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFAwTVJxZHpTcG0wZllObTM4NmpNM1hhSlNacWtnU2RJZkZfYUwxa21vM25PRXhRQktIVkxIWWdKVHJUYkotU1pVTFkxbXZTQ1JncXBwZzlsMXJXTV9adUdmS2ZPV0EzSHRwVHlzX2lEckjSAXBBVV95cUxQME1ScWR6U3BtMGZZTm0zODZqTTNYYUpTWnFrZ1NkSWZGX2FMMWttbzNuT0V4UUJLSFZMSFlnSlRyVGJKLVNaVUxZMW12U0NSZ3FwcGc5bDFyV01fWnVHZktmT1dBM0h0cFR5c19pRHJI?oc=5", "source": "전기신문", "published": "2026-07-22T23:33:24+00:00", "summary": "한수원, 원전 문서도 AI로 쓴다…업무혁신 시동 전기신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "삼성중공업 베팅 대박 예고…美, 부유식 해상 원자력발전 플랫폼 시장 '개화'", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTFB6cXFhaGs1V3pDVjlTR0VMa0pJYXUwanltYVFQVHhtZWlTdWYzU21sRlhJTE1WRXFNMFRxcGNBbVJ3MXpYdjZjOGtBeml4cVpDdEk2ZmptdHRtVmZCdUo0dXhpdw?oc=5", "source": "더구루", "published": "2026-07-23T01:21:56+00:00", "summary": "삼성중공업 베팅 대박 예고…美, 부유식 해상 원자력발전 플랫폼 시장 '개화' 더구루", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "“신규원전 부지 선정은 끝이 아닌 시작…지역과 약속 지켜야”", "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE85X2dYZEluWHB5b3lsNDdLbmtFUlhQaWNWTW1YTVNjVU5KT1FzRDVLY3NHQ2ZsbzM3SjZpcmtIald3SFpYU0UwSDdRaW5jdXVGLUN4N01HeUNhMm9tMDZUSTNCeW8tQQ?oc=5", "source": "인사이트N파워", "published": "2026-07-23T08:49:10+00:00", "summary": "“신규원전 부지 선정은 끝이 아닌 시작…지역과 약속 지켜야” 인사이트N파워", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "김회천 한수원 사장, 원전 생태계 강화 행보…국산화 기업 방문", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTFAtOEFIeVNBZWw0TGtlNTYxc1FNSktULUllc3c5TWZ0OVZHcWpBM0YtTkd2NjlVbjRCVnBZMnBCcXJFSVEtenhvY2JxZDFiQmtYR3BjeHFmajZyTVJ3bF9IRWxoMjUyelZZbFE?oc=5", "source": "천지일보", "published": "2026-07-23T13:18:51+00:00", "summary": "김회천 한수원 사장, 원전 생태계 강화 행보…국산화 기업 방문 천지일보", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "국비 1조원대 성과부터 원전 유치까지…경북도 우수부서 6곳 선정", "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE9VV1pDZmNubjJzVWpzaW5ibjZWWUhUVzdsbUZSSmh0UFNaakFsSGpUTEhGTGRPX29iU0NwMURFVnRza0lhM0tHYm43NDZmNG9GMnNxT2tqN0lZenBLMDFqajNWN2xqd0loeFFKOWxFaw?oc=5", "source": "kyongbuk.co.kr", "published": "2026-07-23T09:34:27+00:00", "summary": "국비 1조원대 성과부터 원전 유치까지…경북도 우수부서 6곳 선정 kyongbuk.co.kr", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "[채널Who] 탈원전 외치던 시대는 끝? SMR을 '국가전략기술'로 지정하려는 정치권 움직임", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTFBfendrVjhRY3lEa3hqNWJQR1o0ZjVmZEZ4dHhzc081QWxYM2duOHg4YzBFZUlwMGNIU20tVzFOa3JsSnhvTWhsN0NNcDItSjF0dWRudjliaVF2aXZQdk5ra0pMbmZ5ZDlXUm13NTNvNXJGcWM?oc=5", "source": "비즈니스포스트", "published": "2026-07-23T08:00:00+00:00", "summary": "[채널Who] 탈원전 외치던 시대는 끝? SMR을 '국가전략기술'로 지정하려는 정치권 움직임 비즈니스포스트", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "어둠을 밝히는 한 줄기 빛, 방글라데시의 희망 원자력발전", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTFBvY2thbVBoR2c5V0I3allCeUZ6cXEtdVJMSDZrekdTdUxxZDRIUS1mT2YxaWJnb3hSRXdlVEt0MDd3TnZqLWxsUTJPdm40ZkMycGVaTmV1Z2IxNFFwb3V6SnZjazc?oc=5", "source": "에너지안전신문", "published": "2026-07-23T00:23:41+00:00", "summary": "어둠을 밝히는 한 줄기 빛, 방글라데시의 희망 원자력발전 에너지안전신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "유니슨 “2030년 매출 1조원 목표…육상·해상풍력 토털 솔루션 기업 도약”", "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE5BcnlBY1hId1pKenBaTUhJTDhFX0p3bVdjblloQ3Y2d2FhbjVOM3o2ZG42eVdRNmZYanlRNEo5TkFoWGxHVXRJU3QyNlNqdFpBSHdDQ0lOM0Joc19hcVE?oc=5", "source": "기후에너지데이터뱅크", "published": "2026-07-23T07:10:02+00:00", "summary": "유니슨 “2030년 매출 1조원 목표…육상·해상풍력 토털 솔루션 기업 도약” 기후에너지데이터뱅크", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "창원시, 수곡·창곡산단에 태양광 발전 확대", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE1kZjRtdHhva095ZlMtUFkxa0ttTjlDeDJVNDdaWlRPdjB0Y19NSS0yckZDSnhubTZSZTd0Q0NxcTR1eHNJMnE2UW1ZbUF0akc0SGFCZ19PbU05YUpSajYwenZDV2x4T25RaFc4?oc=5", "source": "경남일보", "published": "2026-07-23T09:51:51+00:00", "summary": "창원시, 수곡·창곡산단에 태양광 발전 확대 경남일보", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "산은·수협, 해상풍력 금융지원 맞손…주민 이익공유 모델 구축", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9IZnRQUmJIYU8yZG81RlN1U1RqMTJfMXQ2czdXRFQ1dWZDVFA4UXdBbXZJUVZud1ZOSmdqd09FOVBkTFNiQ2xtV3F1QXM4WlZqTE1TUHVMWjFhZzl1aU84MllmZnZpOFo1WWdV?oc=5", "source": "해사신문", "published": "2026-07-23T10:19:14+00:00", "summary": "산은·수협, 해상풍력 금융지원 맞손…주민 이익공유 모델 구축 해사신문", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "中조선사, 세계 첫 '태양광 발전' 1만대급 車운반선 韓에 인도", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFBKWFdpYnFHbGFmYi16clY0S3hJeHNoOTlIdFkwanNBREhBaGFlODF5UXpWTk9nWU5rVXdYazNwNWdhTWoySU1zak5tOFdrRVE?oc=5", "source": "v.daum.net", "published": "2026-07-23T04:27:07+00:00", "summary": "中조선사, 세계 첫 '태양광 발전' 1만대급 車운반선 韓에 인도 v.daum.net", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "[해상풍력상생금융]산업은행·수협, 해상풍력 금융협력 강화…지역상생 에너지 모델 구축", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBHdWQwWlhlM0hYNy0xV0M2WlhCUjB2TFFvN21LMlU3dnJuMGkwOTh5eHhjWjVrQTlaQnEzMDludGFLQV9pMUtZT2xwZnFtcEd6QXQ5Uk9QMnhxWEs1MnhsbVJybmJ1U1pGVXJxQXBxanU?oc=5", "source": "전국뉴스", "published": "2026-07-23T06:48:26+00:00", "summary": "[해상풍력상생금융]산업은행·수협, 해상풍력 금융협력 강화…지역상생 에너지 모델 구축 전국뉴스", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "산은-수협, 해상풍력 발전사업 금융협력 업무협약 체결", "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE9Sbjk2aVlkNXgzbU1JZjVTaTJqYzZsNDEwQ2lkVDlSWklqUEotcGJLU19kZG1mTW1yQkZwSGl1aXJTVUZGazBwbjFrVkVuanhsZUk2Z0k1WktVUFl3U2NoWndR?oc=5", "source": "디지털데일리", "published": "2026-07-23T00:49:40+00:00", "summary": "산은-수협, 해상풍력 발전사업 금융협력 업무협약 체결 디지털데일리", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "유니슨, 2030년 매출 1조원 목표...종합 풍력기업으로 도약 선언", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE9vS3NhaHUwb2wwV182a09hNHpIUm9IX1IzZFAxOHZ5aXNLMEpPcEMzR3hRbTFYaU1KRkYteFJtNUd4bkhYeVYxRXdDbi0xQUR2MlR6aTlJYUtUd09wbnNRb0lWMFFEVEFBOVNULdIBcEFVX3lxTFAwRmk3MjVrUFVFQmE0U1U3VUZEcUdzUWpOSEMxa3ZqLVc4STlIU2J3SGJIRVRJZ0JSVFhyNzJRSFRiak1xeHdSeTlOYXpUejA1Q01GOGotTmM0OGpzT3lPdThPSHdtdVRtWHp6ODJFNlM?oc=5", "source": "전기신문", "published": "2026-07-23T08:00:00+00:00", "summary": "유니슨, 2030년 매출 1조원 목표...종합 풍력기업으로 도약 선언 전기신문", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "한국중부발전, 신안우이 해상풍력 착공… 2029년 상업운전 목표", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5JZE9rdXAzQzM1MGpSeDlrS2xUM3ROelNJXy1BeXdRV21mcUN2dW1pZDAxckx4eEJyUEsydlVtczdoRlVnRkZkeVZJaG5nNjlQM0NYdjJWWmlZTGN5RF94eTRBTV95eGRucFE?oc=5", "source": "천지일보", "published": "2026-07-23T01:12:24+00:00", "summary": "한국중부발전, 신안우이 해상풍력 착공… 2029년 상업운전 목표 천지일보", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "산업은행, 해상풍력·방산·조선 금융 지원 확대… “산업 생태계 안정화”", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTFBRX3NjbFRIX05tWWs5UTZtQndfVFIxc2VUTWRYdDloNTlrcElqdl9QRHlyb3NDMk9feHg4eXZicFJBVGtmZS1DbFJnZG1mSEpUWEJLckNrRmFoME42OWhDeTVlcVliV1NK?oc=5", "source": "녹색경제신문", "published": "2026-07-23T03:28:40+00:00", "summary": "산업은행, 해상풍력·방산·조선 금융 지원 확대… “산업 생태계 안정화” 녹색경제신문", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "수협, 산은과 손잡고 해상풍력 ‘바람소득‘ 모델 구축", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1GUHNYTHJ2WGx4MU8xd1hUdUROQWdmNWdGbHk0WDVmY3ZDUXZsX01FLS1aMmYxd3FqME1QUlZ6eFpla0FieDFaZFZCQTdzVklvcjg1LVYwN1QzZw?oc=5", "source": "브릿지경제", "published": "2026-07-23T08:14:00+00:00", "summary": "수협, 산은과 손잡고 해상풍력 ‘바람소득‘ 모델 구축 브릿지경제", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "한국산업은행, 수협과 국내 해상풍력 발전사업 금융협력을 위한 업무협약 체결", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE5hV3hpZ0RIRHctdDV5TldDMnk4YnUzWUZhNDRjX1JGa2MwNm50YzU2OXM0eUZzWGhsNUFmT0VtV09vMklLbTdpMFdqdlNMenBPMTUzZEJablg2aEJCQ2pTZnJjc2FBMEtVcUVz?oc=5", "source": "내외통신", "published": "2026-07-23T06:15:00+00:00", "summary": "한국산업은행, 수협과 국내 해상풍력 발전사업 금융협력을 위한 업무협약 체결 내외통신", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "'바람으로 어촌 살린다'…수협·산은, 해상풍력 금융모델 구축", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5ZYjlDVHNzYUd1TWwwejAyUmctQlMxdEZGdXIxZDMwQ3Nac19GRTF5QnlwR2wwLUFsc0Z1a1U5emxvODNoTEdhMzVlQzFlYVE4bFZseTE1NkNzQURNVTB1TlFWSVdMNnd1dUHSAW5BVV95cUxQb2dLdWVmazJYcmV1Y3VDZ2ktbDBmbGxSU3NSc1lLN0owNXBuZU9FZlF1QXV4ZUxuRDRHc01STGhhUktUNXFpQzRteUYyZ1paMzZwZVZvcDIwcmtfcHA4T2tmMkNpdXVaV043bDNvdw?oc=5", "source": "뉴시안", "published": "2026-07-23T01:13:54+00:00", "summary": "'바람으로 어촌 살린다'…수협·산은, 해상풍력 금융모델 구축 뉴시안", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "영광군·한전KDN, 공익형 태양광 발전사업 본격 추진", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE8wWnhqalNUV2oxcjk5d2M2X3VOeFZpbmlSMGNKQkZzakV6anlvdWdHRTdiSnMxaHdZQnFFXzFvc2lrZWpIOUVvRkdpdHZSUnFOc3lzUlBJVVFwMFk5UE5zLU5ULVB5WHQ1TFdN?oc=5", "source": "대로미디어", "published": "2026-07-23T06:30:16+00:00", "summary": "영광군·한전KDN, 공익형 태양광 발전사업 본격 추진 대로미디어", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "수협-산은-수협은행, 해상풍력 금융협력 추진...어촌 '바람소득' 모델 만든다", "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE1LbkpVOWZiZ0tGUnIyaFUtZWpjZnUxRWlOZ1lGQVduV2U1eml5VVp4WnByQm9uTkxOSGpzOW1CUDhNOXdId1Z2bkozZnpxM0VlWWVmakFzRWdkUTZlTm9wOWZFTE9JUQ?oc=5", "source": "이로운넷", "published": "2026-07-23T07:01:53+00:00", "summary": "수협-산은-수협은행, 해상풍력 금융협력 추진...어촌 '바람소득' 모델 만든다 이로운넷", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "미국 데이터센터 전력 사용 2035년 4배로…전체 발전량 20% 차지", "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9QdXlpeXZRNmgxSUhubE1ZRnhlenh0czYxU2xVTmVUNlVUcVE2eUc2VmJ1RU5KQUtzNm1QVFRueXI4V1VBb1FqOGlRRERwZTJmMFQwQzVxUEhlRVdEYTNN?oc=5", "source": "헬로티", "published": "2026-07-23T04:48:06+00:00", "summary": "미국 데이터센터 전력 사용 2035년 4배로…전체 발전량 20% 차지 헬로티", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "(금요아침)AI 데이터센터 전력 수요와 원자력의 역할", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE1VaC1fMFlMc1M4M1hRVDE0LV9iTDUyc0lLeGc0T1VITlRiaENwc2REQ2xxTmlHbDJzZGl2LWV3TGk4REU4M28tQXMwaHg3T1NOajJyRlBUODh1bUJLZGdWeUFhOGdBX1diOVdRYlU1UGLSAXBBVV95cUxNVWgtXzBZTHNTODNYUVQxNC1fYkw1MnNJS3hnNE9VSE5UYmhDcHNkRENscU5pR2wyc2Rpdi1ld0xpOERFODNvLUFzMGh4N09TTmoyckZQVDg4dW1CS2RnVnlBYThnQV9XYjlXUWJVNVBi?oc=5", "source": "전기신문", "published": "2026-07-22T23:11:20+00:00", "summary": "(금요아침)AI 데이터센터 전력 수요와 원자력의 역할 전기신문", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "브룩필드, 배터리 저장업체 '아이파파워' 70억 달러에 인수…AI 전력 수요 선점", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTFBBMVRwTEFuM1dWUl9uR295ZWVPUXVSZExmV3MyNGpSUkFnaW5fMDRQckt2NkV0NnJSbGNZclQ5dHhkR3UyRWFDSUNtekZxUms4SHFYVE9YVnIwYWtnYnF2Tmpzaw?oc=5", "source": "더구루", "published": "2026-07-23T05:43:13+00:00", "summary": "브룩필드, 배터리 저장업체 '아이파파워' 70억 달러에 인수…AI 전력 수요 선점 더구루", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "OCI홀딩스, AI 전력 수요 겨냥 폴리실리콘 2배 증설", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE4xNXpWMzFnMTNpR05ZY0VPRndIMXNaQ3hubnJoYmt6b0VCSTRTMGU2bzA1bWxySUxJNUlGZWl5WFZCQVFpQXB0Z2hsbDR6U1F1a0FtVHh3?oc=5", "source": "지디넷코리아", "published": "2026-07-23T05:33:43+00:00", "summary": "OCI홀딩스, AI 전력 수요 겨냥 폴리실리콘 2배 증설 지디넷코리아", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "[GAM]윌리엄스 AI 시대 관통하는 가치사슬 ① 데이터센터 전력 공룡 변신", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE9zUWY2ZE4xT1IyQ2tKYjVPWXFZSlBKaE9yU2MwSl9ja01Wa2xIYWNjT0Z6QTJPNjZ0R0dlX0JuakZ2YkJMSHJXSWQydTlqckVlTnRRdGcxVzh1SHRt?oc=5", "source": "뉴스핌", "published": "2026-07-23T02:55:04+00:00", "summary": "[GAM]윌리엄스 AI 시대 관통하는 가치사슬 ① 데이터센터 전력 공룡 변신 뉴스핌", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "요꼬가와, EV 배터리 및 데이터센터 전력 분석을 위한 고정밀 측정 모듈 2종 출시", "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE14bHJ5WGFTMkJjV21mTUVOQmR3NTlXOGhfX0lGa290Z1JyOGtEYVJyWWlyNGlJa1Jldnk5QWh5aGwyRFBBMElwLTZQX2pLYnBYM0gwRjlsakFCWGZxajQw?oc=5", "source": "뉴스와이어", "published": "2026-07-23T03:00:00+00:00", "summary": "요꼬가와, EV 배터리 및 데이터센터 전력 분석을 위한 고정밀 측정 모듈 2종 출시 뉴스와이어", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "AI 시대 데이터센터 전력 소비 비교: 미국 204TWh vs 한국 8TWh, 얼마나 차이 날까?", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBtZzdncTJUMnhoVTVKa0pneG4tY2ZpQ1Y5N1diNVpMTzJfUS03anlWTl80WjBRNmdGbGhOUGh2dHhId1Yzb0RSeTE3dGxYVUtvc3plWWpvUlhJX1o2UldraWNjbmd4WkVJMzR0dm1oR1XSAXRBVV95cUxQT0p6aENBaXN3VVRMVzVHNk1jUmdBcE5RVzhUbjNqZ2JBN0ZNOUhJblB4aU9INUl2RU4wWU5Wb3NQUS1DWURaRkRFSDZWQXRfVDl4ZFduTHVnRXlVVWwwWDZhOXc5UjFMcThUbWk3QjE0eTl0RA?oc=5", "source": "한국데이터경제신문", "published": "2026-07-22T21:05:00+00:00", "summary": "AI 시대 데이터센터 전력 소비 비교: 미국 204TWh vs 한국 8TWh, 얼마나 차이 날까? 한국데이터경제신문", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "LS일렉·LG유플, 차세대 AI 데이터센터 전력 인프라 개발 맞손", "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9VcEY5bUdUc3lvRmJERFBPa3o3bXdPNi1sbmE0Q1gzR3VJNHZiS3NiNzhPWFBvOHVFZXlQRTBSMHZQc0xPdC1pTkExUm5uUFJiaVBHUVVma0pTVWtMakNPUNIBYEFVX3lxTE9VcEY5bUdUc3lvRmJERFBPa3o3bXdPNi1sbmE0Q1gzR3VJNHZiS3NiNzhPWFBvOHVFZXlQRTBSMHZQc0xPdC1pTkExUm5uUFJiaVBHUVVma0pTVWtMakNPUA?oc=5", "source": "연합뉴스", "published": "2026-07-21T23:51:11+00:00", "summary": "LS일렉·LG유플, 차세대 AI 데이터센터 전력 인프라 개발 맞손 연합뉴스", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "번스타인, 비트코인 채굴주 비중확대 유지…AI 데이터센터 전력 병목 부각", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE51RUljNk9VcHhwR2JqYXpJRk1LSEV6Y2t0MFg2bm5QdnJSTnl0OGxqU0NwRTRRb2xvU2F4Y1FEc0F2M3NrNXRyWnpueWtnZXl0TlVQRzBGRVNwSzJMVGxXQmJCX2JnNHlYdDg1NXRfcXhZQW8?oc=5", "source": "디지털투데이", "published": "2026-07-23T13:09:46+00:00", "summary": "번스타인, 비트코인 채굴주 비중확대 유지…AI 데이터센터 전력 병목 부각 디지털투데이", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "리버티 에너지, 2분기 매출 12억 달러 기록…데이터 센터 전력 시장 진출 가속화", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE5ORHlrSEhFakV6dGxHRmRRcjRmaXgxS1lWRTFkMDM3N0tYZUdkeHByWWtTZjJBQXFERm45bEtJQjRsaGNMejFzWDdwckFLYWx5clV0N1l0X3gxaEhOT3JhRlUzUXlYWmhHVl9vR3JpWExZVFU?oc=5", "source": "데이터투자", "published": "2026-07-23T10:27:31+00:00", "summary": "리버티 에너지, 2분기 매출 12억 달러 기록…데이터 센터 전력 시장 진출 가속화 데이터투자", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "미국 데이터센터 전력 수요 급증… 호남 반도체 허브, 전력망·용수가 과제", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOTkktZzF2enZMbl9ybTg0UmVnX0syb2pHVjhNZnJIOUF6bXkzM2ZLUEp0Z05ub0dsYVBEQWNwc0RoNnFfd2tNVWFZYTFVZFF4ZVFzLVBvRnF2dlhTZFBoalZBV1lBZTZNRkxteERPNmtza3pjd1hmZWtrVVJ2ZWEzZWVCR0lJYWlm?oc=5", "source": "글로벌이코노믹", "published": "2026-07-21T22:46:49+00:00", "summary": "미국 데이터센터 전력 수요 급증… 호남 반도체 허브, 전력망·용수가 과제 글로벌이코노믹", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "LS일렉트릭, 2분기 역대 최대 실적···AI 전력 수요가 성장 이끌었다", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5aeHRrYm44aTAtRm10S1lZYkNfNllHVFYwamp6VGR3cGM5V3E5Rkw1ZmxueXlPNHhaUVVqMGF1cGZRUUVwTmZON004TXpnMDVqUVZiS0szTDQtdDNkSm92N0t1TjJLYlkzWTRJZGJuZUzSAXRBVV95cUxOOXBISXBoaDNldFpFRFFjWW1SZDlBbzQ1ZkxXdHdmZnlvclZUdF9URGw4X2RPdmhUX192WG9jQm96dUtybWx1aVFmQkREaEU4cDdFUnltek5maFQ5b29BUHpwZ3RNN19vWVVOekIzaFlkd3dKZQ?oc=5", "source": "이뉴스투데이", "published": "2026-07-23T01:48:50+00:00", "summary": "LS일렉트릭, 2분기 역대 최대 실적···AI 전력 수요가 성장 이끌었다 이뉴스투데이", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "[딱 알려드림] AI 데이터센터, 전력과 냉각의 기술 트렌드", "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBHcXQ0Qm45QU1nV2lCNW1UZTRFWWFFYW9ndnBERjJWV01GSG9IZDB3cGxTZ3RuLUFFMF9rWU9HTmpFYmo4eVpTZUVuQVRFM1lV?oc=5", "source": "SK에코플랜트 뉴스룸", "published": "2026-07-21T05:19:32+00:00", "summary": "[딱 알려드림] AI 데이터센터, 전력과 냉각의 기술 트렌드 SK에코플랜트 뉴스룸", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "LS일렉트릭, LG유플러스와 AI 데이터센터 전력 인프라 맞손…800V DC 표준 선점 추진", "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTFBZY1JiY3ZYd29feXdUM0JqVFBzSUh6ZkRaTnBYQzhjdEo4OTlzLTQ4NV94V1l2UVZmUGloV0FvQjRUSU13ZFFBWmh5M2Fnbzh2V2NWQV82OW5FVWVsNG9nVTlibVZQZkt2ZDFMOGxhZWpmRU92YjdV0gF3QVVfeXFMUFljUmJjdlh3b195d1QzQmpUUHNJSHpmRFpOcFhDOGN0Sjg5OXMtNDg1X3hXWXZRVmZQaWhXQW9CNFRJTXdkUUFaaHkzYWdvOHZXY1ZBXzY5bkVVZWw0b2dVOWJtVlBmS3ZkMUw4bGFlamZFT3ZiN1U?oc=5", "source": "스트레이트뉴스", "published": "2026-07-22T00:14:17+00:00", "summary": "LS일렉트릭, LG유플러스와 AI 데이터센터 전력 인프라 맞손…800V DC 표준 선점 추진 스트레이트뉴스", "category": "datacenter", "date": "2026-07-23", "mock": false}, {"title": "김성환 기후부 장관 \"용인 반도체 클러스터 전력공급 11년 앞당긴다“", "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9sNUZoNGgxVEw3MzFycDRCWlVmTXkwRUMyNDZRSVo3SjdDMllOYVRwM2NmZ0ZXWGl4NHZDbHRTOC02dl9qYUNiSQ?oc=5", "source": "브레이크뉴스", "published": "2026-07-23T01:27:17+00:00", "summary": "김성환 기후부 장관 \"용인 반도체 클러스터 전력공급 11년 앞당긴다“ 브레이크뉴스", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "용인 반도체 전력 공급 11년 앞당긴다…‘K-반도체’ 골든타임 사수", "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE5BN19JMXJtbFBrd2diaUNDcjNqOGZUV3BIYWxEVXRiQnhkcGZ5SEg2VWN0eG5hNzdfMXBQZW5taFBGVlR0WkNSbTJEajlLSFc5SFJ3RA?oc=5", "source": "매일경제", "published": "2026-07-22T05:51:00+00:00", "summary": "용인 반도체 전력 공급 11년 앞당긴다…‘K-반도체’ 골든타임 사수 매일경제", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "“호남 반도체 클러스터, 전력은 대체불가…전남광주전력공사 설립해야”", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFBiZmVJTHVKVG1hNnFQTFJmeWF3SXQxLTBLdS1Sd2ZjbkdXN1Y3NXZDdHZKN1NJSVdqUG5fNkFlQXFZSFROMzRzY05PbEV6Q0NfTXU5UTBB?oc=5", "source": "헤럴드경제", "published": "2026-07-23T02:00:01+00:00", "summary": "“호남 반도체 클러스터, 전력은 대체불가…전남광주전력공사 설립해야” 헤럴드경제", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "용인 반도체 클러스터, 전력 및 용수 공급 일정 대폭 단축", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE16TnBPM0V4NlYwTmpiMk50NjBBWkp4S1A2VnFpTTZzSm1Xd3lkRUhVWTRJb3R5MGswYzVnakFGMDBwdEhXX0luQUluaWJoamdodUNDUDBlVTFDcmE1ZUVfbjFpUllyQ01C?oc=5", "source": "2news.co.kr", "published": "2026-07-22T04:42:00+00:00", "summary": "용인 반도체 클러스터, 전력 및 용수 공급 일정 대폭 단축 2news.co.kr", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "반도체 클러스터 전력 확보 총력전…이번엔 ‘지연·허수 발전 사업’ 관리 강화", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBaM1pDblBhbG1iTWlOZFU0dnVjd1FZenNKbjN0WG92VXlhc3dZRkpjZWRvcDhFb3RXTFhFcTBMMENMUkJDMXM4WWlWZ1hUbk9hZ3c1c3BoYWlnZ9IBX0FVX3lxTFB6VS1wWjNicFNISnpEbXcxY2tnNExGWHA4UjlCdENsYnlVWGFZQVBQNXpNMWZxcm82aGY5b29obnJmeWwzODEzcW4wTEY5RUdfdG9kbzl0WHJIUXVGbW1J?oc=5", "source": "경향신문", "published": "2026-07-19T06:00:00+00:00", "summary": "반도체 클러스터 전력 확보 총력전…이번엔 ‘지연·허수 발전 사업’ 관리 강화 경향신문", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "김성환 기후부 장관, 용인 반도체 전력·용수 공급방안 점검", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTFBkZENuQ29pVDJvU1NuQVc5VVA1NGFHZkFaSkJCdk5IU3Q2NjJ1ZzVyZHJlX3hqX1FFVWdIb3lJYUM3d25qd2xrNU9pR2hGX0diNnIxbkJRSWplZEt3aTlDZ0ZMa3A1TTVUN3hPdDJ3?oc=5", "source": "투데이에너지", "published": "2026-07-22T07:20:26+00:00", "summary": "김성환 기후부 장관, 용인 반도체 전력·용수 공급방안 점검 투데이에너지", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "용인 반도체 클러스터 전력·용수 공급 '속도'", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE80VEQzNldRWnpOTkxvekRtcVJoblQ1VTRDeVE2QVNHOExEZ2YzX1FVMXUxSFczREZTZWVjbUtXWmtSUUdvX1FiT0RjRUxkWFV3bWUtVVlYVjRWUzJvUUZxRmRieDBuS0Q3MEw0Q1NkTF8?oc=5", "source": "B world", "published": "2026-07-22T09:10:59+00:00", "summary": "용인 반도체 클러스터 전력·용수 공급 '속도' B world", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "‘용인 반도체 전력 조기공급’…정부 “2042년까지 11년 단축”", "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE5pQzZXMG5JN1NVLUVrOUF3SHVvUUhGZXV6S09sdFhYbnhoUFlsdzFob0x3RXl3UWtXQTQzUHpZdXNLQ3FRS3puNEVoOHVuYmZkMnZreXdXMVdaVTNvS2g5dThB?oc=5", "source": "cwn.kr", "published": "2026-07-22T13:15:34+00:00", "summary": "‘용인 반도체 전력 조기공급’…정부 “2042년까지 11년 단축” cwn.kr", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "이상일 용인시장, 첨단반도체 클러스터 전력·용수 지원 경기도에 요청", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE01WXdBUUF0b1hwMmZYdDNuTlVXcU9KV1pWRXdqbnVEMzdzblgxenVTVlhtU2tqQUc1bWtEOFYxRlBjeWFXYktva3pzMzJLbkhOV3VPZEFVT2VJMHNpcWg4Y0c5TnVrcmp0ZHBqQ1ZB?oc=5", "source": "gukjenews.com", "published": "2026-07-22T07:40:22+00:00", "summary": "이상일 용인시장, 첨단반도체 클러스터 전력·용수 지원 경기도에 요청 gukjenews.com", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "김성진 전력거래소 이사장 “광주 반도체 클러스터 전력 공급 능력 충분하다”", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE1NdUZrRDVlaTBFdE9UR0dpSUJsbi1TVXk0c3NISHpjejVfU2JrZ2RVWEJfbVFqem82bldXVTQ5YmMzSGRQRndJcERqcVk1NXJoZjdEazd3Qy1PZGdiMnBSWlpyMm5uQU1QV0lEYTdVMTJKbFnSAXdBVV95cUxQNU52STVybXRUX0Z0VEZxYmlhRTdaNVAzZml5Skp1YWRaeTRzUHE0dEM2WjFjangycHpjR1QzSHVad1VjQkRLY1RxS0VESzhLb3E1c3Q3bWFnN0RaOVFyX1RyeWh1SGNtaERJazV0LXJpdUJDck00SQ?oc=5", "source": "한국시민기자협회 뉴스포털1", "published": "2026-07-18T06:49:14+00:00", "summary": "김성진 전력거래소 이사장 “광주 반도체 클러스터 전력 공급 능력 충분하다” 한국시민기자협회 뉴스포털1", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "댓글 : 호남 반도체 클러스터 #전력주", "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1WcGlNcHlLbGZTODQ4ODZKTWEybXFRcl9OX1NaNkZMS1doSFpFZU9WOW1oYVcxbkNnZmRIWExNSnFKRnVKcDRxNlFvWlM5RkozRWdyWHJzTHlwTG9yd1NQWmdQSm8tSFpWaTEzRHNFUWJqTUhRVFFlM2xkSmpjOHM?oc=5", "source": "네이버 프리미엄콘텐츠", "published": "2026-07-22T03:54:00+00:00", "summary": "댓글 : 호남 반도체 클러스터 #전력주 네이버 프리미엄콘텐츠", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "반도체 클러스터, 전력의 양과 질 ‘두 마리 토끼’ [더 나은 경제, SDGs]", "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE9IU0Zxb2hBeUhkcFhxbWtwQm9Xa1FNcGNEU2FGVWx1Um5ndjlWRXpCX00zZGZMeTcwVVZZZGtublhjelExZ185b1g5OA?oc=5", "source": "v.daum.net", "published": "2026-07-16T05:08:40+00:00", "summary": "반도체 클러스터, 전력의 양과 질 ‘두 마리 토끼’ [더 나은 경제, SDGs] v.daum.net", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "김성진 한국전력거래소 이사장 \"광주 반도체클러스터 전력 충분…2029년 팹 4기 안정 공급 가능\"", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE1qZ1ZYTm5ybnZjcW1VbDh3Z3Q1WWJNWFM0Q1RNWVlSbWlfbG1VQ3NQeVJuVndZUHZrNHBhdk5sRUNXZGotQ1k5VWVYWFVhNWNFMDhjTVlHM3hDbmpZcG1YSDdHRjlwZ2tnQnpKRQ?oc=5", "source": "theleader.co.kr", "published": "2026-07-17T12:41:25+00:00", "summary": "김성진 한국전력거래소 이사장 \"광주 반도체클러스터 전력 충분…2029년 팹 4기 안정 공급 가능\" theleader.co.kr", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "서남권 반도체 클러스터 전력 부족 우려에…정부 “지역 간 별도 송전선 없이도 안정적”", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5XYTUyTjZDQmNnSTZSTFFXYmNpVG9nVjdYMXBTeGp3ME5uS0RacndlQnp2WHJuZGlXZE41ODFqdmdnbUxRSDhKRHZRcEhaS1BKd3daaWQtYThod9IBX0FVX3lxTE5UUUFGXzY2WnNUMThGT1dNYnBJSFZLbjFHUjcwN3d0dmRkWjFzVmlPbmV0R2FTTDYxU25DeWV6QjB0SDhGVGk0enVoN3ZoRzUxN3hvNDJGRllJV1hsemZj?oc=5", "source": "경향신문", "published": "2026-07-08T07:00:00+00:00", "summary": "서남권 반도체 클러스터 전력 부족 우려에…정부 “지역 간 별도 송전선 없이도 안정적” 경향신문", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "서울교통공사, 하절기 전기요금 급등 대응 나서…피크전력 관리·E 절감 확대", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5oREViMWV2Z1hTSEdzX0hIWE1JdnR5VXBYcmZHM0JCblRwODhaeUk0NGpvOGo5TUtSMDhCcjMzS0xKTTVyLTZVNnhtR2tKdlQyUzExX01YRExWWERwbUdiYjQ4d2M5N3R4REREZGNMT0nSAXBBVV95cUxOaERFYjFldmdYU0hHc19ISFhNSXZ0eVVwWHJmRzNCQm5UcDg4WnlJNDRqbzhqOU1LUjA4QnIzM0tMSk01ci02VTZ4bUdrSnZUMlMxMV9NWERMVlhEcG1HYmI0OHdjOTd0eERERGRjTE9J?oc=5", "source": "전기신문", "published": "2026-07-23T10:55:35+00:00", "summary": "서울교통공사, 하절기 전기요금 급등 대응 나서…피크전력 관리·E 절감 확대 전기신문", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "양식업계 전기요금 부담 완화 길 열렸다…양식산업발전법 국회 통과", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE9LMTZYaFBYaU9FZFJCeWxvd3cyMGN6VFZ4RDdOdXBMbG9Cb19PZERYY1daY0ZrdkpxU1NXSDYyMEtFcWZMT3lHSWMtQ3hXTlZjbS1DcVRYQmhQbFBKQ3BjQ2IwaEhTVGZtdFhTMUo4UVdzc0E?oc=5", "source": "헤드라인제주", "published": "2026-07-23T08:41:52+00:00", "summary": "양식업계 전기요금 부담 완화 길 열렸다…양식산업발전법 국회 통과 헤드라인제주", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "AI로 복지 사각지대 찾는다...전기요금 할인도 '선제 지원'", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE85R3IxanQtS1BSVndveWVLY0dya1VyUWZpbDZEek9HQ2xoZE8xdW43amk0cDFSa3RyQ1RCaW9pMm5uV3p4ZExWTDQ4NnNVbXo0Q0tfd3NlOFpnRE5qbFkzV0hoMXB3TmdDZTByeXE3Ykg?oc=5", "source": "에너지신문", "published": "2026-07-23T08:48:41+00:00", "summary": "AI로 복지 사각지대 찾는다...전기요금 할인도 '선제 지원' 에너지신문", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "한전, 네이버클라우드 등과 전기요금 복지 사각지대 발굴 나서 |", "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE5IeTM2X2g2UnpYZ2F4VFgzQVFLM1h3MldDOFpfZFczSFVxNmNwbGRTbHBseGQ3QTlCV1FPUnJKSzZHVXBWV0ppeDFwX2dhX0VSdURTc1pLRVNOanR0R1VwUUVfc1lGLUM1bnY2Qk1WNVprUEZa?oc=5", "source": "연합인포맥스", "published": "2026-07-23T02:07:19+00:00", "summary": "한전, 네이버클라우드 등과 전기요금 복지 사각지대 발굴 나서 | 연합인포맥스", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "강위원 전 전남부지사 \"전기요금 kWh당 100원 이하 충분히 가능...재생에너지, 호남 최대 경쟁력\"[와이드이슈]", "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE9LUlZmWjJyc1ZHcVpDVXp0VHFwTEZBUVFoUlJuTlhoQWNDYW9sc21mOF80eGVfelpzWDlvd1R4ODUzRV8wTnY4ZkJQcDhvYmN3NUktSTdXNllOUlhheDJTZTVn?oc=5", "source": "KBC광주방송", "published": "2026-07-23T06:20:01+00:00", "summary": "강위원 전 전남부지사 \"전기요금 kWh당 100원 이하 충분히 가능...재생에너지, 호남 최대 경쟁력\"[와이드이슈] KBC광주방송", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "한전, 전기요금 복지 대상자 AI로 찾아 전화 안내", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTFBoMnQ2dFkxYnpBTlQ2dkdNTDBJTXdFZkdNRENEOFU5ZmVYSDh0aWpqVURZd0xHaE1RRy1PRElhLXdUSWlucVNoUUhTQmxVdlVxUng1a3BUWVhObVRETFR4Qkl0dWpuQnVrTFF4S0l3?oc=5", "source": "아시아투데이", "published": "2026-07-23T07:04:53+00:00", "summary": "한전, 전기요금 복지 대상자 AI로 찾아 전화 안내 아시아투데이", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "양식업계 전기요금 부담 낮춘다 ... 문대림 의원 대표발의 「 양식산업발전법 」 국회 본회의 통과", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE1fX2puRmszLWRVUjF0aEFRbUwtdzFKRHFmYkc1bDRPTkFaMV9pSmhPQ3hqRjFlcnRsQ0kxNFhhaFN0OHdsMHFxdkxOS210cEpLNWh1bFFJY3hmQ2U3TXVETmxfRzRSVC1sMjdv?oc=5", "source": "일간제주", "published": "2026-07-23T12:48:04+00:00", "summary": "양식업계 전기요금 부담 낮춘다 ... 문대림 의원 대표발의 「 양식산업발전법 」 국회 본회의 통과 일간제주", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "한전, AI로 전기요금 복지 사각지대 찾는다", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTFBSbjBUQXR6SEhydlpDRHUxanhfclkwQUFlVG1jb1RDLU5rNnlTaGU1ckJwSWo1T3RzTXJYcUVQQVo0Sm5rN3R2dG0zaXgzaHdKeFdVb2R2Ul9BUVdQanpQX0RvU0MxYlc3cUN1Tw?oc=5", "source": "에너지타임즈", "published": "2026-07-23T06:08:00+00:00", "summary": "한전, AI로 전기요금 복지 사각지대 찾는다 에너지타임즈", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "\"전기요금 감면 대상자, AI로 찾아낸다\"…한전, 복지 사각지대 해소 - 머니투데이", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9tVzFCeGVTNDBSczZkdkEzaGVBY0VYVFVKemI3Y0RuRjZTdVRDeWl1eDM5eURFQkgyTXZPTTFTNVNVNVdwZ2dOVGpCUzk2RzZlOVlOOWhkUjFZTUhGQ1N6MEJhbVdzVnNHVkF4SzZxZlPSAXBBVV95cUxPbVcxQnhlUzQwUnM2ZHZBM2hlQWNFWFRVSnpiN2NEbkY2U3VUQ3lpdXgzOXlERUJIMk12T00xUzVTVTVXcGdnTlRqQlM5Nkc2ZTlZTjloZFIxWU1IRkNTejBCYW1Xc1ZzR1ZBeEs2cWZT?oc=5", "source": "머니투데이", "published": "2026-07-23T02:02:37+00:00", "summary": "\"전기요금 감면 대상자, AI로 찾아낸다\"…한전, 복지 사각지대 해소 - 머니투데이 머니투데이", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "전기요금 알고 쓰고, 나눠 내고… ‘똑똑한 에너지 소비’ 유도한다", "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTFAwX2FsTi1mNUVnX2pNOEdwYjBqb0RVZC1wZk9vMmFsc18tNXJrajBQRG51Z1R6bmU2VWJZbi1FQWI0TXRwZzJBaEJieE1XdkRtUzdjWmVNbHJOU1ltRlFqa18xLUtsUdIBZkFVX3lxTFAwX2FsTi1mNUVnX2pNOEdwYjBqb0RVZC1wZk9vMmFsc18tNXJrajBQRG51Z1R6bmU2VWJZbi1FQWI0TXRwZzJBaEJieE1XdkRtUzdjWmVNbHJOU1ltRlFqa18xLUtsUQ?oc=5", "source": "동아일보", "published": "2026-07-22T19:30:00+00:00", "summary": "전기요금 알고 쓰고, 나눠 내고… ‘똑똑한 에너지 소비’ 유도한다 동아일보", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "한전, AI·공공데이터 연계 전기요금 복지 지원체계 구축", "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE1NZTItaGdhZGxqU3FoWkVscUFlRjhUc3hUQl95X0ZDamZ6LTJUVHQ2S2xseUp1cmFTZmQ1V1g2d0gyZDBSN3pkcUdHcG4zUzVqc0lrQ253azZ2VlE1ZWJhcXpQc3AxcmZPc2lUc2k0a1pWNFB6dHBIU2VR?oc=5", "source": "로이슈", "published": "2026-07-23T08:45:04+00:00", "summary": "한전, AI·공공데이터 연계 전기요금 복지 지원체계 구축 로이슈", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "“전기요금 많이 나오기 전에 알려드려요”…한전, 누진단계 알림 시행", "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE1GRFZESkpIUTRHV2lYUlhpRDhKRXF1RWtWRlQyTGZBcUliSm5Vc0dKUFRfVlNfM1VDLUpYMnJLMXBQRHktZmFpcGZJWjFEQmxmSUk2U2RCVlZJV2JiTmc?oc=5", "source": "기후에너지데이터뱅크", "published": "2026-07-21T05:10:03+00:00", "summary": "“전기요금 많이 나오기 전에 알려드려요”…한전, 누진단계 알림 시행 기후에너지데이터뱅크", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "아무도 말하지 않는 메가프로젝트 ‘전기요금 청구서’의 이면", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE5vbmFENFE3UHRWMW5LVmJvcWxLM3I5cENkZl91cV96YW5Uc0UzbHpza2NyNTVOeklBZzVKQ3lFcDhPZWh1TDZKdmpES2ZIM1ZTeVFzc0kycTVJRWszbWxrYUh5OUtMZzhzR0tXR0pB?oc=5", "source": "더스쿠프", "published": "2026-07-20T02:37:02+00:00", "summary": "아무도 말하지 않는 메가프로젝트 ‘전기요금 청구서’의 이면 더스쿠프", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "SMP 140원대 진입…4분기 전기요금 현실화 될까", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBLVzV2ME55M1JjaXVVaEt6VkxaM2V6VzlCNEd5VHQ1a3pvRm12V0lvNjdycHRQeWJORXB5YUtON1VfZ1Y5QXR6NkQ0ZTN1QmQ1Z3F6NW9KUFBENjQ4WDUzX3FIc3d5UE5WX3gxZHkwZVrSAXBBVV95cUxQS1c1djBOeTNSY2l1VWhLelZMWjNlelc5QjRHeVR0NWt6b0ZtdldJbzY3cnB0UHliTkVweWFLTjdVX2dWOUF0ejZENGUzdUJkNWdxejVvSlBQRDY0OFg1M19xSHN3eVBOVl94MWR5MGVa?oc=5", "source": "전기신문", "published": "2026-07-22T02:59:16+00:00", "summary": "SMP 140원대 진입…4분기 전기요금 현실화 될까 전기신문", "category": "policy", "date": "2026-07-23", "mock": false}, {"title": "LS일렉, 분기 최대 실적 썼다…전력기기 빅3 호실적 이어간다", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFAxTk43S0lnMHlkYzRid0dYTTZ0YkhRMlRwbjJsWUVKRU1RaG1vMy1pNHhtd2NKNG5kbXZKcEtDdmRVZHBxaEkxWmt6UEtOcFdrV1pUcTNWNC1BQQ?oc=5", "source": "파이낸셜뉴스", "published": "2026-07-23T06:50:16+00:00", "summary": "LS일렉, 분기 최대 실적 썼다…전력기기 빅3 호실적 이어간다 파이낸셜뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "하나증권 \"AI 데이터센터 투자 확대에 전력기기주 부각, 관련주 HD현대일렉트릭 효성중공업\"", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE5BbkxMQUkzYmhhWGtMQjB5dGpFSHdiUC0wbl95VkdNOU15MExLeWdqV2FnNVVHSzU4MERsVXJzb0lBOFd3dzI5WldEVW5uZnpFcmZwQTBoM1ZQR2xkMXhVMXoyd3RMNkkwQjNBR1RTMlVfQmc?oc=5", "source": "비즈니스포스트", "published": "2026-07-22T23:54:34+00:00", "summary": "하나증권 \"AI 데이터센터 투자 확대에 전력기기주 부각, 관련주 HD현대일렉트릭 효성중공업\" 비즈니스포스트", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "전력기기 업계, AI 데이터센터 붐 타고 ‘훈풍’…“장기 호황 기대”", "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE9fNXBYRkZWWlVFSTlQbTh1a0VmclZ6Q0tEa3RuQkN2cFpMYVh2VF9FdTR1VFVUdjNHcjNHSk1wc2tjMG1rSkN2czJmeDVNdEh4LUxENDJnaEHSAVhBVV95cUxPXzVwWEZGVlpVRUk5UG04dWtFZnJWekNLRGt0bkJDdnBaTGFYdlRfRXU0dVRVVHYzR3IzR0pNcHNrYzBta0pDdnMyZng1TXRIeC1MRDQyZ2hB?oc=5", "source": "미디어펜", "published": "2026-07-23T05:18:37+00:00", "summary": "전력기기 업계, AI 데이터센터 붐 타고 ‘훈풍’…“장기 호황 기대” 미디어펜", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "초고압 케이블 기대… 전선株 LS에코에너지 LS마린솔루션 대원전선 '신바람'", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE5vRHFBYzRfbWQ1SzRmSkNSV3o3RlBQTXZfLWI2U09sY1JKS2lidkR3TmZCcVFYZUVJOVN0RFdLNjhNWUprZ29fRkZYN1NrUVBDN3h1V2JVTGZVdWxWQkdFU1J0a2NyVnNjTXJDT2pZNEstUjDSAXdBVV95cUxNWnNCSWNYREJ6dnk5R3U3ZlgzNE5qV0ItVGZ3TXFOOWU5dG92dkJYT0RBX2dsVndoM0hnV1FaS0ZSRWJqUFZjQkZVVEpOVWpSTXlBeURRU0dQdWNlS09SSkMtYlVhYk5aX09yeUswVnVRNXJXUEEwWQ?oc=5", "source": "핀포인트뉴스", "published": "2026-07-23T06:13:36+00:00", "summary": "초고압 케이블 기대… 전선株 LS에코에너지 LS마린솔루션 대원전선 '신바람' 핀포인트뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "\"전력기기 30년 대기\"…1500GW가 계통 앞에 줄 섰다", "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9STUFtOEc0NUV6Q3RxTDZtMG5Cc2JZVW15ZXhiMjhMWnpua1dwX2EzN2xrOUtyNERoWXJFRjJlZzhsdGxLRmJZM01xYnRIOHVIQ0VJRDZlekh3MkpWaFN3QzcyTm9IME0?oc=5", "source": "자본시장뉴스", "published": "2026-07-21T06:00:00+00:00", "summary": "\"전력기기 30년 대기\"…1500GW가 계통 앞에 줄 섰다 자본시장뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "초고압·배전·데이터센터 비상에 K-전력기기 빅3, 2Q에도 역대급 질주 전망", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE10QVh2UUVZUmowRmJ6RE9xMzJwU0JZbHVuSnZ6TjYtQkNVamszWWtGYmthWEdIdTB5bGtNSU1hMm5WYU9RR1IzZHBweFR5VjRHaVNFTTg2bVFFYVV4bEdSX2pNWUtLV2Y1ZWo4LdIBcEFVX3lxTFBLaEdNNkdNWHlXazh4bElJT2lHQ2pHeWxKMXAzcEdHQndNWlVYSF9peTNJUmZPUWY4V0hwdUlXSWtBZGVEYVUta1dZdDhNRzFwUE5VaGVyZ1J2Ym52Y3Eta2g5akVFWUFNZnFPLTNtQWQ?oc=5", "source": "전기신문", "published": "2026-07-20T00:43:01+00:00", "summary": "초고압·배전·데이터센터 비상에 K-전력기기 빅3, 2Q에도 역대급 질주 전망 전기신문", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "美 데이터센터 전력수요 2035년 4배…韓 전력기기·전선업계 기회", "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTFBBT3RwdE54blZXb3RPSUpINVdKOFh1X0ZVS3B4OUpiVVNpOEdJOHpGd2gtaDdJbGZidHA1TTJJM2txMG5MdWdkaXgtdTl4QTJvb2dKMzc5SGNQdWJXTUhVM3V0RktRNDlmNUwybDB4TQ?oc=5", "source": "조세일보", "published": "2026-07-22T07:30:23+00:00", "summary": "美 데이터센터 전력수요 2035년 4배…韓 전력기기·전선업계 기회 조세일보", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "AI 데이터센터發 전력기기 특수…LS일렉트릭·HD현대·효성 가세", "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE5uLXdGX0kxMXJQQl9HbWR0cTNvaGltLVEzMU1nZUgxYkEtaG83QmM3bnBkcG5IY3Z0ZHlDazMyMTFmU2RfZWNIeWZGQVRVM3JySDhWaDZLMNIBU0FVX3lxTE01Z3pFdUNjMkZvY2FLc01EMTZMWjFqaUJtRTdKSEJpSnRlUmlaSldlRDdLbTFlT2JjQ3l1eDhtb2RsRW9hQXV6Wk94cFU4UE03MnNN?oc=5", "source": "KPI뉴스", "published": "2026-07-22T02:39:15+00:00", "summary": "AI 데이터센터發 전력기기 특수…LS일렉트릭·HD현대·효성 가세 KPI뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "전력기기, 최선호株 ‘효성중공업’-차선호株 ‘HD현대일렉트릭’", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTFB5ZkJRZWVjSUQycFpmcUlON3d1M05OYktQNnlKTVNXMGdjZjl6R3M5SmNuWUljaE9vcC0xd2hfZ3g4NFFQMnZBMDdySU1WY081SlVwYlFEclh4bFpmQmdPdkFJVm9SREwxSUE?oc=5", "source": "금융소비자뉴스", "published": "2026-07-22T00:42:00+00:00", "summary": "전력기기, 최선호株 ‘효성중공업’-차선호株 ‘HD현대일렉트릭’ 금융소비자뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "AI 병목, 칩에서 전력으로… 한국 '반도체 둔화·전력기기 호황' 비대칭 국면", "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxQaHRkQUUtZDBBTG5wdm1rNVVQdUhEOHRWenVUTU5wWmRFalRHdFFJVzEySnBnX2ZBaVBIVnVhaVBGWGEzYUhUcUU2VFI2bWF5ODNONXlId19lNTdtamlXcDJDdW9wVml1RmtwOU9wd0oyZy1hWlY5ejl4aktRbnAtT01KTjdVUkE?oc=5", "source": "글로벌이코노믹", "published": "2026-07-21T00:38:15+00:00", "summary": "AI 병목, 칩에서 전력으로… 한국 '반도체 둔화·전력기기 호황' 비대칭 국면 글로벌이코노믹", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "AI·전력망 투자 효과...전선업계 실적 랠리 이어진다", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE1MS0MxalNrTEhpNnNtbU14TWxKXy1lN0MzWkhCUDM4eVVkOEdOZklNSktWTjRJeHM5cmZ0V3pUa2NZdDgtYllhMG5YYnB3TTdidFJCY29rY3VaUU1ZOHk4eWswUVNQVmUz?oc=5", "source": "ebn.co.kr", "published": "2026-07-22T21:00:00+00:00", "summary": "AI·전력망 투자 효과...전선업계 실적 랠리 이어진다 ebn.co.kr", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "AI 투자 확대 재부각?...한국증시 전력기기주 '장중 활짝'", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE1lX29jdlJYWEhTQUtEWlU3SmluUk5QbEF3ZDRrbU5ob3hoZFRjdGdsXzJYaGVaNENSU2tBX0Z6YV80YzFoWmtiUkVHZkRsckRMQlRzQ1dXRzFpSF9jWGllT0F5Yi1nV0hKUEpabVZndWh5UEHSAXNBVV95cUxNZV9vY3ZSWFhIU0FLRFpVN0ppblJOUGxBd2Q0a21OaG94aGRUY3RnbF8yWGhlWjRDUlNrQV9GemFfNGMxaFprYlJFR2ZEbHJETEJUc0NXV0cxaUhfY1hpZU9BeWItZ1dISlBKWm1WZ3VoeVBB?oc=5", "source": "초이스경제", "published": "2026-07-22T03:55:05+00:00", "summary": "AI 투자 확대 재부각?...한국증시 전력기기주 '장중 활짝' 초이스경제", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "고점 대비 30% 빠진 전력기기 업종, 투자전략 물어보니", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE44SDYxMm4zaEJuSGl4QUpEdDg3WGJyY0Fxc2prOVhUVUFlTlNYdmtNTDlLcTNQWFVtRkZEUExZWjRTTkY5U2JLaXJTNnd1ZVFXTHRicUhwTlJtZw?oc=5", "source": "한국경제", "published": "2026-07-03T07:00:00+00:00", "summary": "고점 대비 30% 빠진 전력기기 업종, 투자전략 물어보니 한국경제", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "오후 이슈 [전력기기] : 지엔씨에너지, 금양그린파워, LS ELECTRIC, 티씨머티리얼즈, LS", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE01SkF0RGw0ZnhSVWQtQTkydkVsT2ZRRlFGelRScmxicVJCcGMtVFMwRzJuWVNzcndaM1V2TWxwSkgwN05lb282dHZmWnBJMTRvU0M4TzItMGdsZw?oc=5", "source": "파이낸셜뉴스", "published": "2026-07-23T06:46:08+00:00", "summary": "오후 이슈 [전력기기] : 지엔씨에너지, 금양그린파워, LS ELECTRIC, 티씨머티리얼즈, LS 파이낸셜뉴스", "category": "industry", "date": "2026-07-23", "mock": false}, {"title": "홍천군, 한전과 송전선로 건설 지역상생 업무협약 체결", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE96VHc1SEV4VFVqZkt6UTFET1BPMktwTEV0RFplOFhPQm1yUXNUdnJzUEZUclUzekFlbHRiWTI2d2Y2Z0pQZkNHcUNlbnRrWmxVYjhxaXdhZEs2OVdQVUx2bWlHdHlMUHliWWFmaVFR?oc=5", "source": "영남신문", "published": "2026-07-23T14:29:44+00:00", "summary": "홍천군, 한전과 송전선로 건설 지역상생 업무협약 체결 영남신문", "category": "grid", "date": "2026-07-23", "mock": false}, {"title": "DL그룹, 원전·SMR 등 에너지 인프라 사업 확대", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE52RXJUc2N4Y253VEllSk1kQTVaSVZfOE50djZ0d0p3dzZOU1BFM3hJTDA1ajNPU3VBN2Zod282djN4VHNjWjFoaVdYRXJ2bUpEeVZEbWdKNGhmWjEtOGp2dHpXRnd4d0k5?oc=5", "source": "한국NGO신문", "published": "2026-07-23T14:30:17+00:00", "summary": "DL그룹, 원전·SMR 등 에너지 인프라 사업 확대 한국NGO신문", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "[채널Who] 탈원전 외치던 시대는 끝? SMR '국가전략기술'로 지정하려는 정치권 움직임", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTFBfendrVjhRY3lEa3hqNWJQR1o0ZjVmZEZ4dHhzc081QWxYM2duOHg4YzBFZUlwMGNIU20tVzFOa3JsSnhvTWhsN0NNcDItSjF0dWRudjliaVF2aXZQdk5ra0pMbmZ5ZDlXUm13NTNvNXJGcWM?oc=5", "source": "비즈니스포스트", "published": "2026-07-23T08:00:00+00:00", "summary": "[채널Who] 탈원전 외치던 시대는 끝? SMR '국가전략기술'로 지정하려는 정치권 움직임 비즈니스포스트", "category": "nuclear", "date": "2026-07-23", "mock": false}, {"title": "우리 자본 100% 대규모 해상풍력, 신안우이 해상풍력 본격화", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE1NQjZnRkVjQjBFV3dZODN0QzhKcEtsWkJDYmUwY3BuY1c4RGdLclNCZ1lPbDVqRFpMTUdXMWJwek90NFprbWEzWEdqS0lhb3JHSUUwYU9EMF9WTXhXak5Qd1RTUXpxM0tScnNHYkFB?oc=5", "source": "대한민국 정책브리핑", "published": "2026-07-22T03:10:25+00:00", "summary": "우리 자본 100% 대규모 해상풍력, 신안우이 해상풍력 본격화 대한민국 정책브리핑", "category": "renew", "date": "2026-07-23", "mock": false}, {"title": "전남광주, '반도체 클러스터' 전력·용수·인재 해결...행정절차 신속 준비", "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE5uTnlUMnB5WHRzZ0owWWdtZFg2UGRiVk1xdGUtU0JpcHVfWk5zWjR0SzVrMWxqZ0xPMU1BUzlHbWU3RndJWVFPckowZ052dw?oc=5", "source": "전자신문", "published": "2026-07-06T07:00:00+00:00", "summary": "전남광주, '반도체 클러스터' 전력·용수·인재 해결...행정절차 신속 준비 전자신문", "category": "mega", "date": "2026-07-23", "mock": false}, {"title": "[특징주] SK이터닉스, 유가 급등에 해상풍력 참여 '겹호재'···신고가 경신", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5Ddk1TV0pIekNnd2htd3RhdDBUN2JmRE5RcDB6aDdkQ2RDdEh2Q0VpMjc4c1FPMG9UMS1HTXpOMEpOZ2ZodXNMV0F5bzJLVjg3OE1SN2pJaEZqQ1NNQ3hLNUU3b29QSVBjVWc?oc=5", "source": "서울파이낸스", "published": "2026-07-23T02:51:20+00:00", "summary": "[특징주] SK이터닉스, 유가 급등에 해상풍력 참여 '겹호재'···신고가 경신 서울파이낸스", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "LG유플러스·LS일렉트릭, 차세대 AI 데이터센터 전력 인프라 공동 개발", "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTFBsNVV5OTRSOXpsMHRxUXIyU3phLTBRd1l2Y1RwU2ZvTXhxN2hLWXFWbHdBUnZzbHh3UDA0QkVwRUVzeXpyQXdBMU51OFBYcU9GQkd6WURCQXpFcG9jNmxhbjZQVjRDN3hubFJoMS1iTzJRNnMz?oc=5", "source": "글로벌뉴스통신GNA", "published": "2026-07-23T14:29:28+00:00", "summary": "LG유플러스·LS일렉트릭, 차세대 AI 데이터센터 전력 인프라 공동 개발 글로벌뉴스통신GNA", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "중동發 LNG 가격 급등에… 전기요금 인상 막을 ‘SMP 상한제’ 시행 가능성 커져 - 조선비즈", "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxQNlI1VTU1ZHR1Sm44dkduZ19LZ29FVGtKcmtIQU1icUZ1ZDQ0YlNoV3Nnc0tSdEFpWlVUQ29MS2tnOXBaSnJ4UkZybENnbFFGY2oyZHFtTGI3Nm5iN3FlQjN4akhYeVFmQ0RtZEJLSWFnVXZUMXBJai1oY3FiLUw4M3dSTUjSAZgBQVVfeXFMUEJYcERnZGV4ZXk4MnZEMGhIdkFYekh2N3ZrT0JyeHR0d3JvcW1HalZzTGxYSi1DdFB6NE5tVTJ3RnpyQUVRX05MVE9DMnN0bXUxMGJ0LWxzbEpCZFIzNjZfTEJ1Ti1sWXlfMTNTbEpzcEVKam1adW1DM1ZqLTdZdmVEQzhaS3JZeWdZc0V6VXR1Rm5acWd1cWk?oc=5", "source": "Chosunbiz", "published": "2026-07-22T08:40:00+00:00", "summary": "중동發 LNG 가격 급등에… 전기요금 인상 막을 ‘SMP 상한제’ 시행 가능성 커져 - 조선비즈 Chosunbiz", "category": "policy", "date": "2026-07-24", "mock": false}, {"title": "엔비디아·AMD, ‘직류’ 인프라 시장 띄운다…전력기기업계 선점경쟁 본격화", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBZRzVvZS1QaWpCS0dDa1IxeFhjd001N0JDX0lZcHRWN1ZWTkJnWXdOZ2ZmNFpyM0VNc1NoeHd0Tmg2ZnF4cDFPT1FqUlAzRmNyLWRORG1vTjdRR0E?oc=5", "source": "에너지경제신문", "published": "2026-07-23T14:50:14+00:00", "summary": "엔비디아·AMD, ‘직류’ 인프라 시장 띄운다…전력기기업계 선점경쟁 본격화 에너지경제신문", "category": "industry", "date": "2026-07-24", "mock": false}, {"title": "AI가 쏘아 올린 전력 대란, 주가 폭락 뒤 숨겨진 ‘우라늄 진짜 몸값’", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE5JSHUzU3gzN25zdW1FdEN6dDV1bnU5bGxBcDc5SDFtVERaWGJmdkJ3bDdTWlZXTENXbjBkbHNtYmh6d3A0cTdoSnF6alNUXy1OR0F4d2xGMnRWaC0tQkhOaGppMkM?oc=5", "source": "에너지안전신문", "published": "2026-07-23T22:51:51+00:00", "summary": "AI가 쏘아 올린 전력 대란, 주가 폭락 뒤 숨겨진 ‘우라늄 진짜 몸값’ 에너지안전신문", "category": "supply", "date": "2026-07-24", "mock": false}, {"title": "번스타인 \"AI 전력난에 비트코인 채굴업체 가치 더 커진다\"", "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE5KNW9pM3hkVzlGaG9IZW1KYjJJd2ZpUnNIWUlCMWdVdGVnVkswekZUMmlWTDdYTFZkQVV4a0lMNWFWMF9qdjlqNlhMdGlDazNnaUo1YVdrR3A?oc=5", "source": "블록미디어", "published": "2026-07-23T15:39:00+00:00", "summary": "번스타인 \"AI 전력난에 비트코인 채굴업체 가치 더 커진다\" 블록미디어", "category": "supply", "date": "2026-07-24", "mock": false}, {"title": "홍천군, 송전선로 주변 마을 상생협력 사업 36개 추진", "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE9FMFBXbXUzTUwyZ0c3b29zX3o2UktOb2M1Nm9GLUNIYXlKSlJWSlptUTY3eFYyUHhHc1RUZ29kM09fNXhrdmZiQ0NKaGtRYXV1UWZPUTZFdFU?oc=5", "source": "강원일보", "published": "2026-07-23T15:20:00+00:00", "summary": "홍천군, 송전선로 주변 마을 상생협력 사업 36개 추진 강원일보", "category": "grid", "date": "2026-07-24", "mock": false}, {"title": "홍천군·한전, 송전선로 건설 지역 상생 협약", "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE0xUlQzSlhlNWJWNmpaUlRlYlc0Q3I1VVF6UmhGSzVvSS1WckZwa2NXamh4ZUN1bkJ1ZkJjN0hjXzQtbzlHNWRtSTlHMWZta0piX3piR2pTVjUtZ3pGajl5TNIBYEFVX3lxTE0xUlQzSlhlNWJWNmpaUlRlYlc0Q3I1VVF6UmhGSzVvSS1WckZwa2NXamh4ZUN1bkJ1ZkJjN0hjXzQtbzlHNWRtSTlHMWZta0piX3piR2pTVjUtZ3pGajl5TA?oc=5", "source": "연합뉴스", "published": "2026-07-23T07:16:18+00:00", "summary": "홍천군·한전, 송전선로 건설 지역 상생 협약 연합뉴스", "category": "grid", "date": "2026-07-24", "mock": false}, {"title": "호남 반도체 ‘전력맥’ 뚫린다…1단계 송전선로 2029년 구축", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9sN1ZNUm9uODlLZkVmcjFqVzBhUlU1S2laTWxwZG5oVGlJTHRFLURvT0lneXZZbGV5el9zc0tpb3NVRjNCZHFVdEFIcHJLUDA?oc=5", "source": "v.daum.net", "published": "2026-07-19T11:58:37+00:00", "summary": "호남 반도체 ‘전력맥’ 뚫린다…1단계 송전선로 2029년 구축 v.daum.net", "category": "grid", "date": "2026-07-24", "mock": false}, {"title": "독일 슈타데 원전 54년 만에 철거...가압수형 첫 완전 해체", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE5ZaGlRaFRYUkhHek9MRW5Mem9mNzk3MklNOTFaQU1ZV2oyRVlpeGxRZEZROHZJcEpKZnhUTlRYeHJkaGh2R1FrVHp6eTNFaWZnSXlsTXBwSlI1ZGlxWjFxbVFEQVE?oc=5", "source": "에너지안전신문", "published": "2026-07-23T21:17:53+00:00", "summary": "독일 슈타데 원전 54년 만에 철거...가압수형 첫 완전 해체 에너지안전신문", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "핵무장 야욕 사우디엔 열고…원전 강국 한국엔 닫은 美 원자력 이중잣대", "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxNNjhJcTc2UTlER1N3cnpTWVdfRFNkQkg1Z0FqU055ZzBIYUZKaDFMR2dheHRQNlFGZmFaVTdrcFJHTmlSSEhQSW8yWUZGdHJPcVRfTC1kUHA0TWszalVFbkZwS0dhaDBOWFJXTVM3Ti1xMVVXckdDek9naHVsVUhLNlJuWTRhZms5WENYWXJraFY3dnphMnJTb2JnZzJ2Zw?oc=5", "source": "조선일보", "published": "2026-07-23T19:42:00+00:00", "summary": "핵무장 야욕 사우디엔 열고…원전 강국 한국엔 닫은 美 원자력 이중잣대 조선일보", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "\"2047년 원전 100GW 확보\"… 印, 2033년까지 소형모듈원자로 5기 독자 건설", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNREY4azQ2MUo0cmwyTk1KTXlKTzdCWTljRzlkdmVfWFVIQm9UT3h1eGFGMndSTEVKRmVRQ3ZxMncwSDRyNkEwRHpaYUJEd1pOd0JSNFFCVjNHZVNWYmR1azVYaEhhQzBESGJWUWl6MjFUUldBNWgybGZETHhuSkdBazF6MEo5elRY?oc=5", "source": "글로벌이코노믹", "published": "2026-07-23T22:38:05+00:00", "summary": "\"2047년 원전 100GW 확보\"… 印, 2033년까지 소형모듈원자로 5기 독자 건설 글로벌이코노믹", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "감히 美 상대로 배짱 쇼핑? 근데 먹힌다…원전 ‘100년 계약’ 역설", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE5YcXpPRi1kM0xfekdPSVJuLU56WnE1ZDNCX3JyMGhLSlBNdTBkTmFib1UyNWYwWUtjejgyc2Vvc3hvWGJiZjFmb2luTXFWZEU0aVlXRkJB?oc=5", "source": "중앙일보", "published": "2026-07-23T20:00:01+00:00", "summary": "감히 美 상대로 배짱 쇼핑? 근데 먹힌다…원전 ‘100년 계약’ 역설 중앙일보", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "한울원자력본부·울진소방서, 원전 비상대응 공조체계 강화", "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE4xQ05hdW5BUlFNYnR1MndpMVo3d09FWEt4NTBLZ2k2c3hLcEZ4akFEeXlkcXVZYW5ReUFBNUdFQ014QS00MFg2cFp0b1BpYzVBUmVHcUhmeXc3ZVFlU2xwaTJ4MnJadW_SAWtBVV95cUxPUGxtOE4wa254Y3daTTNhOXVpSDQ2UUoyZ0wycUYtUEdPTFc5cmdIeGk0R3dfUWxJWGNDUEI0SUx5RWxETzNuWTBuUERuNjJ0dktBSW9EakdYcUhnLUZYRHR6bmk4MHUtQ3NzZw?oc=5", "source": "한국원자력신문", "published": "2026-07-23T13:16:20+00:00", "summary": "한울원자력본부·울진소방서, 원전 비상대응 공조체계 강화 한국원자력신문", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "日 , 투자 금융사 '사고시 배상책임' 제외해야 소형원전 대미투자 진행", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1YMzI2UklBR3VUZ2tuUG1KbDduWUxWOE1ybkpxeFpWcE05YThSajZyTjdnczZ2YjVfSDlEenJtUkhheDExU28yWTVlYWk2MTA?oc=5", "source": "v.daum.net", "published": "2026-07-23T06:12:06+00:00", "summary": "日 , 투자 금융사 '사고시 배상책임' 제외해야 소형원전 대미투자 진행 v.daum.net", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "‘해상풍력 터빈 1위’ 베스타스, 약속했던 목포 공장 왜 안 짓나 했더니… “수주 부진에 보류” - 조선비즈", "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxPY3BscE1FdGY0bm1zcHBsTU51bGJZWFNIaVUzYW9rUTloMEVhVzhybzc0eUcyQkt2SGNQWmpPMVhjRE5MeEhWTXVRTi0yelJROUVQOHl3amJHYzFjc0ZLNTh3TnMtOURpOVpJb0UzQTRNMTBKODByeFFlc19zbURQVXgwOUHSAZgBQVVfeXFMTzgxNWNadHE4VWpYZFAwUmpvM0FNMmxrOVJRUGs2RjFPMUdwUEZlZmRIblhQR3c1SkIwV1lIbV9NVnZyYU4ySWxrNDNrQ1VGcG5mTkgzTkZYYldlaHktdjFnaEVEOVhUT2JUSTVJMnNDUmVZX2ppbjMtOTcxcjJNSXVBRzJrazd3SWpsbU12eWRLdmdaZk5XU08?oc=5", "source": "Chosunbiz", "published": "2026-07-23T21:00:00+00:00", "summary": "‘해상풍력 터빈 1위’ 베스타스, 약속했던 목포 공장 왜 안 짓나 했더니… “수주 부진에 보류” - 조선비즈 Chosunbiz", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "산업은행, 수협과 해상풍력 발전사업 금융지원 MOU 체결", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE5GM0V3d0VfWGlZa2Nza2V3bXpHX3BRNmwyNzJ4ellIajBhMk1aSFZzS3M4bTFIVVhXb1VIQ2hhbXhrbUxValRfdDVnbEpOZC1YcW5pbk9n?oc=5", "source": "헤럴드경제", "published": "2026-07-23T22:19:00+00:00", "summary": "산업은행, 수협과 해상풍력 발전사업 금융지원 MOU 체결 헤럴드경제", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "[단독]“호남 최대 태양광 발전, 0~6시 전력공급 0.01%”", "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTE5PbDhqc0J5X09sMjBJRDVfOUJfM2Nzc3ZFNFo5V3lKQmVSUXhkRmJrdFNiemFtTGJ1bWlFTDlqbW85ZF9kZnhJUU55NGZXUWVEXzRoNUpQSU54cUxxZER3Vmt1LU5KVUZtbVVzbjVFWDlxS2JOTDNZ0gFmQVVfeXFMTlVRbnBnV3dYdHRVNGZNNHc4eHVhVEdNTVgzRnNKNC1NcHlLTWhqTHZCVDY5bDlrREh2X1hWajhmcHBqMkdibjhXZ01Qd291cUNuSXl2WmlXLTNHWG1jNmo2ZkRiV3d3?oc=5", "source": "동아일보", "published": "2026-07-01T07:00:00+00:00", "summary": "[단독]“호남 최대 태양광 발전, 0~6시 전력공급 0.01%” 동아일보", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "수협-산업은행,해상풍력 수익을 어촌으로...상생 모델 구축 위한 업무협약 체결", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE5qNWlETzk5am1FU2RaS1dJYWZVS3laMDlmRGRCaFQxY2pvNkk2bUVIYzliVUVoOE1oSktvWDd1YThfMV9BZDI1MThuZnNxYk1LUWZ4YW5CeE9zalhWeVBJdHY5Y3B6WXYySzFqSQ?oc=5", "source": "메디컬투데이", "published": "2026-07-23T06:25:29+00:00", "summary": "수협-산업은행,해상풍력 수익을 어촌으로...상생 모델 구축 위한 업무협약 체결 메디컬투데이", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "LG U+, LS일렉트릭과 AI 데이터센터 전력 수요 대응한다", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTFBxNEJVWlUzOVFiTFRVNC1ISzQ0enl6cnhvVzhxbERyaTJwa2RySmdLQko3OEdrV2MxV05qOXlESlVQaEo3SXhSc1NfNmNTVFptLXVrbXg5NXFPSlZKQVNpTDVNdGNQQVlw?oc=5", "source": "아이티데일리", "published": "2026-07-22T00:44:18+00:00", "summary": "LG U+, LS일렉트릭과 AI 데이터센터 전력 수요 대응한다 아이티데일리", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "AI 데이터센터, 전력 확보 넘어 '설비 경쟁력'이 자산가치 가른다", "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE16Q2pLaFBEeENyMjFVOWlZWi16VW5Oendkc3BDTmJ6RWdHUkxqa0FYQVREdGRUT2xWYjFqR0JBT1ZsVTh4YXFwMXdRc3RZdw?oc=5", "source": "전자신문", "published": "2026-07-20T04:54:49+00:00", "summary": "AI 데이터센터, 전력 확보 넘어 '설비 경쟁력'이 자산가치 가른다 전자신문", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "전기요금 못 내 병원 단전 예고…환자들은 어쩌나", "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE1WRjZ1cUJYRFE5WWhLM0UyQnVWRGxzRUJmbDVYRUVKcHFMdDRLdWNhWEctOHM5RGNHb0FSSFpNb3k4aWVQUUZRdXlGWDEzczJMVGN4akxEUmlzcW1FUGVoWDhveTVXUQ?oc=5", "source": "KBS 뉴스", "published": "2026-07-23T12:41:00+00:00", "summary": "전기요금 못 내 병원 단전 예고…환자들은 어쩌나 KBS 뉴스", "category": "policy", "date": "2026-07-24", "mock": false}, {"title": "한전, 전기요금 누진 3단계 진입 전 알림…요금 폭탄 막는다", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE9rZzNxQTFNSW8zOFhEdlJmU1MzZmpnelpsMVltWDY0UUNPdGo1YlNMbUxRQ2IwUklJcDlHT19TUjJXd1U0aDVZa2VLNE51MjVuT2JhaGRDNVZvMk3SAWBBVV95cUxQTmJZLWhIUThoSWJJN3dncUJiNUpabDRIZnBGYk9nemc3bEwzYWlBS0pJY2ppMWhlR0s1ajlleEhQMFdCQ3g4Z3JLeEVjd1VQYng0LVJxNjV1Z3VmNVFXeTE?oc=5", "source": "연합뉴스", "published": "2026-07-21T00:31:55+00:00", "summary": "한전, 전기요금 누진 3단계 진입 전 알림…요금 폭탄 막는다 연합뉴스", "category": "policy", "date": "2026-07-24", "mock": false}, {"title": "KB증권 \"LS ELECTRIC, 북미 전력기기 수주 확대.. 목표가 상향\"", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOQWV1WnJCNm56SVVpWXZWRmRscm5CbFp4STFYeE4tZ2thMnJJSGt3WGlLN1VieGhGMDdFOU1KZ2o0eXhZY2VENjB4cEtOb002VFR0aEh6QlpCN0paWU5JVjBKNlh2T0dGSzZBazdnUkFJbk9MVFlPdU1CTkxHSDNEUi0zMDA0YjFs?oc=5", "source": "글로벌이코노믹", "published": "2026-07-19T23:51:43+00:00", "summary": "KB증권 \"LS ELECTRIC, 북미 전력기기 수주 확대.. 목표가 상향\" 글로벌이코노믹", "category": "industry", "date": "2026-07-24", "mock": false}, {"title": "'AI 전력난의 구원투수' 비트코인 채굴업체, 몸값 폭등한다", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5tb2FQa3NmTmI4LXJyNmptZXdxSkd5bmNPeDA5Z2tHZnAtUEt2X2pNRC03QU5kcVNsLVhlZmdMdklrV090ak9FaFJrajJCenZkMWFvdnZZVGhJM28td0VTckR5Vy1MbVlZSk9QZjh2MEM?oc=5", "source": "블록체인투데이", "published": "2026-07-23T23:39:36+00:00", "summary": "'AI 전력난의 구원투수' 비트코인 채굴업체, 몸값 폭등한다 블록체인투데이", "category": "supply", "date": "2026-07-24", "mock": false}, {"title": "송전탑 갈등 수년째…홍천군·한전, 주변 마을 지원 나선다", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE4wNlJURHNROUZqSDE2cGlBczdOcXNXZ202YU1mbTVVVnRwdnNLanNaeGZWaFZlS3lvQW9Nd2k3SjRpQUNTSXJsN2JidUdpdXkzN2ZlVVM0UVRlZm8?oc=5", "source": "에너지경제신문", "published": "2026-07-23T23:33:52+00:00", "summary": "송전탑 갈등 수년째…홍천군·한전, 주변 마을 지원 나선다 에너지경제신문", "category": "grid", "date": "2026-07-24", "mock": false}, {"title": "美에너지부, AI 활용 원전 프로젝트 '프로메테우스'에 6천만 달러 지원하기로", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE5MV0RvYV9kV25hUlNZdlBzQmF4R0h5clAzdndHZWNwNVVJMlZ6LVc2d3RkVjlLLWo1aXdGNjk0Y08xRnMwTU5JNzNlQmdtak52cEo5amlGcG9mWTR2aWswcUZRUQ?oc=5", "source": "더구루", "published": "2026-07-23T23:27:56+00:00", "summary": "美에너지부, AI 활용 원전 프로젝트 '프로메테우스'에 6천만 달러 지원하기로 더구루", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "ST마이크로 5억 달러 승부수…AI 데이터센터 전력 칩 쟁탈전 열렸다", "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNQlluNTk5S2RQYl9GMU1ObWRBWkNOLWhpY0N5VWVseElucFQ3LUlnX0E3TlBJLVRtLWZzbHp1M1R5OXo0b2hKQWVLd3hlVUV4T3VTOTdpOU9DSHFQNWxKM0syT1VYcGlOSXk4UzZGMXlUQ0RwMy1ETEJEUzkzeE10ajdwOWpkZkEw?oc=5", "source": "글로벌이코노믹", "published": "2026-07-23T23:39:00+00:00", "summary": "ST마이크로 5억 달러 승부수…AI 데이터센터 전력 칩 쟁탈전 열렸다 글로벌이코노믹", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "LS일렉트릭, ‘역대급 실적’…AI 전력 수요 폭발", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE1JcngzUzl5YW5Bak14dWIxcXdEU3pPaGh2dGYxXzNlUGNiZHl4am4wS0FmbUoyMFZ3MlgzZDBNeWkxVDhvR0ZTVFVRQlY0M3drdDZQWUpJV21oOUtJT2M1Tndtb1I?oc=5", "source": "ppss.kr", "published": "2026-07-23T08:12:57+00:00", "summary": "LS일렉트릭, ‘역대급 실적’…AI 전력 수요 폭발 ppss.kr", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "AI 전력 수요가 키운 공랭식 열교환기…SBI 투자사 디티에스, 코스닥 문턱 넘다", "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNcnZGcmhaU3NidzB4UlN2Z215T0Rhc2M0MG5VNnVIQmJmUFgwR0gyWHl4UVRKWU85RWVxUnFmZUt6dmMtM190UmZxbnlUdkcxS2tCNHZyb05WOEF3OGhJcldHeWxNMHA5dmh6YmJId01UbGtyZ1A0d2QySGRPVHcxVXl6c3BkellLUjBN?oc=5", "source": "글로벌이코노믹", "published": "2026-07-23T23:35:27+00:00", "summary": "AI 전력 수요가 키운 공랭식 열교환기…SBI 투자사 디티에스, 코스닥 문턱 넘다 글로벌이코노믹", "category": "datacenter", "date": "2026-07-24", "mock": false}, {"title": "북미·아세안 러브콜… LS ELECTRIC, 핵심 전력기기 사업 경쟁력 부각", "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTE9Ea2hxVDBHTTJtZElsSFViUzNOT1BsbXFPb0drTUhab3VJc1RZcWpKZDQtNTNWcl9YQ2tIdVdFQ3R4MFM5QzhYWHlodzZZenVpdFZoYUhFWVdraE14eG5LS21IaUxqVWFydjVFQW1wS1dPY0ZteFVN0gF3QVVfeXFMT0RraHFUMEdNMm1kSWxIVWJTM05PUGxtcU9vR2tNSFpvdUlzVFlxakpkNC01M1ZyX1hDa0h1V0VDdHgwUzlDOFhYeWh3Nll6dWl0VmhhSEVZV2toTXh4bktLbUhpTGpVYXJ2NUVBbXBLV09jRm14VU0?oc=5", "source": "핀포인트뉴스", "published": "2026-07-21T05:30:30+00:00", "summary": "북미·아세안 러브콜… LS ELECTRIC, 핵심 전력기기 사업 경쟁력 부각 핀포인트뉴스", "category": "industry", "date": "2026-07-24", "mock": false}, {"title": "[창간8주년 기획-AI 시대, 에너지가 경쟁력이다] ④LS·효성, '케이블'과 '변압기술'로 전력길 잇는다", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTFBXM3gyUGtBeEV6QUJ3OFV3MHVSTGdDNzl1RTVFWWdYSC1ZQ2hWTUpZYlRwRDN3cmNSVzdNdFltcGRzcTVJOTlLZ3ByLTJsNURway10WlBtSjR2SU5udTFTd2V0cVVNYTluRnl5Uw?oc=5", "source": "스마트비즈", "published": "2026-07-23T23:30:00+00:00", "summary": "[창간8주년 기획-AI 시대, 에너지가 경쟁력이다] ④LS·효성, '케이블'과 '변압기술'로 전력길 잇는다 스마트비즈", "category": "grid", "date": "2026-07-24", "mock": false}, {"title": "고리 출신 이창호 원자력안전협의회 위원장, 첫 i-SMR 고리 유치 이끌어", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTFBUOFRsR3RDUXoxMWhZN1hfLWxOSktMUE93MGw3RnRyeWwwb2dVTnVyZk9CM0RvbXI2Z20wemxoZDRnY0dFb3NwOF9kS2xuYm8xVFJRZ0NMRTlfOWszLThQc01KdUtRMkNjY045R9IBcEFVX3lxTFBJZnRlX3JNOXlrWmZIczNYeURtd2VEVUt0emVvZlRtMVgyQzdyeTdMVVZzMTZRRUlUeVU5NHJKSWVpU1FVaXlFZkFuUndFVXBWTnNMTW9OS2M2Q0piLV85YlQ5WHIxNXRQSEJrcEhPWE0?oc=5", "source": "전기신문", "published": "2026-07-24T00:56:47+00:00", "summary": "고리 출신 이창호 원자력안전협의회 위원장, 첫 i-SMR 고리 유치 이끌어 전기신문", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "기후장관 \"한빛원전 추가건설, 당장 아냐…수요 대비한 예비 자원\"", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE81S3dyU2pOcVNORXp4VjN6aXIyVmwwNHllSWVTWkxuX3BHODFnVjhScU51a3VhcFlqd19NNXZsUGota3VmTU1Sd2tKNEs4SktYNWFEczJzbWxYRzl0?oc=5", "source": "뉴스1", "published": "2026-07-23T23:58:46+00:00", "summary": "기후장관 \"한빛원전 추가건설, 당장 아냐…수요 대비한 예비 자원\" 뉴스1", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "김성환 장관 \"재생에너지만으로 전력 공급 한계…원전 역할 필요\"", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9acThqOVp1VU5sWnJYcmZLV2taVFdyX3pqb2xWN1R3VzdTQkxXeVpRaU9SQzRSODc3dTlWX1VGNVY2M0FuWFNQYU9yRDNERUhzWmlteHhIb0ptcHVWeHh6dUlkZk1CY29YUUZv?oc=5", "source": "서울뉴스통신", "published": "2026-07-24T00:26:40+00:00", "summary": "김성환 장관 \"재생에너지만으로 전력 공급 한계…원전 역할 필요\" 서울뉴스통신", "category": "nuclear", "date": "2026-07-24", "mock": false}, {"title": "안동 만운저수지 수상 태양광 발전시설에 불…2시간 만에 진화", "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5ESmJrQjRETEVPdnRuVWpoWEc5NG9Rb2pIaWRSbnJXS05TRDAwUjBKbEN2VmlmaWh3RGFkNnp5dndwa3pBTGpwaFpXZTVPMVdNV3hyTmNsUFYxTGl2RXNB?oc=5", "source": "뉴스1", "published": "2026-07-24T00:36:55+00:00", "summary": "안동 만운저수지 수상 태양광 발전시설에 불…2시간 만에 진화 뉴스1", "category": "renew", "date": "2026-07-24", "mock": false}, {"title": "[에코칼럼] 반도체 클러스터 전력, 지자체 공기업이 전담할 수 있는가", "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE15WXJISFhfdUdwVzVMSkxEbEttRENRSVREX2tVY0E2b0ljcFMzUjhQQmw5RlkxSjJqNDYxcDl0ZlhWZ21kSmVmRjlBOEFnSC1rcGxaSnNTOElLc2FOa3FQcnFBUDktdW1NQTVGLdIBcEFVX3lxTFBoOEFEZV9vc0lkWEVBTWFURTMyQVZBSlBvRXlzZlRyTnpEM0JQVGwtV1VMNnpLZFViUGdWQVFYRUNUVnF4WVlucGxoTzdIMG00RWlDOVF2SmpnMDY2TmFlMXVsbXdaWjJrRzZWMldaR2k?oc=5", "source": "남도일보", "published": "2026-07-23T07:28:11+00:00", "summary": "[에코칼럼] 반도체 클러스터 전력, 지자체 공기업이 전담할 수 있는가 남도일보", "category": "mega", "date": "2026-07-24", "mock": false}, {"title": "기후장관 \"탈석탄에 재생에너지만 확대하면 전기요금 폭등\"", "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9aWWNWbmdFRXEzU2VEakV5MVJscm1XN2U4Q2k3aU8wNDNidXZiX3ZWcUJMdUVhbFJoQU42RFJmMHBQSVBDa1ljcnN5OFBnZTQ?oc=5", "source": "v.daum.net", "published": "2026-07-24T00:46:58+00:00", "summary": "기후장관 \"탈석탄에 재생에너지만 확대하면 전기요금 폭등\" v.daum.net", "category": "policy", "date": "2026-07-24", "mock": false}, {"title": "문대림 \"양식업 전기요금 완화\"…법안 본회의 통과", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTFBwNmNRd3hGMndBQXpNZThHU3ZGN2tvQllKckdyLW9VbGNDdk5QNUxwUnFjRE9iSS1YdUFiempNYmJBeHVXcXJxcTdWX0E2MXlxSkJzT29uYkswYUszZTFsaU1STEFCNWhQMURhMXF3?oc=5", "source": "gukjenews.com", "published": "2026-07-24T00:04:14+00:00", "summary": "문대림 \"양식업 전기요금 완화\"…법안 본회의 통과 gukjenews.com", "category": "policy", "date": "2026-07-24", "mock": false}, {"title": "韓 AI 전력난 속…中 에너지 기업 서산 뚫었다", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTFBTLWdIV05DYVZUNE1ObWliTzdkNWwzeU85UU1lUGtsUGtWcnBxR3BOWnFMV0lMdFltUkdJOHRGazJ0b29CYzI4cUNUU3lpM3B0amJod0FYUmhORzhycE1OMmZkYmpWMlk5?oc=5", "source": "OBC 뉴스", "published": "2026-07-24T16:13:33+00:00", "summary": "韓 AI 전력난 속…中 에너지 기업 서산 뚫었다 OBC 뉴스", "category": "supply", "date": "2026-07-25", "mock": false}, {"title": "263m 철탑 세워 2㎞ 바다 넘었다…운남-안좌 송전선로 ‘무사고 완주’", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9ZdFRkc1FyWlBNaDZ0dTFoRFo5eU1rZWpHaEo4MWZNSEk5ZkFaaDNHRUdkSFN4V0R0VVdVOEwzXzQ5em52VlM1M0t4alJhMUE3RjJ6akZkd1V0c2s3cmFUWXM5TU1talVXNmFzX0RpYXLSAXBBVV95cUxPWXRUZHNRclpQTWg2dHUxaERaOXlNa2VqR2hKODFmTUhJOWZBWmgzR0VHZEhTeFdEdFVXVThMM180OXpudlZTNTNLeGpSYTFBN0YyempGZHdVdHNrN3JhVFlzOU1NbWpVVzZhc19EaWFy?oc=5", "source": "전기신문", "published": "2026-07-24T04:03:49+00:00", "summary": "263m 철탑 세워 2㎞ 바다 넘었다…운남-안좌 송전선로 ‘무사고 완주’ 전기신문", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "“전기는 수도권에서 쓰는데 왜 철탑은 우리 마을에”…농촌의 분노", "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9rZ2RlVEFmRWZrVnJSZUdRNEx4RnVsc0c3ZU5vSk1iZEdBeUFoX2NiNHVDT2tSYWxpSkJRb1A0S3FKSmd0WUJnNjVmVko0LTVVWnoxSWd4T3pYQQ?oc=5", "source": "농민신문", "published": "2026-07-24T06:29:00+00:00", "summary": "“전기는 수도권에서 쓰는데 왜 철탑은 우리 마을에”…농촌의 분노 농민신문", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "홍천군·한전, 500kV HVDC 송전선로 건설 관련 상생 협약 체결", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE00aU5nc0pzbVlwLS1Bak1COURYRW91OS0xOG5XSUxYSDBFNUo2MEVWYjhpc0dhVjZRLV9qU0tfTWRQUWRHSUY4Q1NDY1hjOUlMb25YLWVkUy1hUExFV0FkWXgwZ09WWWxxSm9iWDY3Vm0?oc=5", "source": "신아일보", "published": "2026-07-24T05:27:30+00:00", "summary": "홍천군·한전, 500kV HVDC 송전선로 건설 관련 상생 협약 체결 신아일보", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "담양군의회, '송전선로사업' 재검토 촉구", "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE9JOXZLT1JjTFlTUm1KVkJaZWpzbUtDZjNkeWdHdVJHT0JvM0hjRy1YZzZpdFZZVnJjVlNvejE4Nmh5dFNDUDI5bVIzVEZ1X3d3a0oxR2dYSGFZenI5dFJVeXRmWDhmN282?oc=5", "source": "교차로저널", "published": "2026-07-24T07:00:48+00:00", "summary": "담양군의회, '송전선로사업' 재검토 촉구 교차로저널", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "모바일 변전소, 전력 공급의 빈틈을 채우는 기술", "url": "https://news.google.com/rss/articles/CBMiRkFVX3lxTE4yX1AzbFlKWC0tWXFGOERDQnJTUWRrTWx0R1hnSnI5MlVCWUdORldYNFlpWkhublEtOVVpSDdsdjhwYzlQVnc?oc=5", "source": "Hyosung", "published": "2026-07-24T06:00:23+00:00", "summary": "모바일 변전소, 전력 공급의 빈틈을 채우는 기술 Hyosung", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "[증권言言] 유안타증권 \"대한전선, 해저·HVDC 성장 본격화…목표가 6만원 유지\"", "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9VOWJvZGVBSmQ5dURSR1N2RmVCS2puUkhTNzdrcmNJdER6allfRlhFNGtkU3REX2paTklZMlNRS2p3ck1zNGxfZGlySkhySHNUTi02UnpYNndoLXRnOHExMkVjVjNHMUZQb2tz?oc=5", "source": "마일드경제", "published": "2026-07-24T13:44:04+00:00", "summary": "[증권言言] 유안타증권 \"대한전선, 해저·HVDC 성장 본격화…목표가 6만원 유지\" 마일드경제", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "서안성-고덕간 송전선로 특별지원 등 현안사항 논의", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE0zTUU4SlY0YzlNYkJxMEFYc0tzeHhpTnpjWHRncFJMUk90eTRpMjg0S0xYOGxLTnp0SXMzYk55c21wcmNmbGZueEZJTWxoVUszVkVndHBYUGFFaUZDVFFvNmQzU0htRVpXakxSTjRn?oc=5", "source": "현대일보", "published": "2026-07-24T05:31:59+00:00", "summary": "서안성-고덕간 송전선로 특별지원 등 현안사항 논의 현대일보", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "1350조 메가프로젝트 뒤 전력망 청구서…한국전력, 투자비 미산정", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9yTno3eUhwQVlLWXlmV3pSS29saUZlLVNPTUtMUk5WbWNackRXYmlXaUhTSHBSbW1sRUwzTjc2eUlOcUhkVnZsVE0xWFY0YzdsVElRcWItMmpNNTBjU2htUVZnYkEzM0lVRklmM0p3?oc=5", "source": "뉴스후플러스", "published": "2026-07-24T09:00:00+00:00", "summary": "1350조 메가프로젝트 뒤 전력망 청구서…한국전력, 투자비 미산정 뉴스후플러스", "category": "grid", "date": "2026-07-25", "mock": false}, {"title": "[영상]인도가 움직였다…한국 원전에 새 기회 열린다", "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE1YZzNvb2lOVzB0YkN5dERhVmU1VERlNFR5NmQxd1gySWllV3lvQmctdGVVUnJMUm43cVNwS1gzVVljeEsyMy0wR1p1LXNxN25OZ2w4UVRLWVkzSDJoRnpmV1Robw?oc=5", "source": "더구루", "published": "2026-07-24T23:00:00+00:00", "summary": "[영상]인도가 움직였다…한국 원전에 새 기회 열린다 더구루", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "'원전株' 현대·대우건설, 목표가 하향 조정…검증의 시간 왔나", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5ha2NlUE9zTVJFc2I3eTBvaWFlb0ZCOHZWMUlidk1pRGxtcDRqQ1RVSUdUMkZfeGMyX004UmxUNnFHQlduOGpZcGthTzlKM3NlVFpiZkt0MGFZNWlsMDdWVERJOW5iZlJ2QmdhSkx4bk8?oc=5", "source": "연합인포맥스", "published": "2026-07-24T23:08:04+00:00", "summary": "'원전株' 현대·대우건설, 목표가 하향 조정…검증의 시간 왔나 연합인포맥스", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "[정국진단] 양향자 \"호남 반도체, '원전·재생 결합' 4단계 에너지믹스 구축해야\"", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTFBHNzMtNWxhNUhSMGlJbGxreXBBQ3lSOGpmbE9acjRDTDBlY1dPZFMxUU9UZF95T2gzMTNXM2k0T005STZuVVRzNkVDSVFJQ2xCN0lzWVRXWHg5QWFn?oc=5", "source": "뉴스핌", "published": "2026-07-24T22:00:00+00:00", "summary": "[정국진단] 양향자 \"호남 반도체, '원전·재생 결합' 4단계 에너지믹스 구축해야\" 뉴스핌", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "손양훈 교수 “호남 AI·반도체 유치?…한빛원전 건식저장부터 풀어야”", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1ILTFKQ0liZFZ4T000WVJOQUgxTWlHQTBnWlVBX1NRWjNfOVMxN2FLYzh5Wll3NU1JalNZZ09jVDFxSmJzSmlyQVZpWDJpaTdFcXBGTzdZMm52OVk?oc=5", "source": "에너지경제신문", "published": "2026-07-24T02:17:13+00:00", "summary": "손양훈 교수 “호남 AI·반도체 유치?…한빛원전 건식저장부터 풀어야” 에너지경제신문", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "미국 정부 해상원전 추진 본격화, 삼성중공업 HD현대 한화오션 새 기회 열려", "url": "https://news.google.com/rss/articles/CBMic0FVX3lxTFA1NU4yOW5fM19FVFloNmNLQ1pudFc0QVRkWlhiNXUzSWp2SWQtVWlMazBZSkxBd1lTX0JfdmxEOHE3X3hTTlU3eUtfdlpkNnlLa2ZaN3R4d3BnQjJSNy1oZkVJb2hYbjVSeER0cFJZUnRzcEE?oc=5", "source": "비즈니스포스트", "published": "2026-07-24T06:26:58+00:00", "summary": "미국 정부 해상원전 추진 본격화, 삼성중공업 HD현대 한화오션 새 기회 열려 비즈니스포스트", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "원전 역량 키우는 현대엔지니어링 'SMR 집중'", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9abXpCT21qX0FtT2RQWE4xTWtFSmt1RnIzal9xTVd2TmJxeVhlTDlUekFHQi0tUFBLb2Nrc2J6R1NOOG5yS1Vhc2Z1SkMxZmwzaHB1TkRGZ3pMc1BGcGFubmRjWkRkMk1fNzNubU51TXA?oc=5", "source": "비즈워치", "published": "2026-07-24T08:23:03+00:00", "summary": "원전 역량 키우는 현대엔지니어링 'SMR 집중' 비즈워치", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "트럼프 \"이란과 진지한 대화…사우디 원전 위해 아브라함 협정 가입해야\"(종합)", "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFA4Y0NlcldDX0RlS2JnS09wSjdaTTRJWkJoQlVlWTA3bWVueHpUUTRQeFhucVpqTkpBa0JlazdSYWFpc0dyNmRYZnFsLWl5Uy1FSFc1aGdDVzU?oc=5", "source": "뉴스1", "published": "2026-07-24T21:48:33+00:00", "summary": "트럼프 \"이란과 진지한 대화…사우디 원전 위해 아브라함 협정 가입해야\"(종합) 뉴스1", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "고리원전 계속 운전 지원금 둘러싸고 주민 반발", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE5GX04yMGdOclhVOWlRRXNfMHBKX2hlTlc0UDJWcWU0SGhXTlhoeUU0YlhHdUF5NE1McHFnNXVsd2xlTm95OXpTemFRNUZzRC03eG0wa25zaHc2Qzg?oc=5", "source": "KBS 뉴스", "published": "2026-07-24T10:44:00+00:00", "summary": "고리원전 계속 운전 지원금 둘러싸고 주민 반발 KBS 뉴스", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "미-사우디 핵협정에…원전·조선업계 ‘예의주시’", "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE5wbk5qUEJoYWE5M1BwYWs3dUxqNU1DcDRpT3FxbFdLWFRwMGVyZVBrVzZqemJkRjRjN1pSM2YyV3JPckZUUE9tS0VGRGQzUWtpRWpOV1R4bklvZnhDT0hnbg?oc=5", "source": "뉴스토마토", "published": "2026-07-24T06:03:26+00:00", "summary": "미-사우디 핵협정에…원전·조선업계 ‘예의주시’ 뉴스토마토", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "[분석] 정부, 'SMR 국가전략산업' 승부수…원전 수출 넘어 차세대 에너지 패권 경쟁 돌입", "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE5tWkdfNkJGOFpkeHVpUGFMVlljbnVDdmlYQUxnM0YwXzBLOWVFUTUyNkhuZXVpdjdhR29SU3E5RFVfd2hCWDhOdzc2Tmx4eGFkUndFUVZocndTNk1uSm82TUpFWV83alpkdWJuQjQ5TjRUZw?oc=5", "source": "에너지데일리", "published": "2026-07-24T02:39:56+00:00", "summary": "[분석] 정부, 'SMR 국가전략산업' 승부수…원전 수출 넘어 차세대 에너지 패권 경쟁 돌입 에너지데일리", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "삼성중공업, 미국 원전 설계사와 부유식 원자력발전 플랫폼 개발", "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE8zN3d4MkF5cl9lT2RMeFYtQ29oTzVRbWVsdmdiUm9rc3dVaVJpM3FBUEpGbnFHcWhVcm9KcFZzT0dUR0R5cEJKNE5GdlYtRF9nR3dYbEp0WUx4WEXSAWBBVV95cUxQZEt5X1lkaUxrWVV6RTl1cVA1Y2U4WExzN0VNeGlBNnhMb25qQVN0VzNtWHUtZ2hOWnJKNExGT3NoYkZucTBWdTlYLUUyNGJlamhuSFY3LWltN3pRaEZKbWk?oc=5", "source": "연합뉴스", "published": "2026-07-22T01:11:19+00:00", "summary": "삼성중공업, 미국 원전 설계사와 부유식 원자력발전 플랫폼 개발 연합뉴스", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "롤스로이스 SMR, 체코 2곳 추가 건설 추진…한국 원전수출 영향은 제한적", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE00NERablIzcFdja0dzOEtxTDVvb1J4NGxXbzBleDA0LTY2SUFQaF9oVUdFUjN2VDB0UHNUS2MzWjVVcnFtTGZKZjUweWQxRGZsX05QUWFGbDFfdDY2YzRUVzJsZVE?oc=5", "source": "에너지안전신문", "published": "2026-07-21T23:04:19+00:00", "summary": "롤스로이스 SMR, 체코 2곳 추가 건설 추진…한국 원전수출 영향은 제한적 에너지안전신문", "category": "nuclear", "date": "2026-07-25", "mock": false}, {"title": "태양광 발전시설서 작업자 감전 심정지…결국 숨져", "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5EUVRycGl5ZWowVVprWnVmU2RSeVZXLWVSUWhJenlybm5CZHFpRnppWUUzVUlORzJRUUE3alBFTnZNalZzTThxS0dQOWhCWl95?oc=5", "source": "문화일보", "published": "2026-07-24T22:19:24+00:00", "summary": "태양광 발전시설서 작업자 감전 심정지…결국 숨져 문화일보", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "김용범 \"재생에너지·계통 인프라 전면 개편…8월 '국가 에너지 비전' 발표\"", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5xa01hdlp4MnhYLWF6YlZJZWR0bWZKenhlM1NQZUtwaF9pVmtxVFh4amRIOUx1d09FdTNfcVNoV2k5bUdiMW1hdEFCRk1vSHY1b2t4YzNfVGQzdmxp?oc=5", "source": "뉴스핌", "published": "2026-07-24T17:00:00+00:00", "summary": "김용범 \"재생에너지·계통 인프라 전면 개편…8월 '국가 에너지 비전' 발표\" 뉴스핌", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "유니슨 “국내 육·해상 풍력터빈 보급으로 2030년 매출 1조 목표”", "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE1zQlRFZFY2YmhhRGNjRnFQNzFER0ZKNU5aWHpGM0FQMDFCVklQcVU1Y3g0M0tUbXEwVUNyRHJaZER1TzExZFdHWTdHaGIzU2YxWjRrSHVlZ1pUdGtUMHE5RzR5MEIzWnZJQkhXOTFNRWpyNnhHNEczNzN5TQ?oc=5", "source": "서울신문", "published": "2026-07-24T09:01:42+00:00", "summary": "유니슨 “국내 육·해상 풍력터빈 보급으로 2030년 매출 1조 목표” 서울신문", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "[단독] 해상풍력 용도 아니라던 풍황계측기 인천시 번복 논란 자초", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5EMUlOY2t1eWFoLURKQVlGX1BPekEyZE1ydFFNdDh0SmgyTFZxYTJxaFBoNnJKdTZqR0hDQ29VeUlyTUZPT21YMV9rUVVtbkFfUXY2NE55SGVTaHE0TENoUVYxbjFtaDBURTFaLXhCbEs?oc=5", "source": "인천투데이", "published": "2026-07-24T02:40:14+00:00", "summary": "[단독] 해상풍력 용도 아니라던 풍황계측기 인천시 번복 논란 자초 인천투데이", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "산업은행, 수협과 협약…국내 해상풍력 발전사업 금융협력", "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1sVlJDSnlISG9zYmNXMktEVVo0WEIxM3BZLUN1a21FaDV6a0tsVERYLUJOVVZ6WGhKbjhnZFNKd3h0NE9UblN3YWZQeWc4TGM1SFJsU3dtaXVtOEpBSFNjVE1MZHc0dDhGbUE?oc=5", "source": "비즈월드", "published": "2026-07-24T11:22:00+00:00", "summary": "산업은행, 수협과 협약…국내 해상풍력 발전사업 금융협력 비즈월드", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "미국 해상풍력 후퇴의 경제적 파장: 듀크 에너지 리스 반납이 드러낸 정책 리스크", "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTE5Lams1LVJZNEFtMEtLcU11US1TTmY2UDlxSjlaOWZDYkVRNTJyMkFrNWlTckN3T1pYUGZLX1VTOVNBRTg?oc=5", "source": "한국공공정책신문", "published": "2026-07-25T00:04:08+00:00", "summary": "미국 해상풍력 후퇴의 경제적 파장: 듀크 에너지 리스 반납이 드러낸 정책 리스크 한국공공정책신문", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "해상풍력 키우는 두산에너빌리티…자회사에 630억원 투입", "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFA3TEk1bERvc2NacWVhVi0zWVdpeGdqdlQxRnlnLWhhXzJCMkRGMnFURzN0aXYzemZGTF9ZRWpya0lnUXNLcUkxY0VScVl0Yld1NlN4UEl3?oc=5", "source": "지디넷코리아", "published": "2026-07-24T08:55:12+00:00", "summary": "해상풍력 키우는 두산에너빌리티…자회사에 630억원 투입 지디넷코리아", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "태안·가의·서해 해상풍력 본격 추진…정부 55GW 로드맵 실현의 핵심 거점으로 ‘태안’부상", "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE96dUxpamVCZE5MRnhfcHl2b0lSbFZSOHpSVTlLR2d3dkhQSTFVdTd5b19nc1Jrc3NiX3ExZkkwaWs4OXJXc04xSXhmdWpnUmI2RGxzMU5LejgwMkgyMnB4VlB3TXJtSmNabHFyUmZR?oc=5", "source": "taeannews.co.kr", "published": "2026-07-24T07:00:00+00:00", "summary": "태안·가의·서해 해상풍력 본격 추진…정부 55GW 로드맵 실현의 핵심 거점으로 ‘태안’부상 taeannews.co.kr", "category": "renew", "date": "2026-07-25", "mock": false}, {"title": "데이터센터 전력 공급에 대한 트럼프의 공약에 회의적인 시각 제기", "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTE14YS05MXcyRnkxSlZ1TE8zbXBXOFdBTlB3UHMtdExrTS1WN2cxZWJaRU5VampNUUQzdFI4ZkxQeGU4YVZwRzFBR0l0dk0xS0ZveVA1TkRYR2o3OF92bFBCQVRlZ3FVdnVXWUg3WDdjR1U1aERsb1Fz?oc=5", "source": "TradingView", "published": "2026-07-24T10:01:04+00:00", "summary": "데이터센터 전력 공급에 대한 트럼프의 공약에 회의적인 시각 제기 TradingView", "category": "datacenter", "date": "2026-07-25", "mock": false}, {"title": "중동 지정학적 리스크와 AI 전력 수요가 만든 에너지 관련주 투자 포인트", "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxNenpPWjFmZGZPRzVoUGtyLTFFVW43S3FxcS04T1RpbkhkdUV0bURJZW1uYm1zV2xUYjNqUTlqM2VIdGlMLUtBWjdhUVNKS2pncjU3eElUUE1jVXdqcUZtRS1YQ0NDMmtueHpHVThDZm9jckFkOWNiNkdLWnM1dVpSYjNlRXNGR2htMWc?oc=5", "source": "네이버 프리미엄콘텐츠", "published": "2026-07-24T04:25:00+00:00", "summary": "중동 지정학적 리스크와 AI 전력 수요가 만든 에너지 관련주 투자 포인트 네이버 프리미엄콘텐츠", "category": "datacenter", "date": "2026-07-25", "mock": false}, {"title": "LS일렉-LG유플, 차세대 AI 데이터센터 전력 인프라 공동 개발한다", "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE9KMFgtcTgxcVZ5Ny1LZHpxendJTkgxZ0N1bF9YRkVuV2NWb0lHdUl2TERXS3VwMGNmMEdzdkdaXzYzbDVxTXZCaGZSLV9MNHJqRWVmUmdtemp0dm1VX0U4U1BwWVRmc1RPVGthT0FFUERQZw?oc=5", "source": "에너지데일리", "published": "2026-07-21T23:36:58+00:00", "summary": "LS일렉-LG유플, 차세대 AI 데이터센터 전력 인프라 공동 개발한다 에너지데일리", "category": "datacenter", "date": "2026-07-25", "mock": false}, {"title": "LG유플러스-LS일렉트릭, AI데이터센터 전력 기술 공동개발 협력", "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE55eHBfTlRGWnZGSXMydUJvdFVaX2pOYjNJV084TWRGT3laejNUd0hjaHR3Q0xQVFpYSkdtQmNwM0hJenFnblBXVmh3Vk5mUzBYT1JxanRsNHJyVGlt?oc=5", "source": "뉴스핌", "published": "2026-07-22T01:06:00+00:00", "summary": "LG유플러스-LS일렉트릭, AI데이터센터 전력 기술 공동개발 협력 뉴스핌", "category": "datacenter", "date": "2026-07-25", "mock": false}, {"title": "김성환 기후장관 \"재생에너지만 확대하면 전기요금 대폭 오를 것\" |", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBIRzZuUElZTUZtb1N5UXAwZVlaZ0ZqUGx4OVZ4T200UERBdGt6LUJVVnkyaXdDOVpMNzNsMnFTYWxwRkxlMWx5LVFEWTNjcWJ5ZDgyS3RvNkwyX2U1VHVnY2F5VWpLcWd6SkM4QXVqSnY?oc=5", "source": "전기신문", "published": "2026-07-24T04:18:12+00:00", "summary": "김성환 기후장관 \"재생에너지만 확대하면 전기요금 대폭 오를 것\" | 전기신문", "category": "policy", "date": "2026-07-25", "mock": false}, {"title": "AI 시대 막대한 전기요금…데이터센터와 국민, 누가 부담할까", "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTE56cHJUWUNDQVZxRThrTjBILWI3WTdDUkZ6Nm9aMjd0TVBGWUExYVIzN1ZVeF82ZGlVZl9iT1NLRVJSeE91NWx6dHFVaW5CZUZNVXc?oc=5", "source": "더나은미래", "published": "2026-07-24T07:26:00+00:00", "summary": "AI 시대 막대한 전기요금…데이터센터와 국민, 누가 부담할까 더나은미래", "category": "policy", "date": "2026-07-25", "mock": false}, {"title": "기후장관 “탈석탄 대안, 재생에너지만으론 전기요금 부담”", "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE5DUXpQYzY3cHM4eDhPQnNnUjlmbXBzT2dNemFfSF96LVFrYm41Y211Nkptd0FZaFU2Rm1PMHZQUkJwaWtnajZkTTNGOEFXYlBSUVZPMGJ1cDQzRVhPdmFVejloeGU?oc=5", "source": "매일일보", "published": "2026-07-24T11:00:21+00:00", "summary": "기후장관 “탈석탄 대안, 재생에너지만으론 전기요금 부담” 매일일보", "category": "policy", "date": "2026-07-25", "mock": false}, {"title": "양식업계 전기요금 부담 낮춘다…양식산업발전법 국회 통과", "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE9ZN1hneXZkX2pyaWdYVXB2MG5oZlY0cnlUUDVhWnVYUG9PSmdoQ2FUeTR3NW0tQnJZeDNtY0VQNFJnWFRtTWpyODNEcmRzbEdjTkhwSTFoREFYRzhBQnRjOUdQSXlBaWRVenYzM0hLaDhyRXBO?oc=5", "source": "부산일보", "published": "2026-07-24T11:53:21+00:00", "summary": "양식업계 전기요금 부담 낮춘다…양식산업발전법 국회 통과 부산일보", "category": "policy", "date": "2026-07-25", "mock": false}, {"title": "김성환 기후부 장관의 ‘원전 유턴’…“재생에너지만 늘리면 산업 경쟁력 타격”", "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE1OZkJEOV9hQ3hlazluUEowTFJkX1c4eU4tbm4xOGNoRHJWRExBSFEzbTA2NjNieVZJOU5rd0kzNGRzT1Q0WXVTWldYNVZNcl9rZmNaZTlXdDhlMGh6bXc?oc=5", "source": "기후에너지데이터뱅크", "published": "2026-07-24T04:10:03+00:00", "summary": "김성환 기후부 장관의 ‘원전 유턴’…“재생에너지만 늘리면 산업 경쟁력 타격” 기후에너지데이터뱅크", "category": "policy", "date": "2026-07-25", "mock": false}, {"title": "\"전기요금 폭탄 피하세요\"…한전, 누진 3단계 진입 전 알림톡 쏜다", "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9ydGpIN0U1azBiVzZnQl9yb2o0RVRpa0NLOWVKYno2YmsxTnlmekZuakpQOTBJMFJSX1AtZFR2YlZ5X2hmanBlby04YXJkWHZSeDZlNUMyNlNUVjMtcXh3WW13eUNrTVVCQkJKQTRsdU0?oc=5", "source": "연합인포맥스", "published": "2026-07-21T05:54:43+00:00", "summary": "\"전기요금 폭탄 피하세요\"…한전, 누진 3단계 진입 전 알림톡 쏜다 연합인포맥스", "category": "policy", "date": "2026-07-25", "mock": false}]}, "patents": {"categories": [{"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리"}, {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망"}, {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR"}, {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장"}, {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·전원장치"}, {"key": "mega", "emoji": "🏗️", "name": "전력반도체·전력변환"}, {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드"}, {"key": "industry", "emoji": "🏭", "name": "전력설비·기기"}], "countries": [{"code": "US", "emoji": "🇺🇸", "name": "미국"}, {"code": "KR", "emoji": "🇰🇷", "name": "한국"}, {"code": "CN", "emoji": "🇨🇳", "name": "중국"}, {"code": "JP", "emoji": "🇯🇵", "name": "일본"}, {"code": "EU", "emoji": "🇪🇺", "name": "유럽"}], "perWeek": [], "items": []}}</script>
+<script>
+const FEED = JSON.parse(document.getElementById('feed').textContent);
+const PAGE = 60;
+const $ = s => document.querySelector(s);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LS_KEY = 'pnp_lastVisit';
+const lastVisit = Number(localStorage.getItem(LS_KEY) || 0);
+
+// 타일 그리드 세계지도용 국가 배치(대략 지리적 위치, 11열×5행). 지리 데이터 불필요.
+const CGRID = {
+  CA:{f:'🇨🇦',n:'캐나다',c:2,r:1}, US:{f:'🇺🇸',n:'미국',c:2,r:2}, MX:{f:'🇲🇽',n:'멕시코',c:2,r:3}, BR:{f:'🇧🇷',n:'브라질',c:3,r:4},
+  GB:{f:'🇬🇧',n:'영국',c:5,r:1}, SE:{f:'🇸🇪',n:'스웨덴',c:6,r:1}, FI:{f:'🇫🇮',n:'핀란드',c:7,r:1},
+  NL:{f:'🇳🇱',n:'네덜란드',c:5,r:2}, DE:{f:'🇩🇪',n:'독일',c:6,r:2},
+  FR:{f:'🇫🇷',n:'프랑스',c:5,r:3}, CH:{f:'🇨🇭',n:'스위스',c:6,r:3},
+  ES:{f:'🇪🇸',n:'스페인',c:5,r:4}, IT:{f:'🇮🇹',n:'이탈리아',c:6,r:4}, IL:{f:'🇮🇱',n:'이스라엘',c:7,r:4},
+  RU:{f:'🇷🇺',n:'러시아',c:9,r:1}, CN:{f:'🇨🇳',n:'중국',c:9,r:2}, KR:{f:'🇰🇷',n:'한국',c:10,r:2}, JP:{f:'🇯🇵',n:'일본',c:11,r:2},
+  IN:{f:'🇮🇳',n:'인도',c:8,r:3}, TW:{f:'🇹🇼',n:'대만',c:10,r:3}, SG:{f:'🇸🇬',n:'싱가포르',c:9,r:4}, AU:{f:'🇦🇺',n:'호주',c:10,r:5}
+};
+
+const LS_SAVE='pnp_saved', LS_READ='pnp_read';
+let saved = new Set(JSON.parse(localStorage.getItem(LS_SAVE)||'[]'));
+let read  = new Set(JSON.parse(localStorage.getItem(LS_READ)||'[]'));
+let briefCollapsed = localStorage.getItem('pnp_briefClosed')==='1';
+function persist(){ localStorage.setItem(LS_SAVE,JSON.stringify([...saved])); localStorage.setItem(LS_READ,JSON.stringify([...read])); }
+
+const state = { tab:'home', view:'list', q:'', cats:new Set(), countries:new Set(),
+  sort:'new', newonly:false, period:'all', source:'', savedOnly:false, unreadOnly:false, limit:PAGE };
+
+function catMap(tab){ const m={}; FEED[tab].categories.forEach(c=>m[c.key]=c); return m; }
+function itemTime(it){ const d = it.published || it.pub_date || it.date || it.week || ''; const t = Date.parse(d); return isNaN(t)?0:t; }
+function isNew(it){ return lastVisit>0 && itemTime(it) > lastVisit; }
+
+function latestNewsDate(){ const p=FEED.news.perDay; return p.length? p[p.length-1].x : ''; }
+function shiftDate(d, delta){ const t=new Date(d+'T00:00:00'); if(isNaN(t)) return d;
+  t.setDate(t.getDate()+delta); const p=n=>String(n).padStart(2,'0');
+  return t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate()); }
+function dayLabel(d){ const L=latestNewsDate(); if(d===L) return '오늘'; if(d===shiftDate(L,-1)) return '어제'; return d; }
+function weekday(d){ const t=new Date(d+'T00:00:00'); return isNaN(t)?'':'일월화수목금토'[t.getDay()]; }
+function inPeriod(it){
+  if(state.period==='all') return true;
+  if(state.tab==='news'){
+    const L=latestNewsDate();
+    if(state.period==='today') return it.date===L;
+    if(state.period==='7d')  return it.date >= shiftDate(L,-6);
+    if(state.period==='30d') return it.date >= shiftDate(L,-29);
+    return it.date===state.period;          // 특정일(스파크라인 클릭)
+  }
+  return it.week===state.period;            // 특허: 특정 주(스파크라인 클릭)
+}
+function hl(text){
+  const e=esc(text);
+  const terms=state.q.toLowerCase().split(/\s+/).filter(Boolean)
+    .map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  if(!terms.length) return e;
+  try{ return e.replace(new RegExp('('+terms.join('|')+')','gi'),'<mark>$1</mark>'); }catch(_){ return e; }
+}
+
+function filtered(){
+  const f = FEED[state.tab];
+  const terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+  let out = f.items.filter(it=>{
+    if(state.cats.size && !state.cats.has(it.category)) return false;
+    if(state.tab==='patents' && state.countries.size && !state.countries.has(it.country)) return false;
+    if(!inPeriod(it)) return false;
+    if(state.tab==='news' && state.source && it.source!==state.source) return false;
+    if(state.savedOnly && !saved.has(it.url)) return false;
+    if(state.unreadOnly && read.has(it.url)) return false;
+    if(state.newonly && !isNew(it)) return false;
+    if(terms.length){
+      const hay = (it.title+' '+(it.summary||'')+' '+(it.source||'')+' '+(it.assignee||'')+' '+(it.aName||'')+' '+(it.number||'')).toLowerCase();
+      if(!terms.every(t=>hay.includes(t))) return false;
+    }
+    return true;
+  });
+  out.sort((a,b)=> state.sort==='new' ? itemTime(b)-itemTime(a) : itemTime(a)-itemTime(b));
+  return out;
+}
+
+function fmtDate(iso){ if(!iso) return ''; const t=Date.parse(iso); if(isNaN(t)) return esc(iso);
+  const d=new Date(t); const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function fmtDay(iso){ if(!iso) return ''; const t=Date.parse(iso); if(isNaN(t)) return esc(iso);
+  const d=new Date(t); const p=n=>String(n).padStart(2,'0'); return (d.getMonth()+1)+'-'+p(d.getDate()); }
+
+function card(it, cm){
+  const c = cm[it.category] || {emoji:'',name:it.category};
+  const nw = isNew(it);
+  const bits = [];
+  if(state.tab==='news'){
+    if(it.source) bits.push('<span class="src">'+esc(it.source)+'</span>');
+    if(it.published) bits.push('<span class="mono">'+fmtDate(it.published)+'</span>');
+  } else {
+    const co = (FEED.patents.countries.find(x=>x.code===it.country))||{emoji:'',name:it.country};
+    bits.push('<span class="src">'+co.emoji+' '+esc(co.name)+'</span>');
+    if(it.assignee) bits.push(esc(it.assignee));
+    if(it.number) bits.push('<span class="num">'+esc(it.number)+'</span>');
+    if(it.pub_date) bits.push('<span class="mono">공개 '+esc(it.pub_date)+'</span>');
+  }
+  const mock = it.mock ? ' <span class="mockflag">샘플</span>' : '';
+  const meta = bits.join(' <span aria-hidden="true">·</span> ');
+  const sum = it.summary ? '<div class="sum">'+hl(it.summary)+'</div>' : '';
+  const isS = saved.has(it.url), isR = read.has(it.url);
+  return '<article class="card'+(nw?' isnew':'')+(isR?' isread':'')+'">'
+    + '<button class="star'+(isS?' on':'')+'" data-save="'+esc(it.url)+'" aria-label="저장" title="저장">'+(isS?'★':'☆')+'</button>'
+    + '<a class="t" href="'+esc(it.url)+'" target="_blank" rel="noopener" data-read="'+esc(it.url)+'">'+hl(it.title||'(제목 없음)')+'</a>'
+    + '<div class="meta">'+meta+mock+'<span class="tag">'+(c.emoji||'')+' '+esc(c.name)+'</span></div>'
+    + sum + '</article>';
+}
+
+function sparkline(series){
+  if(!series.length) return '';
+  const pts = series.slice(-40);
+  const max = Math.max(1, ...pts.map(p=>p.y));
+  const n = pts.length, gap = 2, W = 320, H = 38;
+  const bw = Math.max(1, (W-(n-1)*gap)/n);
+  let bars = '';
+  pts.forEach((p,i)=>{
+    const h = Math.max(1, Math.round(p.y/max*H));
+    const x = i*(bw+gap), y = H-h;
+    const sel = state.period===p.x ? ' class="sel"' : '';
+    bars += '<rect'+sel+' data-x="'+esc(p.x)+'" x="'+x.toFixed(1)+'" y="'+y+'" width="'+bw.toFixed(1)+'" height="'+h
+      +'" rx="1.5" fill="var(--spark)"><title>'+esc(p.x)+' · '+p.y+'건 (클릭해 필터)</title></rect>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="기간별 건수 추이(막대 클릭 시 그 기간만)">'+bars+'</svg>';
+}
+
+function briefHTML(){
+  const b = FEED.brief;   // 최신 브리핑(홈 상단)
+  if(!b || !(b.headline || (b.body&&b.body.length))) return '';
+  // 최신 뉴스일과 브리핑 기준일 차이 → 오래된 브리핑이면 정직하게 표시.
+  let stale='';
+  const L=latestNewsDate();
+  if(b.date && L){ const dd=Math.round((Date.parse(L)-Date.parse(b.date))/86400000);
+    if(dd>=2) stale='<span class="bstale">· '+dd+'일 전 작성</span>'; }
+  const body=(b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
+  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
+    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
+  const foot=[];
+  if(b.author) foot.push('✍️ '+esc(b.author)+(b.mode?' · '+esc(b.mode):''));
+  if(b.basis) foot.push('<span class="sep">·</span> '+esc(b.basis));
+  if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
+  return '<div class="brief'+(briefCollapsed?' collapsed':'')+'">'
+    + '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
+    + (b.date?'<span class="bdate">'+esc(b.date)+' 기준</span>':'') + stale
+    + '<button class="btoggle" id="briefToggle">'+(briefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
+    + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
+    + '<div class="bbody">'+body+'</div>'
+    + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'');
+}
+
+function insightsHTML(){
+  const ins = FEED.insights;
+  if(!ins || !ins.asOf) return '';
+  const w = ins.window || {recentDays:7, recentWeeks:4};
+
+  // 1) 최근 많이 언급된 키워드 (클릭 → 검색)
+  const kws = (ins.trending||[]);
+  const kwHtml = kws.length ? kws.map(k=>{
+    const up = k.rising ? '<span class="up" title="이전 대비 증가">▲'+(k.count-k.prev)+'</span>' : '';
+    return '<button class="kw'+(k.rising?' hot':'')+'" data-kw="'+esc(k.term)+'" title="'+esc(k.term)
+      +' — 검색">'+esc(k.term)+'<span class="c">'+k.count+'</span>'+up+'</button>';
+  }).join('') : '<span class="iempty">데이터가 쌓이면 표시됩니다.</span>';
+
+  // 2) 이슈 흐름 (카테고리 최근 vs 이전)
+  const ct = (ins.catTrend||[]).slice(0,6);
+  const ctHtml = ct.length ? ct.map(r=>{
+    const d=r.delta; const cls=d>0?'up':(d<0?'dn':'fl'); const sym=d>0?'▲':(d<0?'▼':'–');
+    const dd=d===0?'':(' '+sym+Math.abs(d));
+    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터"><div class="nm">'
+      +r.emoji+' '+esc(r.name)+'</div><div class="d">'+r.recent+'<span class="n">건</span>'
+      +'<span class="'+cls+'">'+dd+'</span></div></div>';
+  }).join('') : '<span class="iempty">–</span>';
+
+  // 3) 이번 주 공개 특허 (질적 노출 — 건수 아님). 최신 주 특허 중 최근 공개분 일부.
+  const picks = patentPicks(5);
+  const cos = FEED.patents.countries;
+  const pkHtml = picks.length ? picks.map(p=>{
+    const co=(cos.find(x=>x.code===p.country))||{emoji:''};
+    const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
+    return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
+      +'<span class="pf">'+(co.emoji||'📄')+'</span>'
+      +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
+  }).join('') : '<span class="iempty">이번 주 공개 특허가 아직 없습니다.</span>';
+
+  return '<div class="insights">'
+    + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
+    + '<p class="isub">최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색</p>'
+    + '<div class="kwrap">'+kwHtml+'</div></div>'
+    + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
+    + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터</p>'
+    + '<div class="trend">'+ctHtml+'</div></div>'
+    + '<div class="ipanel"><h3>📄 이번 주 공개 특허</h3>'
+    + '<p class="isub">최근 공개분 일부 · 무엇을/누가 출원했는지 (건수 아님) · 클릭 시 원문</p>'
+    + '<div class="ppick">'+pkHtml+'</div></div></div>';
+}
+
+function kpiHTML(){
+  const n=FEED.news, p=FEED.patents;
+  const nL = n.perDay.length? n.perDay[n.perDay.length-1] : {x:'-',y:0};
+  const pL = p.perWeek.length? p.perWeek[p.perWeek.length-1] : {x:'-',y:0};
+  return '<div class="homekpi">'
+    + tile('📰 뉴스 누적', n.items.length.toLocaleString())
+    + tile('📰 최근일', nL.y+'<small>건 · '+esc(nL.x)+'</small>')
+    + tile('📄 특허 누적', p.items.length.toLocaleString())
+    + tile('📄 최근주', pL.y+'<small>건 · '+esc(pL.x)+'</small>')
+    + '</div>';
+}
+
+function matrixMiniHTML(){
+  const list=FEED.patents.items; if(!list.length) return '';
+  return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
+    + '<p class="sub">발행국/지역별 주요 출원인이 어느 분야에 특허를 내는지. 칸을 누르면 특허 탭 상세.</p>'
+    + '<div class="mxmini">'+regionMatrixHTML(list, {})+'</div></div>';
+}
+
+function timelineHTML(){
+  const past=(FEED.briefs||[]).slice(1);   // 최신은 위에 크게 노출, 나머지를 타임라인으로
+  const inner = past.length ? past.map((b,i)=>{
+    const body=(b.body||[]).slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('');
+    return '<div class="tl" data-ti="'+i+'"><div class="tld">'+esc(b.date||'')+'</div>'
+      + '<div class="tlh">'+esc(b.headline||'(제목 없음)')+'</div>'
+      + '<div class="tlb">'+body+'</div></div>';
+  }).join('') : '<p class="homehint">지난 브리핑이 쌓이면 여기 타임라인으로 보여요(매주 갱신).</p>';
+  return '<div class="homepanel"><h3>🗓️ 지난 브리핑</h3>'
+    + '<p class="sub">제목을 누르면 요지가 펼쳐집니다.</p>'
+    + '<div class="timeline">'+inner+'</div></div>';
+}
+
+function renderHome(){
+  const parts=[];
+  const bh=briefHTML(); if(bh) parts.push(bh);
+  parts.push(kpiHTML());
+  const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
+  parts.push('<div class="homebot">'+(matrixMiniHTML()||'')+timelineHTML()+'</div>');
+  $('#home').innerHTML = parts.join('');
+}
+
+function latestPatentWeek(){ const p=FEED.patents.perWeek; return p.length? p[p.length-1].x : ''; }
+function patentPicks(n){
+  const items = FEED.patents.items.slice();
+  const w = latestPatentWeek();
+  let pool = items.filter(it=>it.week===w);
+  if(pool.length < n) pool = items;                 // 최신 주가 빈약하면 전체에서
+  pool.sort((a,b)=> (Date.parse(b.pub_date||b.week)||0)-(Date.parse(a.pub_date||a.week)||0));
+  return pool.slice(0, n);
+}
+
+function renderOverview(){
+  const f = FEED[state.tab];
+  const total = f.items.length;
+  const series = state.tab==='news' ? f.perDay : f.perWeek;
+  const periods = series.length;
+  const latest = series.length ? series[series.length-1] : {x:'-',y:0};
+  const newCount = f.items.filter(isNew).length;
+  const unit = state.tab==='news' ? '일' : '주';
+  const ov = $('#overview');
+  ov.innerHTML =
+    tile('누적 '+(state.tab==='news'?'기사':'특허'), total.toLocaleString())
+    + tile('수집 '+unit, periods)
+    + tile('최근 '+unit, latest.y+'<small>건 · '+esc(latest.x)+'</small>')
+    + tile(lastVisit? '새 항목' : '오늘 열람', lastVisit? newCount : '—')
+    + '<div class="tile spark sparkwrap"><div class="k">'+(state.tab==='news'?'일별':'주별')+' 추이 <b>('+periods+')</b></div>'
+      + sparkline(series) + '</div>';
+}
+function tile(k,v){ return '<div class="tile"><div class="k">'+k+'</div><div class="v mono">'+v+'</div></div>'; }
+
+function renderChips(){
+  if(state.tab==='home'){ $('#catChips').innerHTML=''; const cc=$('#countryChips'); cc.hidden=true; cc.innerHTML=''; return; }
+  const f = FEED[state.tab], cm = {};
+  f.items.forEach(it=> cm[it.category]=(cm[it.category]||0)+1);
+  $('#catChips').innerHTML = f.categories.filter(c=>cm[c.key]).map(c=>
+    '<button class="f" data-cat="'+c.key+'" aria-pressed="'+state.cats.has(c.key)+'">'
+    + c.emoji+' '+esc(c.name)+'<span class="n">'+(cm[c.key]||0)+'</span></button>').join('');
+  const cc = $('#countryChips');
+  if(state.tab==='patents'){
+    cc.hidden = false;
+    const cnt = {}; f.items.forEach(it=> cnt[it.country]=(cnt[it.country]||0)+1);
+    cc.innerHTML = f.countries.filter(c=>cnt[c.code]).map(c=>
+      '<button class="f co" data-country="'+c.code+'" aria-pressed="'+state.countries.has(c.code)+'">'
+      + c.emoji+' '+esc(c.name)+'<span class="n">'+(cnt[c.code]||0)+'</span></button>').join('');
+  } else { cc.hidden = true; cc.innerHTML=''; }
+}
+
+function renderPeriodBar(){
+  const pb=$('#periodBar');
+  if(state.tab!=='news'){ pb.hidden=true; pb.innerHTML=''; return; }
+  pb.hidden=false;
+  const opts=[['all','전체'],['today','오늘'],['7d','최근 7일'],['30d','최근 30일']];
+  let html=opts.map(o=>'<button class="f" data-period="'+o[0]+'" aria-pressed="'+(state.period===o[0])+'">'+o[1]+'</button>').join('');
+  if(state.period!=='all' && !opts.some(o=>o[0]===state.period))
+    html+='<button class="f" data-period="'+esc(state.period)+'" aria-pressed="true">📅 '+esc(state.period)+' ✕</button>';
+  pb.innerHTML=html;
+}
+function renderSource(){
+  const sel=$('#source');
+  if(state.tab!=='news'){ sel.hidden=true; return; }
+  sel.hidden=false;
+  if(!sel.dataset.built){
+    const srcs=[...new Set(FEED.news.items.map(n=>n.source).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML='<option value="">전체 출처</option>'+srcs.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
+    sel.dataset.built='1';
+  }
+  sel.value=state.source;
+}
+
+function render(){
+  const home = state.tab==='home';
+  document.querySelector('.wrap').classList.toggle('homemode', home);
+  $('#home').hidden = !home;
+  if(home){ renderHome(); updateViewToggle(); syncHash(); return; }
+  renderOverview();
+  renderPeriodBar(); renderSource();
+  const list = filtered();
+  const active = state.q || state.cats.size || state.countries.size || state.newonly
+    || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
+  $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
+    + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
+  $('#reset').hidden = !active;
+  const isStats = state.tab==='patents' && state.view==='stats';
+  $('#results').classList.toggle('readcol', !isStats);   // 목록=읽기폭, 통계=전체폭
+  if(isStats){
+    $('#results').innerHTML = renderStats(list);
+    $('#more').hidden = true;
+    syncHash(); return;
+  }
+  const cm = catMap(state.tab);
+  const shown = list.slice(0, state.limit);
+  if(!shown.length){
+    $('#results').innerHTML = '<div class="empty">조건에 맞는 항목이 없습니다.</div>';
+  } else if(state.tab==='news'){
+    // 날짜별 그룹 헤더
+    const byDay={}; const order=[];
+    shown.forEach(it=>{ const d=it.date||'?'; if(!(d in byDay)){byDay[d]=[]; order.push(d);} byDay[d].push(it); });
+    $('#results').innerHTML = order.map(d=>{
+      const lbl=dayLabel(d), wd=weekday(d);
+      const dateSpan = (lbl!==d? '<span class="d">'+esc(d)+'</span>':'') + (wd? '<span class="d">('+wd+')</span>':'');
+      return '<div class="dgroup">'+esc(lbl)+dateSpan
+        + '<span class="n">'+byDay[d].length+'건</span></div>'
+        + byDay[d].map(it=>card(it,cm)).join('');
+    }).join('');
+  } else {
+    $('#results').innerHTML = shown.map(it=>card(it,cm)).join('');
+  }
+  $('#more').hidden = list.length <= state.limit;
+  $('#more').textContent = '더 보기 ('+(list.length-state.limit)+'개 남음)';
+  syncHash();
+}
+
+// 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순
+function _rankApplicants(list){
+  const byA={};
+  list.forEach(it=>{ const nm=it.aName||'(미상)';
+    const o=byA[nm]||(byA[nm]={cnt:0, flag:it.aFlag||'', region:it.aCountry||'', grid:{}});
+    o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; if(!o.flag)o.flag=it.aFlag||''; });
+  return Object.keys(byA).map(nm=>Object.assign({name:nm}, byA[nm]))
+    .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
+}
+// 한 지역(부분집합)의 출원인×분야 표. opts.total → 합계 열
+function matrixTableHTML(ranked, opts){
+  const cats=FEED.patents.categories; opts=opts||{};
+  if(!ranked.length) return '';
+  let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
+  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')
+    +(opts.total?'<th>합계</th>':'')+'</tr>';
+  const body=ranked.map(r=>{
+    const cells=cats.map(c=>{ const v=r.grid[c.key]||0; const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
+      const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
+      const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
+      return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
+    return '<tr><td class="lab">'+(r.flag||'')+' '+esc(r.name)+'</td>'+cells
+      +(opts.total?'<td class="c tot">'+r.cnt+'</td>':'')+'</tr>';
+  }).join('');
+  return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+// 발행국/지역별로 나눈 매트릭스(미국·한국·중국·일본·유럽 순, 있는 지역만)
+function regionMatrixHTML(list, opts){
+  const html=FEED.patents.countries.map(rg=>{
+    const sub=list.filter(it=>it.aCountry===rg.code);
+    if(!sub.length) return '';
+    const ranked=_rankApplicants(sub);
+    return '<div class="rgsec"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
+      + ' <span class="rgn">'+sub.length+'건 · 출원인 '+ranked.length+'</span></div>'
+      + matrixTableHTML(ranked, opts)+'</div>';
+  }).filter(Boolean).join('');
+  return html || '<p class="sub" style="margin:0">수집된 특허가 없습니다(주별 회전 수집으로 채워집니다).</p>';
+}
+
+function renderStats(list){
+  if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
+  const cats=FEED.patents.categories, regions=FEED.patents.countries;
+  const ranked=_rankApplicants(list);
+  const uniq=ranked.length, topA=ranked[0];
+  const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
+  const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ');
+  // 분야별 주요 출원인
+  const byCatA={}; list.forEach(it=>{const k=it.category,nm=it.aName||'(미상)'; (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1;});
+  const catLeadRows=cats.filter(c=>byCatA[c.key]).map(c=>{
+    const entries=Object.entries(byCatA[c.key]).filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    const chips=entries.slice(0,3).map(([n,v])=>'<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
+    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div><div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
+  }).join('');
+  // 랭킹(전 지역 통합)
+  const top=ranked.slice(0,15), maxA=top[0].cnt||1;
+  const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.cnt/maxA*100);
+    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'+(i+1)+'</span>'
+      + (r.flag||'')+' '+esc(r.name)+'</div><div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
+      + '<div class="val">'+r.cnt+'</div></div>'; }).join('');
+
+  return '<div class="stats">'
+    + '<div class="panel wide"><div class="statkpi">'
+      + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
+        + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
+      + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
+      + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
+        + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
+      + '</div></div>'
+    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">발행국/지역별</span></h3>'
+      + '<p class="sub">각 지역(미국·한국·중국·일본·유럽) 주요 출원인이 <b>어느 분야에</b> 최근 특허를 냈는지(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허를 봅니다.</p>'
+      + regionMatrixHTML(list, {total:true}) + '</div>'
+    + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
+      + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
+      + '<div class="catlead">'+catLeadRows+'</div></div>'
+    + '<div class="panel"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'</span></h3>'
+      + '<p class="sub">전 지역 통합 · 표본 내 총 출원 수.</p>'
+      + '<div class="lead">'+leadRows+'</div></div>'
+    + '</div>';
+}
+
+function updateViewToggle(){
+  const vt = $('#viewToggle');
+  vt.classList.toggle('on', state.tab==='patents');
+  vt.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.view===state.view));
+}
+
+function syncHash(){
+  const p = new URLSearchParams();
+  p.set('tab', state.tab);
+  if(state.q) p.set('q', state.q);
+  if(state.cats.size) p.set('cat', [...state.cats].join(','));
+  if(state.countries.size) p.set('co', [...state.countries].join(','));
+  if(state.sort!=='new') p.set('sort', state.sort);
+  if(state.newonly) p.set('new','1');
+  if(state.period!=='all') p.set('period', state.period);
+  if(state.source) p.set('src', state.source);
+  if(state.savedOnly) p.set('saved','1');
+  if(state.unreadOnly) p.set('unread','1');
+  if(state.tab==='patents' && state.view==='stats') p.set('view','stats');
+  const h = p.toString();
+  history.replaceState(null,'', h? '#'+h : location.pathname);
+}
+function loadHash(){
+  const p = new URLSearchParams(location.hash.replace(/^#/,''));
+  const t=p.get('tab'); if(t==='news'||t==='patents'||t==='home') state.tab=t;
+  if(state.tab==='patents' && p.get('view')==='stats') state.view='stats';
+  state.q = p.get('q')||'';
+  state.sort = p.get('sort')==='old'?'old':'new';
+  state.newonly = p.get('new')==='1';
+  state.period = p.get('period')||'all';
+  state.source = p.get('src')||'';
+  state.savedOnly = p.get('saved')==='1';
+  state.unreadOnly = p.get('unread')==='1';
+  if(p.get('cat')) p.get('cat').split(',').forEach(c=>state.cats.add(c));
+  if(p.get('co')) p.get('co').split(',').forEach(c=>state.countries.add(c));
+}
+
+function syncTabsUI(){ document.querySelectorAll('.tabs button')
+  .forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===state.tab)); }
+
+// 홈에서 특정 탭으로 이동하며 필터를 적용(키워드→검색, 카테고리·매트릭스→필터)
+function gotoTab(t, opts){ opts=opts||{};
+  state.tab=t; state.view=opts.view||'list';
+  state.cats.clear(); state.countries.clear(); state.period='all'; state.source='';
+  state.q=opts.q||''; if(opts.cat) state.cats.add(opts.cat);
+  state.limit=PAGE;
+  const q=$('#q'); if(q) q.value=state.q;
+  syncTabsUI(); updateViewToggle(); renderChips(); render();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function setTab(t){
+  if(state.tab===t) return;
+  state.tab=t; state.view='list'; state.cats.clear(); state.countries.clear();
+  state.period='all'; state.source=''; state.limit=PAGE;
+  syncTabsUI();
+  updateViewToggle(); renderChips(); render();
+}
+
+function wire(){
+  document.querySelectorAll('.tabs button').forEach(b=> b.onclick=()=>setTab(b.dataset.tab));
+  $('#viewToggle').onclick = e=>{ const b=e.target.closest('[data-view]'); if(!b) return;
+    state.view=b.dataset.view; updateViewToggle(); render(); };
+  let deb; $('#q').oninput = e=>{ clearTimeout(deb); deb=setTimeout(()=>{ state.q=e.target.value.trim(); state.limit=PAGE; render(); },140); };
+  $('#sort').onchange = e=>{ state.sort=e.target.value; render(); };
+  $('#newonly').onclick = e=>{ state.newonly=!state.newonly; e.currentTarget.setAttribute('aria-pressed',state.newonly); state.limit=PAGE; render(); };
+  $('#catChips').onclick = e=>{ const b=e.target.closest('[data-cat]'); if(!b) return;
+    const k=b.dataset.cat; state.cats.has(k)?state.cats.delete(k):state.cats.add(k);
+    b.setAttribute('aria-pressed',state.cats.has(k)); state.limit=PAGE; render(); };
+  $('#countryChips').onclick = e=>{ const b=e.target.closest('[data-country]'); if(!b) return;
+    const k=b.dataset.country; state.countries.has(k)?state.countries.delete(k):state.countries.add(k);
+    b.setAttribute('aria-pressed',state.countries.has(k)); state.limit=PAGE; render(); };
+  $('#more').onclick = ()=>{ state.limit+=PAGE; render(); };
+  $('#savedonly').onclick = e=>{ state.savedOnly=!state.savedOnly; e.currentTarget.setAttribute('aria-pressed',state.savedOnly); state.limit=PAGE; render(); };
+  $('#unreadonly').onclick = e=>{ state.unreadOnly=!state.unreadOnly; e.currentTarget.setAttribute('aria-pressed',state.unreadOnly); state.limit=PAGE; render(); };
+  $('#source').onchange = e=>{ state.source=e.target.value; state.limit=PAGE; render(); };
+  $('#periodBar').onclick = e=>{ const b=e.target.closest('[data-period]'); if(!b) return;
+    const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
+  $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
+    const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
+  $('#home').onclick = e=>{
+    // 브리핑 접기/펼치기
+    if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
+      localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0'); renderHome(); return; }
+    // 지난 브리핑 타임라인 펼치기
+    const tl=e.target.closest('.tl'); if(tl && !e.target.closest('[data-go]')){ tl.classList.toggle('open'); return; }
+    // 키워드 → 뉴스 탭에서 검색
+    const kw=e.target.closest('[data-kw]'); if(kw){ gotoTab('news', {q:kw.getAttribute('data-kw')}); return; }
+    // 특허 통계 전체 보기
+    const go=e.target.closest('[data-go]'); if(go){ gotoTab('patents', {view:'stats'}); return; }
+    // 매트릭스 칸 → 특허 탭에서 그 출원인·분야
+    const mc=e.target.closest('.pmx td.has[data-ap]');
+    if(mc){ gotoTab('patents', {q:mc.getAttribute('data-ap'), cat:mc.getAttribute('data-cat')}); return; }
+    // 이슈 흐름 행 → 뉴스 탭 카테고리 필터
+    const row=e.target.closest('.trend [data-cat]');
+    if(row){ gotoTab('news', {cat:row.getAttribute('data-cat')}); return; }
+  };
+  $('#results').addEventListener('click', e=>{
+    // 매트릭스 칸 클릭 → 그 출원인·분야로 좁혀 목록 보기
+    const mc=e.target.closest('.pmx td.has[data-ap]');
+    if(mc){ state.q=mc.getAttribute('data-ap'); $('#q').value=state.q;
+      state.cats=new Set([mc.getAttribute('data-cat')]); state.view='list';
+      state.limit=PAGE; updateViewToggle(); renderChips(); render();
+      $('#results').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    const sb=e.target.closest('[data-save]');
+    if(sb){ e.preventDefault(); const u=sb.getAttribute('data-save');
+      saved.has(u)?saved.delete(u):saved.add(u); persist(); render(); return; }
+    const a=e.target.closest('a.t[data-read]');
+    if(a){ const u=a.getAttribute('data-read'); if(!read.has(u)){ read.add(u); persist();
+      const cd=a.closest('.card'); if(cd) cd.classList.add('isread'); } }
+  });
+  $('#reset').onclick = ()=>{ state.q=''; state.cats.clear(); state.countries.clear(); state.newonly=false;
+    state.period='all'; state.source=''; state.savedOnly=false; state.unreadOnly=false;
+    state.limit=PAGE; $('#q').value='';
+    ['newonly','savedonly','unreadonly'].forEach(id=>$('#'+id).setAttribute('aria-pressed','false'));
+    document.querySelectorAll('.chips .f').forEach(b=>b.setAttribute('aria-pressed','false')); render(); };
+  const toTop=$('#toTop');
+  addEventListener('scroll', ()=>{ toTop.hidden = scrollY < 500; }, {passive:true});
+  toTop.onclick = ()=> scrollTo({top:0, behavior:'smooth'});
+  addEventListener('keydown', e=>{
+    const tag=(document.activeElement&&document.activeElement.tagName)||'';
+    if(e.key==='/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)){ e.preventDefault(); $('#q').focus(); }
+    else if(e.key==='Escape' && document.activeElement===$('#q')){ $('#q').blur(); }
+  });
+}
+
+$('#foot').innerHTML = '뉴스: Google 뉴스 RSS · 특허: Google Patents 공개 데이터에서 전력 키워드로 자동 수집. '
+  + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
+  + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
+  + '건 · 특허 '+FEED.patents.items.length+'건';
+
+loadHash();
+$('#q').value = state.q;
+$('#sort').value = state.sort;
+$('#newonly').setAttribute('aria-pressed', state.newonly);
+$('#savedonly').setAttribute('aria-pressed', state.savedOnly);
+$('#unreadonly').setAttribute('aria-pressed', state.unreadOnly);
+document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===state.tab));
+updateViewToggle(); renderChips(); wire(); render();
+localStorage.setItem(LS_KEY, Date.now());
+</script>
+</body></html>

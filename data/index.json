@@ -1,0 +1,45 @@
+{
+  "generated": "2026-07-25 09:07 KST",
+  "days": [
+    {
+      "date": "2026-07-25",
+      "count": 39,
+      "by_category": {
+        "supply": 1,
+        "grid": 8,
+        "nuclear": 12,
+        "renew": 8,
+        "datacenter": 4,
+        "policy": 6
+      }
+    },
+    {
+      "date": "2026-07-24",
+      "count": 39,
+      "by_category": {
+        "renew": 6,
+        "datacenter": 6,
+        "policy": 5,
+        "industry": 3,
+        "supply": 3,
+        "grid": 5,
+        "nuclear": 10,
+        "mega": 1
+      }
+    },
+    {
+      "date": "2026-07-23",
+      "count": 117,
+      "by_category": {
+        "supply": 14,
+        "grid": 15,
+        "nuclear": 16,
+        "renew": 15,
+        "datacenter": 14,
+        "mega": 15,
+        "policy": 14,
+        "industry": 14
+      }
+    }
+  ]
+}
