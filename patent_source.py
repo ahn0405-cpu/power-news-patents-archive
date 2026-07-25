@@ -205,12 +205,39 @@ def _cql(applicant_q: str, days: int, today: datetime | None = None) -> str:
             f'"{start.strftime("%Y%m%d")} {end.strftime("%Y%m%d")}" and ({cpc_or})')
 
 
+def _count(token: str, cql: str) -> int:
+    """1건만 받아 전체 건수만 얻는다(집계 전용, 응답이 가볍다)."""
+    _, total = _search(token, cql, 1, 1)
+    return total
+
+
+def _office_counts(token: str, ap: dict, today) -> dict:
+    """출원인이 어느 특허청에 몇 건 공개했는지 — '어느 시장에 출원하나' 축.
+
+    같은 발명이 여러 특허청에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있다.
+    OPS CQL 의 pn any "<코드>" 로 공개국을 제한한다(프로브로 실측 확인).
+    """
+    out = {}
+    base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
+    for off in cfg.OFFICES:
+        try:
+            n = _count(token, f'{base} and pn any "{off["code"]}"')
+        except Exception:
+            n = 0                      # 404 = 해당 특허청 공개 없음
+        if n:
+            out[off["code"]] = n
+        if cfg.REQUEST_DELAY:
+            time.sleep(cfg.REQUEST_DELAY)
+    return out
+
+
 def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
     if not (cfg.OPS_KEY and cfg.OPS_SECRET):
         raise RuntimeError("OPS 키 없음(OPS_KEY/OPS_SECRET)")
     token = _get_token()
     collected: list[dict] = []
     totals: dict[str, int] = {}      # 출원인 → 실제 전체 건수(상한과 무관)
+    offices: dict[str, dict] = {}    # 출원인 → {특허청: 건수}
     seen: set[str] = set()
     errors = 0
     for ap in cfg.APPLICANTS:
@@ -257,12 +284,18 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
                 time.sleep(cfg.REQUEST_DELAY)
         tot = totals.get(ap["name"], 0)
         cap = " (상한, 실제 %d건)" % tot if tot > added else ""
+        # 공개국별 정확 집계(옵션). 출원인당 특허청 수만큼 가벼운 1건 요청이 추가된다.
+        if cfg.OFFICE_COUNTS and tot:
+            oc = _office_counts(token, ap, today)
+            if oc:
+                offices[ap["name"]] = oc
+                cap += " · " + " ".join(f"{k}{v}" for k, v in oc.items())
         print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {added}건{cap}")
         if cfg.REQUEST_DELAY:
             time.sleep(cfg.REQUEST_DELAY)
     if not collected and errors:
         raise RuntimeError("OPS 수집 실패(모든 출원인)")
-    return collected, totals
+    return collected, {"totals": totals, "offices": offices}
 
 
 # ── MOCK (키 없음/오프라인 폴백) ──────────────────────────────────
@@ -313,11 +346,11 @@ def _mock_collect(today: datetime) -> list[dict]:
     totals = {}
     for it in collected:
         totals[it["applicant"]] = totals.get(it["applicant"], 0) + 1
-    return collected, totals
+    return collected, {"totals": totals, "offices": offices}
 
 
 def collect(today: datetime) -> tuple[list[dict], bool, dict]:
-    """(특허 목록, mock 여부, 출원인별 실제 전체 건수).
+    """(특허 목록, mock 여부, 집계 dict{totals, offices}).
 
     목록은 출원인당 상한(PER_APPLICANT_LIMIT)까지의 표본이지만, 전체 건수는 OPS 가
     알려주는 실제 값이라 랭킹·규모 비교는 상한에 왜곡되지 않는다.
@@ -325,14 +358,14 @@ def collect(today: datetime) -> tuple[list[dict], bool, dict]:
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
     """
     if cfg.is_mock():
-        items, totals = _mock_collect(today)
-        return items, True, totals
+        items, stats = _mock_collect(today)
+        return items, True, stats
     try:
-        items, totals = _live_collect(today)
-        return items, False, totals
+        items, stats = _live_collect(today)
+        return items, False, stats
     except Exception as e:
         if cfg.force_live():
             raise
         print(f"⚠️ 특허 라이브(OPS) 수집 실패 → MOCK 폴백: {e}")
-        items, totals = _mock_collect(today)
-        return items, True, totals
+        items, stats = _mock_collect(today)
+        return items, True, stats

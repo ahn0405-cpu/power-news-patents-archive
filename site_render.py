@@ -198,9 +198,12 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
     # 출원인별 '실제 전체 건수'(OPS @total-result-count). 저장 목록은 상한까지의
     # 표본이지만 이 값은 상한과 무관해, 랭킹·규모 비교를 왜곡 없이 할 수 있다.
     totals: dict[str, int] = {}
+    offices: dict[str, dict] = {}
     for wk in sorted(patent_weeks):                 # 최신 주 값이 이기도록 오름차순
         for k, v in (patent_weeks[wk].get("totals") or {}).items():
             totals[k] = v
+        for k, v in (patent_weeks[wk].get("offices") or {}).items():
+            offices[k] = v
 
     # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
@@ -213,6 +216,9 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
         "perWeek": [{"x": w, "y": per_week[w]} for w in sorted(per_week)],
         "pubRange": {"from": pubs[0], "to": pubs[-1]} if pubs else None,
         "totals": totals,
+        "officeCounts": offices,
+        "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
+                    for o in pcfg.OFFICES],
         "lookbackDays": pcfg.LOOKBACK_DAYS,
         "applicants": len(pcfg.APPLICANTS),
         "items": items,
@@ -1036,8 +1042,10 @@ function regionMatrixHTML(list, opts){
   return html || '<p class="sub" style="margin:0">아직 수집된 특허가 없습니다.</p>';
 }
 
-// 랭킹 보기 방식: 'region'(국적별) | 'all'(전 지역 통합)
-let rankMode = localStorage.getItem('pnp_rankMode')==='all' ? 'all' : 'region';
+// 랭킹 보기 방식: 'region'(출원인 국적별) | 'office'(공개 특허청=시장별) | 'all'(통합)
+const RANK_MODES = ['region','office','all'];
+let rankMode = RANK_MODES.includes(localStorage.getItem('pnp_rankMode'))
+  ? localStorage.getItem('pnp_rankMode') : 'region';
 
 function rankRowsHTML(rows, maxOverride){
   const maxA = maxOverride || (rows[0] ? rows[0].total : 1) || 1;
@@ -1061,6 +1069,33 @@ function regionRankHTML(ranked){
   return out || '<span class="unknown">—</span>';
 }
 
+// 공개 특허청(시장)별 다출원 기업 — "미국 시장에 누가 많이 내나"(국적 무관).
+// officeCounts[출원인][특허청] = 실제 건수(OPS count 쿼리). 없으면 표본으로 근사.
+function officeRankHTML(ranked){
+  const OC = FEED.patents.officeCounts || {};
+  const exact = Object.keys(OC).length > 0;
+  const byName = {}; ranked.forEach(r=>byName[r.name]=r);
+  const fallback = {};      // 표본 기반 근사(정확 집계가 없을 때)
+  if(!exact){
+    FEED.patents.items.forEach(it=>{
+      const o=fallback[it.aName]||(fallback[it.aName]={});
+      if(it.office) o[it.office]=(o[it.office]||0)+1; });
+  }
+  const src = exact? OC : fallback;
+  const out = (FEED.patents.offices||[]).map(off=>{
+    const rows = Object.keys(src).map(nm=>{
+      const n = src[nm][off.code] || 0;
+      const base = byName[nm] || {flag:'', name:nm};
+      return n? {name:nm, flag:base.flag, total:n, cnt:n, sampled:false} : null;
+    }).filter(Boolean).sort((a,b)=> b.total-a.total || a.name.localeCompare(b.name));
+    if(!rows.length) return '';
+    return '<div class="rgrank"><div class="rghead">'+off.emoji+' <b>'+esc(off.name)+'</b>'
+      + ' <span class="rgn">'+rows.length+'곳</span></div>'
+      + rankRowsHTML(rows.slice(0,5)) + '</div>';
+  }).filter(Boolean).join('');
+  return out || '<span class="unknown">—</span>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const cats=FEED.patents.categories, regions=FEED.patents.countries;
@@ -1078,13 +1113,18 @@ function renderStats(list){
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
   const nSampled=ranked.filter(r=>r.sampled).length;
-  const leadRows = rankMode==='region'
-    ? regionRankHTML(ranked) : rankRowsHTML(ranked.slice(0,15));
-  const rankSub = (rankMode==='region'
-      ? '국적별로 그 나라 기업 중 다출원 순서(지역별 상위 5)'
-      : '전 지역 통합 상위 15')
-    + ' · <b>실제 공개 건수</b> 기준(수집 상한과 무관).'
-    + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '');
+  const leadRows = rankMode==='region' ? regionRankHTML(ranked)
+    : rankMode==='office' ? officeRankHTML(ranked)
+    : rankRowsHTML(ranked.slice(0,15));
+  const exactOffice = Object.keys(FEED.patents.officeCounts||{}).length>0;
+  const rankSub = rankMode==='region'
+      ? '<b>출원인 국적별</b> — 그 나라 기업 중 다출원 순서(지역별 상위 5) · 실제 공개 건수 기준.'
+        + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '')
+    : rankMode==='office'
+      ? '<b>공개 특허청(시장)별</b> — 그 특허청에 많이 공개한 기업(국적 무관, 상위 5). '
+        + (exactOffice? '실제 공개 건수 기준.' : '표본 기반 근사치(다음 수집부터 정확).')
+        + ' 같은 발명이 여러 나라에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있습니다.'
+      : '전 지역 통합 상위 15 · 실제 공개 건수 기준(수집 상한과 무관).';
 
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
@@ -1103,7 +1143,8 @@ function renderStats(list){
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹'
       + '<span class="rankseg">'
-      + '<button data-rank="region" aria-pressed="'+(rankMode==='region')+'">국적별</button>'
+      + '<button data-rank="region" aria-pressed="'+(rankMode==='region')+'" title="그 나라 기업 중 다출원">출원인 국적별</button>'
+      + '<button data-rank="office" aria-pressed="'+(rankMode==='office')+'" title="그 특허청에 많이 낸 기업(국적 무관)">공개국별</button>'
       + '<button data-rank="all" aria-pressed="'+(rankMode==='all')+'">전체</button></span></h3>'
       + '<p class="sub">'+rankSub+'</p>'
       + '<div class="lead">'+leadRows+'</div></div>'

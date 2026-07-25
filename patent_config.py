@@ -32,6 +32,19 @@ REGION_LABEL = {
 COUNTRIES = REGIONS
 COUNTRY_LABEL = REGION_LABEL
 
+# ── 공개 특허청(시장) ─────────────────────────────────────────────
+# "어느 시장에 출원했나" 축. 출원인 국적(REGIONS)과는 다른 개념이며, 같은 발명이
+# 여러 특허청에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있다.
+# OPS CQL: pn any "<코드>" (프로브로 실측 확인)
+OFFICES = [
+    {"code": "US", "emoji": "🇺🇸", "name": "미국"},
+    {"code": "KR", "emoji": "🇰🇷", "name": "한국"},
+    {"code": "CN", "emoji": "🇨🇳", "name": "중국"},
+    {"code": "JP", "emoji": "🇯🇵", "name": "일본"},
+    {"code": "EP", "emoji": "🇪🇺", "name": "유럽(EPO)"},
+    {"code": "WO", "emoji": "🌐", "name": "PCT 국제"},
+]
+
 # ── 수집(EPO OPS) ────────────────────────────────────────────────
 # 출원인마다 '최근 N일 발행 + 전력 CPC' 특허를 한 번에 받아 CPC로 분야를 분류한다.
 # (무키 시절의 출원인×분야 개별 조회가 아니라 출원인당 1~2요청 → 회전 불필요)
@@ -42,6 +55,9 @@ LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "90"))        # 최근 N�
 REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "40"))
 REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "0.4"))         # OPS 쿼터 배려
 MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on | off
+# 출원인×특허청 정확 집계(공개국별 랭킹)용 count 쿼리 수행 여부. 출원인수 × 특허청수
+# 만큼 가벼운 1건 요청이 추가된다(31×6 ≈ 3분). 끄면 표본 기반 근사만 쓴다.
+OFFICE_COUNTS = os.getenv("PATENT_OFFICE_COUNTS", "on") != "off"
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)
