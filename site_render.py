@@ -195,12 +195,18 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
             if p.get("mock", week_mock):
                 it["mock"] = True
             items.append(it)
+    # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
+    # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
+    pubs = sorted(p["pub_date"] for p in items if p.get("pub_date"))
     return {
         "categories": [{"key": c["key"], "emoji": c["emoji"], "name": c["name"]}
                        for c in pcfg.CATEGORIES],
         "countries": [{"code": k, "emoji": v[0], "name": v[1]}
                       for k, v in pcfg.COUNTRY_LABEL.items()],
         "perWeek": [{"x": w, "y": per_week[w]} for w in sorted(per_week)],
+        "pubRange": {"from": pubs[0], "to": pubs[-1]} if pubs else None,
+        "lookbackDays": pcfg.LOOKBACK_DAYS,
+        "applicants": len(pcfg.APPLICANTS),
         "items": items,
     }
 
@@ -313,7 +319,7 @@ a{color:inherit}
 .brief.collapsed .bbody,.brief.collapsed .bpoints{display:none}
 @media (max-width:820px){ .brief .bpoints{grid-template-columns:1fr} }
 /* 홈(대시보드) */
-.homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,
+.homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,.homemode #scope,
 .homemode #more,.homemode #viewToggle{display:none!important}
 .home{display:flex;flex-direction:column;gap:16px}
 .home .sec{font-size:12px;font-weight:800;margin:4px 2px 2px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
@@ -408,6 +414,9 @@ a{color:inherit}
 .card.isnew{border-left:3px solid var(--accent)}
 .mockflag{background:var(--accent);color:#1a1a1a;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px}
 .empty{color:var(--muted);font-size:14px;padding:40px 0;text-align:center;border:1px dashed var(--line);border-radius:9px}
+.scope,.scopewrap{color:var(--muted);font-size:12px;line-height:1.6;margin:0 2px 12px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 11px}
+.scope b{color:var(--ink)}
+.stats .panel .scope{margin:0 0 12px}
 .more{display:block;margin:14px auto 0;font:inherit;font-size:13px;font-weight:600;color:var(--ink);
   background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 18px;cursor:pointer}
 .selects .toggle[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -538,6 +547,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <span id="resCount" aria-live="polite"></span>
     <button class="reset" id="reset" hidden>필터 초기화</button>
   </div>
+  <p class="scopewrap" id="scope" hidden></p>
   <main id="results"></main>
   <button class="more" id="more" hidden>더 보기</button>
   <footer class="foot" id="foot"></footer>
@@ -740,12 +750,12 @@ function insightsHTML(){
 function kpiHTML(){
   const n=FEED.news, p=FEED.patents;
   const nL = n.perDay.length? n.perDay[n.perDay.length-1] : {x:'-',y:0};
-  const pL = p.perWeek.length? p.perWeek[p.perWeek.length-1] : {x:'-',y:0};
   return '<div class="homekpi">'
     + tile('📰 뉴스 누적', n.items.length.toLocaleString())
     + tile('📰 최근일', nL.y+'<small>건 · '+esc(nL.x)+'</small>')
     + tile('📄 특허 누적', p.items.length.toLocaleString())
-    + tile('📄 최근주', pL.y+'<small>건 · '+esc(pL.x)+'</small>')
+    + tile('📄 특허 공개일', p.pubRange
+        ? '<small>'+esc(p.pubRange.from)+' ~<br>'+esc(p.pubRange.to)+'</small>' : '—')
     + '</div>';
 }
 
@@ -788,6 +798,15 @@ function patentPicks(n){
   return pool.slice(0, n);
 }
 
+// 특허가 '어느 기간 공개분'인지 한 줄로. 주별 버킷은 수집한 주라서 공개일과 다르다.
+function patentScopeHTML(){
+  const f=FEED.patents, r=f.pubRange;
+  if(!r) return '';
+  return '<p class="scope">📄 <b>공개일 '+esc(r.from)+' ~ '+esc(r.to)+'</b> 특허 '
+    + f.items.length.toLocaleString()+'건 · 주요 출원인 '+(f.applicants||0)+'곳을 매주 조회해'
+    + '(1회 조회 범위: 최근 '+(f.lookbackDays||90)+'일 공개분) 새로 공개된 것만 누적합니다.</p>';
+}
+
 function renderOverview(){
   const f = FEED[state.tab];
   const total = f.items.length;
@@ -795,14 +814,19 @@ function renderOverview(){
   const periods = series.length;
   const latest = series.length ? series[series.length-1] : {x:'-',y:0};
   const newCount = f.items.filter(isNew).length;
-  const unit = state.tab==='news' ? '일' : '주';
+  const news = state.tab==='news';
   const ov = $('#overview');
+  // 특허는 '최근 주(수집한 주)' 대신 공개일 범위를 보여준다 — 그쪽이 사용자가 궁금한 값.
+  const thirdTile = news
+    ? tile('최근 일', latest.y+'<small>건 · '+esc(latest.x)+'</small>')
+    : tile('공개일 범위', (f.pubRange
+        ? '<small>'+esc(f.pubRange.from)+' ~ '+esc(f.pubRange.to)+'</small>' : '—'));
   ov.innerHTML =
-    tile('누적 '+(state.tab==='news'?'기사':'특허'), total.toLocaleString())
-    + tile('수집 '+unit, periods)
-    + tile('최근 '+unit, latest.y+'<small>건 · '+esc(latest.x)+'</small>')
+    tile('누적 '+(news?'기사':'특허'), total.toLocaleString())
+    + tile('수집 '+(news?'일':'주'), periods)
+    + thirdTile
     + tile(lastVisit? '새 항목' : '오늘 열람', lastVisit? newCount : '—')
-    + '<div class="tile spark sparkwrap"><div class="k">'+(state.tab==='news'?'일별':'주별')+' 추이 <b>('+periods+')</b></div>'
+    + '<div class="tile spark sparkwrap"><div class="k">'+(news?'일별':'주별')+' 수집 추이 <b>('+periods+')</b></div>'
       + sparkline(series) + '</div>';
 }
 function tile(k,v){ return '<div class="tile"><div class="k">'+k+'</div><div class="v mono">'+v+'</div></div>'; }
@@ -868,6 +892,9 @@ function render(){
     || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
   $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
     + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
+  // 특허 탭엔 '어느 기간 공개분인지'를 항상 명시(주별 버킷=수집 주와 혼동 방지)
+  $('#scope').innerHTML = state.tab==='patents' ? patentScopeHTML() : '';
+  $('#scope').hidden = state.tab!=='patents';
   $('#reset').hidden = !active;
   const isStats = state.tab==='patents' && state.view==='stats';
   $('#results').classList.toggle('readcol', !isStats);   // 목록=읽기폭, 통계=전체폭
@@ -969,7 +996,7 @@ function renderStats(list){
       + '<div class="val">'+r.cnt+'</div></div>'; }).join('');
 
   return '<div class="stats">'
-    + '<div class="panel wide"><div class="statkpi">'
+    + '<div class="panel wide">' + patentScopeHTML() + '<div class="statkpi">'
       + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
         + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
@@ -1131,7 +1158,9 @@ function wire(){
   });
 }
 
-$('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일) · 특허: EPO OPS 공식 API에서 주요 출원인×전력 CPC로 수집(매주). '
+$('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: EPO OPS 공식 API에서 주요 출원인 '
+  + (FEED.patents.applicants||0) + '곳 × 전력 CPC로 매주 수집(1회 조회 범위 = 최근 '
+  + (FEED.patents.lookbackDays||90) + '일 공개분, 새로 공개된 것만 누적). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
   + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
   + '건 · 특허 '+FEED.patents.items.length+'건';
