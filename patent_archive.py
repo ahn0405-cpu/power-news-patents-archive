@@ -68,11 +68,15 @@ def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
     week["mock"] = any(x.get("mock") for x in week["patents"])
     # 출원인별 '실제 전체 건수'와 '특허청별 건수'(수집 상한과 무관). 저장 목록은
     # 표본이지만 이 값들로 규모 비교·랭킹을 정확히 할 수 있다. 매주 최신값으로 갱신.
+    # ★ 병합(덮어쓰기 금지). OPS 가 쿼터로 일부 출원인을 403 으로 막으면 그 실행의
+    #   집계는 부분집합인데, 통째로 대입하면 지난주에 잘 받아둔 값이 사라진다.
     if stats:
         if stats.get("totals"):
-            week["totals"] = stats["totals"]
+            week.setdefault("totals", {}).update(stats["totals"])
         if stats.get("offices"):
-            week["offices"] = stats["offices"]
+            wo = week.setdefault("offices", {})
+            for name, per in stats["offices"].items():
+                wo.setdefault(name, {}).update(per)
     weeks[wk] = week
     return week, added
 

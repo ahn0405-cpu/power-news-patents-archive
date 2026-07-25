@@ -211,24 +211,47 @@ def _count(token: str, cql: str) -> int:
     return total
 
 
-def _office_counts(token: str, ap: dict, today) -> dict:
+def _office_counts(token: str, ap: dict, today) -> tuple[dict, bool]:
     """출원인이 어느 특허청에 몇 건 공개했는지 — '어느 시장에 출원하나' 축.
 
     같은 발명이 여러 특허청에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있다.
     OPS CQL 의 pn any "<코드>" 로 공개국을 제한한다(프로브로 실측 확인).
+    반환: ({특허청: 건수}, 쿼터초과여부)
     """
-    out = {}
+    out, quota_hit = {}, False
     base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
     for off in cfg.OFFICES:
         try:
             n = _count(token, f'{base} and pn any "{off["code"]}"')
-        except Exception:
+        except Exception as e:
+            if _is_quota(e):           # 쿼터 초과 → 즉시 중단(더 조르면 본 수집도 막힌다)
+                return out, True
             n = 0                      # 404 = 해당 특허청 공개 없음
         if n:
             out[off["code"]] = n
         if cfg.REQUEST_DELAY:
             time.sleep(cfg.REQUEST_DELAY)
-    return out
+    return out, quota_hit
+
+
+def _is_quota(e: Exception) -> bool:
+    """OPS 쿼터/스로틀 거부(403). 이게 뜨면 더 조르지 않고 물러나야 한다."""
+    return "403" in str(e)
+
+
+def _office_batch(today) -> list[dict]:
+    """이번 실행에서 특허청 집계를 돌릴 출원인 부분집합(주차 기준 회전).
+
+    전체를 한 번에 돌리면 OPS 쿼터를 넘겨 403 이 나고 본 수집까지 실패한다(실측).
+    매주 일부만 갱신하고 아카이브에서 병합해 누적한다.
+    """
+    n = len(cfg.APPLICANTS)
+    if not cfg.OFFICE_COUNTS or cfg.OFFICE_BATCH <= 0 or not n:
+        return []
+    week = (today or datetime.now()).isocalendar()[1]
+    start = (week * cfg.OFFICE_BATCH) % n
+    order = cfg.APPLICANTS[start:] + cfg.APPLICANTS[:start]
+    return order[:cfg.OFFICE_BATCH]
 
 
 def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
@@ -238,6 +261,11 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
     collected: list[dict] = []
     totals: dict[str, int] = {}      # 출원인 → 실제 전체 건수(상한과 무관)
     offices: dict[str, dict] = {}    # 출원인 → {특허청: 건수}
+    batch = _office_batch(today)     # 이번 실행에서 특허청 집계를 돌릴 부분집합
+    batch_names = {a["name"] for a in batch}
+    office_stop = False              # 403 을 만나면 이후 특허청 집계는 건너뛴다
+    if batch_names:
+        print(f"  (공개국 집계 대상 {len(batch_names)}곳: {', '.join(sorted(batch_names))})")
     seen: set[str] = set()
     errors = 0
     for ap in cfg.APPLICANTS:
@@ -249,7 +277,13 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
         while added < cfg.PER_APPLICANT_LIMIT and start <= cfg.PER_APPLICANT_LIMIT:
             end = min(start + 24, cfg.PER_APPLICANT_LIMIT)   # OPS 범위는 25건 단위
             try:
-                data, total = _search(token, cql, start, end)
+                try:
+                    data, total = _search(token, cql, start, end)
+                except Exception as e1:
+                    if not _is_quota(e1):
+                        raise
+                    time.sleep(8)          # 쿼터/스로틀 → 한 번만 쉬고 재시도
+                    data, total = _search(token, cql, start, end)
                 if total:
                     totals[ap["name"]] = total
             except Exception as e:
@@ -284,9 +318,12 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
                 time.sleep(cfg.REQUEST_DELAY)
         tot = totals.get(ap["name"], 0)
         cap = " (상한, 실제 %d건)" % tot if tot > added else ""
-        # 공개국별 정확 집계(옵션). 출원인당 특허청 수만큼 가벼운 1건 요청이 추가된다.
-        if cfg.OFFICE_COUNTS and tot:
-            oc = _office_counts(token, ap, today)
+        # 공개국별 정확 집계 — 이번 주 배치에 든 출원인만(쿼터 보호). 403 이 뜨면 중단.
+        if tot and not office_stop and ap["name"] in batch_names:
+            oc, hit = _office_counts(token, ap, today)
+            if hit:
+                office_stop = True
+                print("    (OPS 쿼터 한계 — 공개국 집계는 다음 주에 이어서)")
             if oc:
                 offices[ap["name"]] = oc
                 cap += " · " + " ".join(f"{k}{v}" for k, v in oc.items())
@@ -343,9 +380,14 @@ def _mock_collect(today: datetime) -> list[dict]:
                 # URL 은 저장/읽음 상태의 키라서 항목마다 달라야 한다(전부 같으면 한꺼번에 토글).
                 "url": "https://worldwide.espacenet.com/patent/search?q=" + num,
             })
-    totals = {}
+    # MOCK 은 표본이 곧 전체이므로 총계·특허청 집계를 그대로 세어 만든다.
+    totals: dict[str, int] = {}
+    offices: dict[str, dict] = {}
     for it in collected:
-        totals[it["applicant"]] = totals.get(it["applicant"], 0) + 1
+        nm = it["applicant"]
+        totals[nm] = totals.get(nm, 0) + 1
+        per = offices.setdefault(nm, {})
+        per[it["office"]] = per.get(it["office"], 0) + 1
     return collected, {"totals": totals, "offices": offices}
 
 
