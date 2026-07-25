@@ -28,7 +28,6 @@ SITE_DIR = Path(os.getenv("NEWS_SITE_DIR", str(BASE_DIR / "site")))
 _prev = os.getenv("NEWS_PREV_DIR", "")
 PREV_DIR = Path(_prev) if _prev else None
 DATA_SUBDIR = "data"          # 사이트 안에서 원자료(JSON)가 담기는 하위 폴더
-DAY_SUBDIR = "d"              # 날짜별 상세 페이지가 담기는 하위 폴더
 
 # ── 동작 옵션 ────────────────────────────────────────────────────
 MOCK_MODE = os.getenv("NEWS_MOCK", "auto")     # auto | on | off
@@ -36,8 +35,6 @@ PER_CATEGORY_LIMIT = int(os.getenv("NEWS_PER_CATEGORY", "14"))
 REQUEST_TIMEOUT = int(os.getenv("NEWS_TIMEOUT", "20"))
 # 유사 기사(같은 사건, 다른 매체) 제거 임계값(제목 2-gram 자카드). 높을수록 관대.
 DEDUP_SIM = float(os.getenv("NEWS_DEDUP_SIM", "0.55"))
-# 최근 며칠 이내 기사만 '오늘 새로 발견'으로 인정(오래된 재탕 방지). 0=무제한.
-FRESH_DAYS = int(os.getenv("NEWS_FRESH_DAYS", "0"))
 
 SITE_TITLE = os.getenv("NEWS_SITE_TITLE", "전력 이슈 뉴스 아카이브")
 SITE_TAGLINE = os.getenv(

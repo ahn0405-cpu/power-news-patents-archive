@@ -56,9 +56,16 @@ def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
         if not k or k in prior or k in have:
             continue
         have.add(k)
+        # mock 여부는 항목별로 남긴다. 같은 주에 MOCK 폴백과 라이브 수집이 섞이면
+        # 주 단위 플래그로는 실데이터에 '샘플' 배지가 붙거나 그 반대가 된다.
+        if mock:
+            p["mock"] = True
+        else:
+            p.pop("mock", None)
         week["patents"].append(p)
         added += 1
-    week["mock"] = mock
+    # 주 단위 플래그는 '이 주에 샘플이 하나라도 섞였는가'로만 쓴다(하위호환).
+    week["mock"] = any(x.get("mock") for x in week["patents"])
     weeks[wk] = week
     return week, added
 

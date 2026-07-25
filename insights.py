@@ -6,13 +6,12 @@ Actions 에서 그대로 재생성된다. (서술형 브리핑을 나중에 얹�
 
 산출물(dict):
   asOf       : 기준일(최신 뉴스 날짜)
-  window     : {recentDays, priorDays, recentWeeks}
+  window     : {recentDays, priorDays}
   trending   : 최근 N일 많이 언급된 키워드 [{term,count,prev,rising}]
   catTrend   : 카테고리별 최근 vs 이전 건수 [{key,name,emoji,recent,prev,delta}]
 
-특허는 '건수'로 다루지 않는다: 수집이 카테고리·국가별 상한(국가당 PER_COUNTRY_LIMIT)에서
-잘려 대부분 상한값으로 채워지므로 카테고리 간 특허 건수 비교는 통계적 의미가 없다.
-(사이트는 특허를 '이번 주 공개 특허 하이라이트'처럼 질적으로만 상단에 노출한다.)
+여기서는 뉴스만 집계한다. 특허는 주 1회 수집이라 '일별 트렌드'와 축이 다르고,
+사이트는 특허를 별도 매트릭스/하이라이트로 보여준다.
 
 수치는 여기서만 계산하고, 서술(자연어)은 하지 않는다 — 역할 분리(코드=계산).
 """
@@ -22,7 +21,6 @@ import re
 from datetime import datetime, timedelta
 
 import news_config as ncfg
-import patent_config as pcfg
 
 RECENT_DAYS = 7           # '최근' 창(일)
 PRIOR_DAYS = 21           # 비교 대상 '이전' 창(일)
@@ -100,7 +98,7 @@ def _iter_articles(news_days: dict):
             yield d, a
 
 
-def _trending(news_days: dict, latest, recent_from, prior_from):
+def _trending(news_days: dict, recent_from, prior_from):
     recent, prior = {}, {}
     for d, a in _iter_articles(news_days):
         if d is None:
@@ -160,6 +158,6 @@ def build(news_days: dict, patent_weeks: dict) -> dict:
     return {
         "asOf": latest.isoformat(),
         "window": {"recentDays": RECENT_DAYS, "priorDays": PRIOR_DAYS},
-        "trending": _trending(news_days, latest, recent_from, prior_from),
+        "trending": _trending(news_days, recent_from, prior_from),
         "catTrend": _cat_trend(news_days, recent_from, prior_from),
     }

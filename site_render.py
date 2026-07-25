@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import timezone, timedelta
 from pathlib import Path
 
 import news_config as ncfg
@@ -118,6 +118,16 @@ SITE_TITLE = "IP·Power"
 SITE_TAGLINE = "전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대"
 
 
+def _squash(s: str) -> str:
+    return re.sub(r"[^0-9a-z가-힣]+", "", (s or "").lower())
+
+
+def _echoes_title(summary: str, title: str) -> bool:
+    """요약이 제목을 사실상 되풀이하는가(구글 뉴스 description 이 흔히 그렇다)."""
+    st, tt = _squash(summary), _squash(title)
+    return bool(tt) and (st.startswith(tt) or tt.startswith(st))
+
+
 def _news_feed(news_days: dict[str, dict]) -> dict:
     items = []
     per_day: dict[str, int] = {}
@@ -126,12 +136,20 @@ def _news_feed(news_days: dict[str, dict]) -> dict:
         per_day[date] = len(arts)
         mock = bool(news_days[date].get("mock"))
         for a in arts:
-            items.append({
-                "title": a.get("title", ""), "url": a.get("url", ""),
+            # 페이로드 절약: RSS 요약은 제목을 그대로 되풀이하는 경우가 많다 →
+            # 제목과 실질적으로 같으면 싣지 않는다(카드에서 어차피 중복 표시).
+            title = a.get("title", "")
+            summary = (a.get("summary") or "").strip()
+            it = {
+                "title": title, "url": a.get("url", ""),
                 "source": a.get("source", ""), "published": a.get("published"),
-                "summary": a.get("summary", ""), "category": a.get("category", "etc"),
-                "date": date, "mock": mock,
-            })
+                "category": a.get("category", "etc"), "date": date,
+            }
+            if summary and not _echoes_title(summary, title):
+                it["summary"] = summary
+            if mock:
+                it["mock"] = True
+            items.append(it)
     return {
         "categories": [{"key": c["key"], "emoji": c["emoji"], "name": c["name"]}
                        for c in ncfg.CATEGORIES],
@@ -146,7 +164,7 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
     for wk in sorted(patent_weeks):
         pats = patent_weeks[wk].get("patents", [])
         per_week[wk] = len(pats)
-        mock = bool(patent_weeks[wk].get("mock"))
+        week_mock = bool(patent_weeks[wk].get("mock"))
         for p in pats:
             # 출원인은 수집 시 명시(우리가 조회한 주체) → 그 값을 우선 사용.
             # 옛 데이터(applicant 없음)는 이름 정규화로 대체(하위호환).
@@ -155,15 +173,28 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
             region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
             flag = p.get("flag") or (pcfg.REGION_LABEL.get(region, ("", ""))[0])
-            items.append({
+            # 페이로드 절약: 원문 assignee 는 정규화명(aName)과 다를 때만, snippet 은
+            # 있을 때만 담는다. cpc 는 카드에 분류 근거로 보여주므로 상위 3개만.
+            raw = p.get("assignee", "")
+            it = {
                 "title": p.get("title", ""), "url": p.get("url", ""),
-                "assignee": p.get("assignee", ""), "number": p.get("number", ""),
-                "aName": aname, "aCountry": region, "aFlag": flag, "applicant": ap,
+                "number": p.get("number", ""),
+                "aName": aname, "aCountry": region, "aFlag": flag,
                 "office": p.get("office", ""),
-                "pub_date": p.get("pub_date"), "summary": p.get("snippet", ""),
+                "pub_date": p.get("pub_date"),
                 "category": p.get("category", "etc"), "country": region,
-                "week": wk, "mock": mock,
-            })
+                "week": wk,
+            }
+            if raw and raw != aname:
+                it["assignee"] = raw
+            if p.get("snippet"):
+                it["summary"] = p["snippet"]
+            if p.get("cpc"):
+                it["cpc"] = p["cpc"][:3]
+            # 항목별 mock 우선(없으면 주 단위 — 옛 데이터 하위호환)
+            if p.get("mock", week_mock):
+                it["mock"] = True
+            items.append(it)
     return {
         "categories": [{"key": c["key"], "emoji": c["emoji"], "name": c["name"]}
                        for c in pcfg.CATEGORIES],
@@ -368,12 +399,12 @@ a{color:inherit}
 .card .meta{color:var(--muted);font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .card .meta .src{color:var(--ink);font-weight:600}
 .card .meta .num{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.card .meta .off{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px}
+.card .meta .cpc{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--accent2)}
 .card .sum{color:var(--muted);font-size:13px;margin-top:6px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);
   border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:auto}
-.card .newdot{position:absolute;top:14px;right:14px;width:7px;height:7px;border-radius:50%;
-  background:var(--accent)}
 .card.isnew{border-left:3px solid var(--accent)}
 .mockflag{background:var(--accent);color:#1a1a1a;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px}
 .empty{color:var(--muted);font-size:14px;padding:40px 0;text-align:center;border:1px dashed var(--line);border-radius:9px}
@@ -424,10 +455,6 @@ a{color:inherit}
 .lead .bar{height:15px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
 .lead .val{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .lead .val .co{color:var(--muted);font-weight:500;font-size:11.5px;margin-left:5px}
-.dist{display:flex;flex-direction:column;gap:12px}
-.dist .row{display:grid;grid-template-columns:88px 1fr auto;align-items:center;gap:10px;font-size:13px}
-.dist .bar{height:16px;background:var(--accent2);border-radius:0 4px 4px 0;min-width:2px}
-.dist .val{font-weight:700;font-variant-numeric:tabular-nums}
 .pmxwrap{overflow-x:auto}
 .pmx{border-collapse:separate;border-spacing:2px;font-size:12.5px;min-width:100%}
 .pmx th{font-weight:600;color:var(--muted);text-align:center;padding:3px 4px;font-size:13px;white-space:nowrap}
@@ -453,19 +480,10 @@ a{color:inherit}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
-.natwrap{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
-.tilemap{display:grid;grid-template-columns:repeat(11,1fr);gap:3px}
-.tilemap .cell{aspect-ratio:1/.85;border-radius:5px;border:1px solid var(--line);background:var(--bg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1}
-.tilemap .cell .cv{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px}
-.natbars{display:flex;flex-direction:column;gap:8px}
-.natbars .row{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:9px;font-size:13px}
-.natbars .bar{height:14px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
-.natbars .val{font-weight:700;font-variant-numeric:tabular-nums}
 .unknown{color:var(--muted);font-size:12px;margin-top:8px}
+.homehint{color:var(--muted);font-size:12.5px;margin:2px 0 0}
 @media (max-width:820px){
 .stats{grid-template-columns:1fr}
-.natwrap{grid-template-columns:1fr}
 .lead .row{grid-template-columns:120px 1fr auto}
   .overview{grid-template-columns:repeat(2,1fr)}
   .tile.spark{grid-column:1 / -1}
@@ -537,16 +555,6 @@ const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<
 const LS_KEY = 'pnp_lastVisit';
 const lastVisit = Number(localStorage.getItem(LS_KEY) || 0);
 
-// 타일 그리드 세계지도용 국가 배치(대략 지리적 위치, 11열×5행). 지리 데이터 불필요.
-const CGRID = {
-  CA:{f:'🇨🇦',n:'캐나다',c:2,r:1}, US:{f:'🇺🇸',n:'미국',c:2,r:2}, MX:{f:'🇲🇽',n:'멕시코',c:2,r:3}, BR:{f:'🇧🇷',n:'브라질',c:3,r:4},
-  GB:{f:'🇬🇧',n:'영국',c:5,r:1}, SE:{f:'🇸🇪',n:'스웨덴',c:6,r:1}, FI:{f:'🇫🇮',n:'핀란드',c:7,r:1},
-  NL:{f:'🇳🇱',n:'네덜란드',c:5,r:2}, DE:{f:'🇩🇪',n:'독일',c:6,r:2},
-  FR:{f:'🇫🇷',n:'프랑스',c:5,r:3}, CH:{f:'🇨🇭',n:'스위스',c:6,r:3},
-  ES:{f:'🇪🇸',n:'스페인',c:5,r:4}, IT:{f:'🇮🇹',n:'이탈리아',c:6,r:4}, IL:{f:'🇮🇱',n:'이스라엘',c:7,r:4},
-  RU:{f:'🇷🇺',n:'러시아',c:9,r:1}, CN:{f:'🇨🇳',n:'중국',c:9,r:2}, KR:{f:'🇰🇷',n:'한국',c:10,r:2}, JP:{f:'🇯🇵',n:'일본',c:11,r:2},
-  IN:{f:'🇮🇳',n:'인도',c:8,r:3}, TW:{f:'🇹🇼',n:'대만',c:10,r:3}, SG:{f:'🇸🇬',n:'싱가포르',c:9,r:4}, AU:{f:'🇦🇺',n:'호주',c:10,r:5}
-};
 
 const LS_SAVE='pnp_saved', LS_READ='pnp_read';
 let saved = new Set(JSON.parse(localStorage.getItem(LS_SAVE)||'[]'));
@@ -621,10 +629,13 @@ function card(it, cm){
     if(it.source) bits.push('<span class="src">'+esc(it.source)+'</span>');
     if(it.published) bits.push('<span class="mono">'+fmtDate(it.published)+'</span>');
   } else {
-    const co = (FEED.patents.countries.find(x=>x.code===it.country))||{emoji:'',name:it.country};
-    bits.push('<span class="src">'+co.emoji+' '+esc(co.name)+'</span>');
-    if(it.assignee) bits.push(esc(it.assignee));
+    // 출원인은 매트릭스·랭킹과 같은 정규화명(aName)으로 통일. 원문이 다르면 툴팁으로.
+    if(it.aName) bits.push('<span class="src" title="'+esc(it.assignee||it.aName)+'">'
+      + (it.aFlag||'') + ' ' + esc(it.aName)+'</span>');
+    if(it.office) bits.push('<span class="off" title="공개 특허청">'+esc(it.office)+' 공보</span>');
     if(it.number) bits.push('<span class="num">'+esc(it.number)+'</span>');
+    if(it.cpc && it.cpc.length) bits.push('<span class="cpc" title="CPC 분류(분야 판정 근거)">'
+      + esc(it.cpc.join(' ')) + '</span>');
     if(it.pub_date) bits.push('<span class="mono">공개 '+esc(it.pub_date)+'</span>');
   }
   const mock = it.mock ? ' <span class="mockflag">샘플</span>' : '';
@@ -677,7 +688,8 @@ function briefHTML(){
     + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
     + '<div class="bbody">'+body+'</div>'
     + (pts?'<div class="bpoints">'+pts+'</div>':'')
-    + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'');
+    + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'')
+    + '</div>';   // ← .brief 닫기. 없으면 홈의 후속 블록이 전부 이 카드 안에 중첩된다.
 }
 
 function insightsHTML(){
@@ -705,14 +717,13 @@ function insightsHTML(){
 
   // 3) 이번 주 공개 특허 (질적 노출 — 건수 아님). 최신 주 특허 중 최근 공개분 일부.
   const picks = patentPicks(5);
-  const cos = FEED.patents.countries;
   const pkHtml = picks.length ? picks.map(p=>{
-    const co=(cos.find(x=>x.code===p.country))||{emoji:''};
+    // 국기는 매트릭스와 같은 출원인 국적(aFlag)으로 통일 — 같은 화면에서 달라 보이지 않게.
     const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
     return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
-      +'<span class="pf">'+(co.emoji||'📄')+'</span>'
+      +'<span class="pf">'+(p.aFlag||'📄')+'</span>'
       +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
-  }).join('') : '<span class="iempty">이번 주 공개 특허가 아직 없습니다.</span>';
+  }).join('') : '<span class="iempty">최근 공개 특허가 아직 없습니다.</span>';
 
   return '<div class="insights">'
     + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
@@ -741,15 +752,15 @@ function kpiHTML(){
 function matrixMiniHTML(){
   const list=FEED.patents.items; if(!list.length) return '';
   return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">발행국/지역별 주요 출원인이 어느 분야에 특허를 내는지. 칸을 누르면 특허 탭 상세.</p>'
-    + '<div class="mxmini">'+regionMatrixHTML(list, {})+'</div></div>';
+    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3). 칸을 누르면 특허 탭 상세.</p>'
+    + '<div class="mxmini">'+regionMatrixHTML(list, {top:3})+'</div></div>';
 }
 
 function timelineHTML(){
   const past=(FEED.briefs||[]).slice(1);   // 최신은 위에 크게 노출, 나머지를 타임라인으로
-  const inner = past.length ? past.map((b,i)=>{
+  const inner = past.length ? past.map(b=>{
     const body=(b.body||[]).slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('');
-    return '<div class="tl" data-ti="'+i+'"><div class="tld">'+esc(b.date||'')+'</div>'
+    return '<div class="tl"><div class="tld">'+esc(b.date||'')+'</div>'
       + '<div class="tlh">'+esc(b.headline||'(제목 없음)')+'</div>'
       + '<div class="tlb">'+body+'</div></div>';
   }).join('') : '<p class="homehint">지난 브리핑이 쌓이면 여기 타임라인으로 보여요(매주 갱신).</p>';
@@ -815,6 +826,16 @@ function renderChips(){
 
 function renderPeriodBar(){
   const pb=$('#periodBar');
+  if(state.tab==='patents'){
+    // 특허 탭엔 기간 프리셋이 없지만, 스파크라인 클릭으로 특정 주가 걸릴 수 있다 →
+    // 해제할 수 있게 그때만 칩을 보여준다.
+    if(state.period==='all'){ pb.hidden=true; pb.innerHTML=''; return; }
+    pb.hidden=false;
+    pb.innerHTML='<button class="f" data-period="all">전체 기간</button>'
+      + '<button class="f" data-period="'+esc(state.period)+'" aria-pressed="true">📅 '
+      + esc(state.period)+' 주 ✕</button>';
+    return;
+  }
   if(state.tab!=='news'){ pb.hidden=true; pb.innerHTML=''; return; }
   pb.hidden=false;
   const opts=[['all','전체'],['today','오늘'],['7d','최근 7일'],['30d','최근 30일']];
@@ -904,17 +925,26 @@ function matrixTableHTML(ranked, opts){
   }).join('');
   return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
 }
-// 발행국/지역별로 나눈 매트릭스(미국·한국·중국·일본·유럽 순, 있는 지역만)
+// 출원인 국적(지역)별로 나눈 매트릭스. opts.top 이 있으면 지역마다 상위 N 출원인만(홈 요약용).
 function regionMatrixHTML(list, opts){
-  const html=FEED.patents.countries.map(rg=>{
-    const sub=list.filter(it=>it.aCountry===rg.code);
+  opts = opts||{};
+  const known=new Set(FEED.patents.countries.map(c=>c.code));
+  const groups=FEED.patents.countries.slice();
+  // 알 수 없는 지역(옛 데이터 등)은 버리지 않고 '기타'로 모아 KPI 합계와 어긋나지 않게 한다.
+  if(list.some(it=>!known.has(it.aCountry))) groups.push({code:'', emoji:'🏳️', name:'기타'});
+  const html=groups.map(rg=>{
+    const sub=rg.code? list.filter(it=>it.aCountry===rg.code)
+                     : list.filter(it=>!known.has(it.aCountry));
     if(!sub.length) return '';
-    const ranked=_rankApplicants(sub);
+    const all=_rankApplicants(sub);
+    const ranked=opts.top? all.slice(0,opts.top) : all;
+    const more=all.length-ranked.length;
     return '<div class="rgsec"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
-      + ' <span class="rgn">'+sub.length+'건 · 출원인 '+ranked.length+'</span></div>'
+      + ' <span class="rgn">'+sub.length+'건 · 출원인 '+all.length
+      + (more>0? ' (상위 '+ranked.length+')':'') + '</span></div>'
       + matrixTableHTML(ranked, opts)+'</div>';
   }).filter(Boolean).join('');
-  return html || '<p class="sub" style="margin:0">수집된 특허가 없습니다(주별 회전 수집으로 채워집니다).</p>';
+  return html || '<p class="sub" style="margin:0">아직 수집된 특허가 없습니다.</p>';
 }
 
 function renderStats(list){
@@ -946,8 +976,9 @@ function renderStats(list){
       + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
       + '</div></div>'
-    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">발행국/지역별</span></h3>'
-      + '<p class="sub">각 지역(미국·한국·중국·일본·유럽) 주요 출원인이 <b>어느 분야에</b> 최근 특허를 냈는지(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허를 봅니다.</p>'
+    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
+      + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허로 이동. '
+      + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.</p>'
       + regionMatrixHTML(list, {total:true}) + '</div>'
     + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
       + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
@@ -1001,18 +1032,28 @@ function syncTabsUI(){ document.querySelectorAll('.tabs button')
 // 홈에서 특정 탭으로 이동하며 필터를 적용(키워드→검색, 카테고리·매트릭스→필터)
 function gotoTab(t, opts){ opts=opts||{};
   state.tab=t; state.view=opts.view||'list';
-  state.cats.clear(); state.countries.clear(); state.period='all'; state.source='';
+  resetFilters();
   state.q=opts.q||''; if(opts.cat) state.cats.add(opts.cat);
-  state.limit=PAGE;
   const q=$('#q'); if(q) q.value=state.q;
   syncTabsUI(); updateViewToggle(); renderChips(); render();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
+function resetFilters(){
+  state.q=''; state.cats.clear(); state.countries.clear();
+  state.period='all'; state.source=''; state.limit=PAGE;
+  state.newonly=false; state.savedOnly=false; state.unreadOnly=false;
+  const q=$('#q'); if(q) q.value='';
+  ['newonly','savedonly','unreadonly'].forEach(id=>{
+    const b=$('#'+id); if(b) b.setAttribute('aria-pressed','false'); });
+}
+
 function setTab(t){
   if(state.tab===t) return;
-  state.tab=t; state.view='list'; state.cats.clear(); state.countries.clear();
-  state.period='all'; state.source=''; state.limit=PAGE;
+  // 탭을 바꾸면 필터를 모두 초기화한다. 특히 홈은 검색창이 숨겨져 있어
+  // 남아있는 검색어/토글을 사용자가 인지·해제할 방법이 없다.
+  state.tab=t; state.view='list';
+  resetFilters();
   syncTabsUI();
   updateViewToggle(); renderChips(); render();
 }
@@ -1041,7 +1082,13 @@ function wire(){
   $('#home').onclick = e=>{
     // 브리핑 접기/펼치기
     if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
-      localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0'); renderHome(); return; }
+      localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0');
+      // 홈 전체가 아니라 브리핑 카드만 교체 → 펼쳐둔 '지난 브리핑' 타임라인이 유지된다.
+      const cur=$('#home').querySelector('.brief');
+      if(cur){ const tmp=document.createElement('div'); tmp.innerHTML=briefHTML();
+        const next=tmp.firstElementChild; if(next) cur.replaceWith(next); }
+      else renderHome();
+      return; }
     // 지난 브리핑 타임라인 펼치기
     const tl=e.target.closest('.tl'); if(tl && !e.target.closest('[data-go]')){ tl.classList.toggle('open'); return; }
     // 키워드 → 뉴스 탭에서 검색
@@ -1084,7 +1131,7 @@ function wire(){
   });
 }
 
-$('#foot').innerHTML = '뉴스: Google 뉴스 RSS · 특허: Google Patents 공개 데이터에서 전력 키워드로 자동 수집. '
+$('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일) · 특허: EPO OPS 공식 API에서 주요 출원인×전력 CPC로 수집(매주). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
   + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
   + '건 · 특허 '+FEED.patents.items.length+'건';

@@ -1,16 +1,25 @@
 """전력 뉴스 아카이브 저장소.
 
 날짜별 JSON(data/YYYY-MM-DD.json)으로 누적하고, 목록(data/index.json)을 유지한다.
-새 기사는 '지금까지 아카이브된 모든 기사'와 제목 기준으로 중복 제거 → 매일
-새로 발견된 것만 그날 항목으로 쌓인다.
+새 기사는 '지금까지 아카이브된 기사'와 중복 제거 → 매일 새로 발견된 것만 그날 항목으로
+쌓인다. 중복 판정은 두 단계다:
+  1) 제목 완전일치(또는 URL 동일)
+  2) 제목 2-gram 자카드 유사도 — 같은 사건을 다른 매체가 며칠에 걸쳐 조금씩 다른
+     제목으로 내보내는 경우를 잡는다(수집 단계의 판정과 같은 기준).
+2)는 최근 DEDUP_WINDOW_DAYS 일치 기사와만 비교해 아카이브가 커져도 비용이 일정하다.
 """
 from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import news_config as cfg
+
+# 유사 판정 비교 창(일). 오래된 기사와는 비교하지 않는다(같은 사건이 몇 주 뒤
+# 재등장하면 그건 새 소식일 가능성이 크고, 비용도 아카이브 크기와 무관해진다).
+DEDUP_WINDOW_DAYS = 30
 
 
 def _data_dir(site_dir: Path) -> Path:
@@ -19,6 +28,29 @@ def _data_dir(site_dir: Path) -> Path:
 
 def _norm_key(title: str) -> str:
     return re.sub(r"[\s\W_]+", "", (title or "").lower())
+
+
+def bigrams(title: str) -> set[str]:
+    """제목의 문자 2-gram 집합(공백·기호 제거). 유사 기사 판정용."""
+    s = re.sub(r"[^0-9a-z가-힣]+", "", (title or "").lower())
+    return {s[i:i + 2] for i in range(len(s) - 1)} if len(s) > 2 else {s}
+
+
+def similar(a: set[str], b: set[str]) -> float:
+    """두 2-gram 집합의 자카드 유사도."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _within_window(date: str, ref: str) -> bool:
+    """date 가 ref 기준 최근 DEDUP_WINDOW_DAYS 안인가(파싱 실패 시 포함)."""
+    try:
+        d = datetime.strptime(date[:10], "%Y-%m-%d")
+        r = datetime.strptime(ref[:10], "%Y-%m-%d")
+    except Exception:
+        return True
+    return (r - d) <= timedelta(days=DEDUP_WINDOW_DAYS)
 
 
 def load_days(source_dir: Path) -> dict[str, dict]:
@@ -61,6 +93,11 @@ def merge_today(days: dict[str, dict], date: str, fresh: list[dict],
              for k in (_norm_key(art.get("title", "")), art.get("url"))
              if k}
 
+    # 유사 판정용: 최근 창 안의 기존 제목 2-gram (오늘 것 포함해 누적)
+    recent_bg = [bigrams(art.get("title", ""))
+                 for d, day in days.items() if _within_window(d, date)
+                 for art in day.get("articles", [])]
+
     today = days.get(date, {"date": date, "articles": []})
     today_keys = existing_keys({date: today})
     added = 0
@@ -68,6 +105,11 @@ def merge_today(days: dict[str, dict], date: str, fresh: list[dict],
         key = _norm_key(art.get("title", ""))
         if not key or key in prior or key in today_keys:
             continue
+        # 같은 사건의 다른 매체·다른 날 기사(제목만 조금 다른 경우) 제외
+        bg = bigrams(art.get("title", ""))
+        if any(similar(bg, k) >= cfg.DEDUP_SIM for k in recent_bg):
+            continue
+        recent_bg.append(bg)
         today_keys.add(key)
         today["articles"].append(art)
         added += 1

@@ -162,7 +162,8 @@ def _normalize(doc: dict) -> dict | None:
         return None                      # 전력 분야로 분류 안 되면 제외
     return {
         "number": number,
-        "title": _title(bib) or "(제목 없음)",
+        # 일부 번역 공보(ES 등)는 영문·자국어 제목이 모두 비어 온다 → 번호로 대체.
+        "title": _title(bib) or number,
         "assignee": _applicant_name(bib),
         "inventor": "",
         "pub_date": date or None,
@@ -176,8 +177,10 @@ def _normalize(doc: dict) -> dict | None:
 
 
 # ── 수집 ─────────────────────────────────────────────────────────
-def _cql(applicant_q: str, days: int) -> str:
-    end = datetime.utcnow().date()
+def _cql(applicant_q: str, days: int, today: datetime | None = None) -> str:
+    # 기준일은 호출부(build_site)가 주는 KST 기준 '오늘'. utcnow() 는 3.12 에서
+    # deprecated 이고 프로젝트의 다른 날짜 처리(KST)와도 어긋난다.
+    end = (today or datetime.now()).date()
     start = end - timedelta(days=days)
     cpc_or = " or ".join(f'cpc="{c}"'
                          for cat in cfg.CATEGORIES for c in cat["cpc"])
@@ -185,7 +188,7 @@ def _cql(applicant_q: str, days: int) -> str:
             f'"{start.strftime("%Y%m%d")} {end.strftime("%Y%m%d")}" and ({cpc_or})')
 
 
-def _live_collect() -> list[dict]:
+def _live_collect(today: datetime | None = None) -> list[dict]:
     if not (cfg.OPS_KEY and cfg.OPS_SECRET):
         raise RuntimeError("OPS 키 없음(OPS_KEY/OPS_SECRET)")
     token = _get_token()
@@ -194,9 +197,11 @@ def _live_collect() -> list[dict]:
     errors = 0
     for ap in cfg.APPLICANTS:
         added = 0
-        cql = _cql(ap["q"], cfg.LOOKBACK_DAYS)
+        cql = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
         start = 1
-        while added < cfg.PER_APPLICANT_LIMIT:
+        # start 상한도 함께 검사한다. CPC 분류에서 일부가 걸러지면 added 가 상한에
+        # 못 미친 채 루프가 한 번 더 돌아 '51-50' 같은 역전 범위를 요청하게 된다.
+        while added < cfg.PER_APPLICANT_LIMIT and start <= cfg.PER_APPLICANT_LIMIT:
             end = min(start + 24, cfg.PER_APPLICANT_LIMIT)   # OPS 범위는 25건 단위
             try:
                 data = _search(token, cql, start, end)
@@ -280,7 +285,8 @@ def _mock_collect(today: datetime) -> list[dict]:
                 "cpc": cat["cpc"][:2],
                 "category": fkey, "applicant": ap["name"],
                 "country": ap["region"], "flag": ap["flag"],
-                "url": "https://worldwide.espacenet.com/",
+                # URL 은 저장/읽음 상태의 키라서 항목마다 달라야 한다(전부 같으면 한꺼번에 토글).
+                "url": "https://worldwide.espacenet.com/patent/search?q=" + num,
             })
     return collected
 
@@ -293,7 +299,7 @@ def collect(today: datetime) -> tuple[list[dict], bool]:
     if cfg.is_mock():
         return _mock_collect(today), True
     try:
-        return _live_collect(), False
+        return _live_collect(today), False
     except Exception as e:
         if cfg.force_live():
             raise
