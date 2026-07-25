@@ -275,7 +275,7 @@ a{color:inherit}
 .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SFMono-Regular",Menlo,monospace}
 .wrap{max-width:1600px;margin:0 auto;padding:22px 32px 72px}
 /* 상세(뉴스·특허) 목록은 가독성을 위해 읽기 폭을 가운데 정렬로 제한. 홈/통계는 전체 폭. */
-.readcol{max-width:1120px;margin-left:auto;margin-right:auto}
+.readcol{max-width:1120px}
 .mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0}
 .mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;display:flex;gap:9px;align-items:center}
 .mast h1 .bolt{color:var(--accent)}
@@ -324,7 +324,13 @@ a{color:inherit}
 .home{display:flex;flex-direction:column;gap:16px}
 .home .sec{font-size:12px;font-weight:800;margin:4px 2px 2px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
 .homekpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.homekpi .tile .v{font-size:21px;line-height:1.25}
+.homekpi .tile small{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-top:3px}
+.homekpi .rgs{display:flex;gap:7px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.homekpi .rgc{font-size:12px;font-weight:700;color:var(--ink)}
+.homekpi .topap{font-size:15.5px;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .homebot{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
+.homebot.single{grid-template-columns:1fr}
 .homepanel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px 16px;box-shadow:var(--shadow);min-width:0}
 .homepanel h3{font-size:14px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:7px}
 .homepanel .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
@@ -462,6 +468,8 @@ a{color:inherit}
 .lead .nm{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lead .nm .rk{color:var(--muted);font-weight:700;margin-right:6px;font-variant-numeric:tabular-nums}
 .lead .bar{height:15px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.lead .bar.cap{background:repeating-linear-gradient(135deg,var(--accent) 0 7px,var(--line) 7px 10px)}
+.lead .val .plus{color:var(--muted);font-weight:700;margin-left:1px}
 .lead .val{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .lead .val .co{color:var(--muted);font-weight:500;font-size:11.5px;margin-left:5px}
 .pmxwrap{overflow-x:auto}
@@ -750,19 +758,38 @@ function insightsHTML(){
 function kpiHTML(){
   const n=FEED.news, p=FEED.patents;
   const nL = n.perDay.length? n.perDay[n.perDay.length-1] : {x:'-',y:0};
+  // 특허 요약 지표(출원인 수·국적 내역·최다 출원인)는 통계 탭까지 안 들어가도 보이게 홈에.
+  const ranked = p.items.length? _rankApplicants(p.items) : [];
+  const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
+  const regChips = p.countries.map(rg=>regCnt[rg.code]
+      ? '<span class="rgc">'+rg.emoji+regCnt[rg.code]+'</span>' : '').filter(Boolean).join('');
+  const top = ranked[0];
   return '<div class="homekpi">'
-    + tile('📰 뉴스 누적', n.items.length.toLocaleString())
-    + tile('📰 최근일', nL.y+'<small>건 · '+esc(nL.x)+'</small>')
-    + tile('📄 특허 누적', p.items.length.toLocaleString())
-    + tile('📄 특허 공개일', p.pubRange
-        ? '<small>'+esc(p.pubRange.from)+' ~<br>'+esc(p.pubRange.to)+'</small>' : '—')
+    + tile('📰 뉴스 누적', n.items.length.toLocaleString()
+        + '<small>건 · 최근 '+esc(nL.x)+' '+nL.y+'건</small>')
+    + tile('📄 특허 누적', p.items.length.toLocaleString()
+        + (p.pubRange? '<small>건 · 공개 '+esc(p.pubRange.from)+' ~ '+esc(p.pubRange.to)+'</small>':'건'))
+    + tile('🏢 분석 출원인', (ranked.length||0)
+        + '<small class="rgs">'+regChips+'</small>')
+    + (function(){
+        const ci=_cappedInfo(ranked);
+        // 여러 곳이 상한에서 동점이면 '최다 출원인'은 정렬 우연이라 표시하지 않는다.
+        if(ci.n>1) return tile('📐 표본 상한', ci.cap
+          + '<small>건/출원인 · '+ci.n+'곳이 상한 도달<br>(건수 비교는 이 범위 안에서만)</small>');
+        return tile('🏆 최다 출원인', top
+          ? '<span class="topap">'+(top.flag||'')+' '+esc(top.name)+'</span><small>'+top.cnt+'건</small>'
+          : '—');
+      })()
     + '</div>';
 }
 
 function matrixMiniHTML(){
   const list=FEED.patents.items; if(!list.length) return '';
+  const r=FEED.patents.pubRange;
   return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3). 칸을 누르면 특허 탭 상세.</p>'
+    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3). 칸을 누르면 특허 탭 상세.'
+    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 매주 최근 '
+         +(FEED.patents.lookbackDays||90)+'일 공개분을 조회해 새 것만 누적.' : '') + '</p>'
     + '<div class="mxmini">'+regionMatrixHTML(list, {top:3})+'</div></div>';
 }
 
@@ -784,7 +811,10 @@ function renderHome(){
   const bh=briefHTML(); if(bh) parts.push(bh);
   parts.push(kpiHTML());
   const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
-  parts.push('<div class="homebot">'+(matrixMiniHTML()||'')+timelineHTML()+'</div>');
+  // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
+  const hasPast=(FEED.briefs||[]).length>1;
+  parts.push('<div class="homebot'+(hasPast?'':' single')+'">'
+    + (matrixMiniHTML()||'') + timelineHTML() + '</div>');
   $('#home').innerHTML = parts.join('');
 }
 
@@ -825,9 +855,19 @@ function renderOverview(){
     tile('누적 '+(news?'기사':'특허'), total.toLocaleString())
     + tile('수집 '+(news?'일':'주'), periods)
     + thirdTile
-    + tile(lastVisit? '새 항목' : '오늘 열람', lastVisit? newCount : '—')
-    + '<div class="tile spark sparkwrap"><div class="k">'+(news?'일별':'주별')+' 수집 추이 <b>('+periods+')</b></div>'
-      + sparkline(series) + '</div>';
+    + (lastVisit
+        ? tile('✨ 새 항목', newCount + '<small>지난 방문 이후</small>')
+        : tile(news? '최근 7일' : '최근 4주',
+            f_recentCount(f, news) + '<small>건</small>'))
+    + (periods>1
+        ? '<div class="tile spark sparkwrap"><div class="k">'+(news?'일별':'주별')+' 수집 추이 <b>('+periods+')</b></div>'
+          + sparkline(series) + '</div>'
+        : '');
+}
+// 최근 구간 합계(뉴스=7일, 특허=4주) — '오늘 열람' 자리를 채울 실질 지표
+function f_recentCount(f, news){
+  const series = news? f.perDay : f.perWeek;
+  return series.slice(news? -7 : -4).reduce((a,b)=>a+b.y,0).toLocaleString();
 }
 function tile(k,v){ return '<div class="tile"><div class="k">'+k+'</div><div class="v mono">'+v+'</div></div>'; }
 
@@ -868,6 +908,13 @@ function renderPeriodBar(){
     html+='<button class="f" data-period="'+esc(state.period)+'" aria-pressed="true">📅 '+esc(state.period)+' ✕</button>';
   pb.innerHTML=html;
 }
+function syncSearchPlaceholder(){
+  const q=$('#q'); if(!q) return;
+  q.placeholder = state.tab==='patents'
+    ? '특허 제목·출원인·공개번호·CPC 검색'
+    : '뉴스 제목·요약·언론사 검색';
+}
+
 function renderSource(){
   const sel=$('#source');
   if(state.tab!=='news'){ sel.hidden=true; return; }
@@ -886,7 +933,7 @@ function render(){
   $('#home').hidden = !home;
   if(home){ renderHome(); updateViewToggle(); syncHash(); return; }
   renderOverview();
-  renderPeriodBar(); renderSource();
+  renderPeriodBar(); renderSource(); syncSearchPlaceholder();
   const list = filtered();
   const active = state.q || state.cats.size || state.countries.size || state.newonly
     || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
@@ -924,6 +971,14 @@ function render(){
   $('#more').hidden = list.length <= state.limit;
   $('#more').textContent = '더 보기 ('+(list.length-state.limit)+'개 남음)';
   syncHash();
+}
+
+// 수집 상한(출원인당 N건)에 걸린 출원인 수. 상한에 몰리면 '최다 출원인' 같은
+// 순위는 우연한 정렬 결과일 뿐이라, 그 사실을 드러내기 위해 쓴다.
+function _cappedInfo(ranked){
+  if(!ranked.length) return {cap:0, n:0};
+  const cap=ranked[0].cnt;
+  return {cap, n: ranked.filter(r=>r.cnt===cap).length};
 }
 
 // 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순
@@ -988,20 +1043,33 @@ function renderStats(list){
     const chips=entries.slice(0,3).map(([n,v])=>'<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
     return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div><div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
   }).join('');
-  // 랭킹(전 지역 통합)
+  // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
+  // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
+  const capInfo=_cappedInfo(ranked);
+  const capped = c => capInfo.n>1 && c===capInfo.cap;
   const top=ranked.slice(0,15), maxA=top[0].cnt||1;
   const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.cnt/maxA*100);
-    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'+(i+1)+'</span>'
-      + (r.flag||'')+' '+esc(r.name)+'</div><div class="bar" style="width:'+w.toFixed(1)+'%"></div>'
-      + '<div class="val">'+r.cnt+'</div></div>'; }).join('');
+    const isCap=capped(r.cnt);
+    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'
+      + (isCap? '–' : (i+1))+'</span>'
+      + (r.flag||'')+' '+esc(r.name)+'</div>'
+      + '<div class="bar'+(isCap?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
+      + '<div class="val">'+r.cnt+(isCap?'<span class="plus">+</span>':'')+'</div></div>'; }).join('');
+  const rankSub = capInfo.n>1
+    ? '전 지역 통합 · 수집 상한(출원인당 '+capInfo.cap+'건)에 걸린 '+capInfo.n
+      + '곳은 <b>'+capInfo.cap+'+</b> 로 표시했습니다 — 이들 사이의 순위는 의미가 없습니다.'
+    : '전 지역 통합 · 표본 내 총 출원 수.';
 
   return '<div class="stats">'
-    + '<div class="panel wide">' + patentScopeHTML() + '<div class="statkpi">'
+    + '<div class="panel wide"><div class="statkpi">'
       + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
         + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
-      + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
-        + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'
+      + (function(){ const ci=_cappedInfo(ranked);
+          if(ci.n>1) return '<div><div class="k">표본 상한</div><div class="v mono">'+ci.cap
+            + ' <span style="font-size:12px;color:var(--muted)">건/출원인 · '+ci.n+'곳 도달</span></div></div>';
+          return '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
+            + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'; })()
       + '</div></div>'
     + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
       + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허로 이동. '
@@ -1011,7 +1079,7 @@ function renderStats(list){
       + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹 <span style="color:var(--muted);font-weight:600;font-size:12px">상위 '+top.length+' / '+uniq+'</span></h3>'
-      + '<p class="sub">전 지역 통합 · 표본 내 총 출원 수.</p>'
+      + '<p class="sub">'+rankSub+'</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
     + '</div>';
 }

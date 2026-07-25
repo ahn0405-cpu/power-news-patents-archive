@@ -118,10 +118,16 @@ def _cpc_codes(bib: dict) -> list[str]:
     for ip in _as_list(_v(bib, "classifications-ipcr", "classification-ipcr")):
         if isinstance(ip, dict):
             txt = str(_v(ip, "text") or "")
-            m = re.match(r"([A-H]\d{2}[A-Z])\s*(\d+)", txt.replace(" ", " "))
+            m = re.match(r"([A-H]\d{2}[A-Z])\s*(\d+)", txt)
             if m:
                 out.append(m.group(1) + m.group(2))
-    return out
+    # CPC 와 IPC 에 같은 코드가 들어 있어 그대로 두면 카드에 'F03D7 F03D7' 처럼 중복 표시된다.
+    seen, uniq = set(), []
+    for c in out:
+        if c not in seen:
+            seen.add(c)
+            uniq.append(c)
+    return uniq
 
 
 def _pub_ref(bib: dict) -> tuple[str, str, str]:
