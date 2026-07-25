@@ -45,7 +45,7 @@ def load_weeks(source_dir: Path) -> dict[str, dict]:
 
 
 def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
-               mock: bool) -> tuple[dict, int]:
+               mock: bool, totals: dict | None = None) -> tuple[dict, int]:
     prior = {k for w, wobj in weeks.items() if w != wk
              for p in wobj.get("patents", []) for k in (_key(p),) if k}
     week = weeks.get(wk, {"week": wk, "patents": []})
@@ -66,6 +66,10 @@ def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
         added += 1
     # 주 단위 플래그는 '이 주에 샘플이 하나라도 섞였는가'로만 쓴다(하위호환).
     week["mock"] = any(x.get("mock") for x in week["patents"])
+    # 출원인별 '실제 전체 건수'(수집 상한과 무관). 저장 목록은 표본이지만 이 값으로
+    # 규모 비교·랭킹을 정확히 할 수 있다. 매주 최신값으로 갱신.
+    if totals:
+        week["totals"] = totals
     weeks[wk] = week
     return week, added
 

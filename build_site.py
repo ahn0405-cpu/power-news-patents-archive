@@ -75,8 +75,8 @@ def main() -> None:
     if what in ("patents", "both"):
         wk = patent_archive.week_start(now)
         print(f"{'[MOCK] ' if patent_source.cfg.is_mock() else ''}특허 수집 → {wk} 주")
-        pfresh, pmock = patent_source.collect(now)
-        _, padded = patent_archive.merge_week(patent_weeks, wk, pfresh, pmock)
+        pfresh, pmock, ptotals = patent_source.collect(now)
+        _, padded = patent_archive.merge_week(patent_weeks, wk, pfresh, pmock, ptotals)
         print(f"  특허 신규 {padded}건 (수집 {len(pfresh)}{' MOCK' if pmock else ''})")
 
     # ── 저장 + 전체 사이트 재생성 ──

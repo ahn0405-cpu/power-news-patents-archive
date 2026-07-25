@@ -39,14 +39,25 @@ def _get_token() -> str:
         return json.loads(r.read())["access_token"]
 
 
-def _search(token: str, cql: str, start: int, end: int) -> dict:
+def _search(token: str, cql: str, start: int, end: int) -> tuple[dict, int]:
+    """(응답, 조건에 맞는 전체 건수). 전체 건수는 받아온 건수와 무관하게 온다 →
+    저장은 표본(상한)만 하면서도 '실제로 몇 건인지'를 정확히 알 수 있다."""
     url = SEARCH_URL + "?q=" + urllib.parse.quote(cql)
     req = urllib.request.Request(url, headers={
         "Authorization": "Bearer " + token,
         "Accept": "application/json",
         "X-OPS-Range": f"{start}-{end}"})
     with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        return json.loads(r.read())
+        data = json.loads(r.read())
+    return data, _total(data)
+
+
+def _total(data: dict) -> int:
+    try:
+        v = data["ops:world-patent-data"]["ops:biblio-search"]["@total-result-count"]
+        return int(v)
+    except Exception:
+        return 0
 
 
 # ── 응답 파싱 (OPS JSON 은 값이 {"$": ...} 로 감싸여 있다) ──────────
@@ -194,11 +205,12 @@ def _cql(applicant_q: str, days: int, today: datetime | None = None) -> str:
             f'"{start.strftime("%Y%m%d")} {end.strftime("%Y%m%d")}" and ({cpc_or})')
 
 
-def _live_collect(today: datetime | None = None) -> list[dict]:
+def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
     if not (cfg.OPS_KEY and cfg.OPS_SECRET):
         raise RuntimeError("OPS 키 없음(OPS_KEY/OPS_SECRET)")
     token = _get_token()
     collected: list[dict] = []
+    totals: dict[str, int] = {}      # 출원인 → 실제 전체 건수(상한과 무관)
     seen: set[str] = set()
     errors = 0
     for ap in cfg.APPLICANTS:
@@ -210,7 +222,9 @@ def _live_collect(today: datetime | None = None) -> list[dict]:
         while added < cfg.PER_APPLICANT_LIMIT and start <= cfg.PER_APPLICANT_LIMIT:
             end = min(start + 24, cfg.PER_APPLICANT_LIMIT)   # OPS 범위는 25건 단위
             try:
-                data = _search(token, cql, start, end)
+                data, total = _search(token, cql, start, end)
+                if total:
+                    totals[ap["name"]] = total
             except Exception as e:
                 # 결과 없음(404)·범위 초과는 정상 종료로 취급
                 msg = str(e)
@@ -241,12 +255,14 @@ def _live_collect(today: datetime | None = None) -> list[dict]:
             start = end + 1
             if cfg.REQUEST_DELAY:
                 time.sleep(cfg.REQUEST_DELAY)
-        print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {added}건")
+        tot = totals.get(ap["name"], 0)
+        cap = " (상한, 실제 %d건)" % tot if tot > added else ""
+        print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {added}건{cap}")
         if cfg.REQUEST_DELAY:
             time.sleep(cfg.REQUEST_DELAY)
     if not collected and errors:
         raise RuntimeError("OPS 수집 실패(모든 출원인)")
-    return collected
+    return collected, totals
 
 
 # ── MOCK (키 없음/오프라인 폴백) ──────────────────────────────────
@@ -294,20 +310,29 @@ def _mock_collect(today: datetime) -> list[dict]:
                 # URL 은 저장/읽음 상태의 키라서 항목마다 달라야 한다(전부 같으면 한꺼번에 토글).
                 "url": "https://worldwide.espacenet.com/patent/search?q=" + num,
             })
-    return collected
+    totals = {}
+    for it in collected:
+        totals[it["applicant"]] = totals.get(it["applicant"], 0) + 1
+    return collected, totals
 
 
-def collect(today: datetime) -> tuple[list[dict], bool]:
-    """(출원인×분야) 특허 목록과 mock 여부를 반환.
+def collect(today: datetime) -> tuple[list[dict], bool, dict]:
+    """(특허 목록, mock 여부, 출원인별 실제 전체 건수).
+
+    목록은 출원인당 상한(PER_APPLICANT_LIMIT)까지의 표본이지만, 전체 건수는 OPS 가
+    알려주는 실제 값이라 랭킹·규모 비교는 상한에 왜곡되지 않는다.
 
     PATENT_MOCK=on → mock / off → 라이브(실패 시 예외) / auto → 라이브 후 실패 시 mock.
     """
     if cfg.is_mock():
-        return _mock_collect(today), True
+        items, totals = _mock_collect(today)
+        return items, True, totals
     try:
-        return _live_collect(today), False
+        items, totals = _live_collect(today)
+        return items, False, totals
     except Exception as e:
         if cfg.force_live():
             raise
         print(f"⚠️ 특허 라이브(OPS) 수집 실패 → MOCK 폴백: {e}")
-        return _mock_collect(today), True
+        items, totals = _mock_collect(today)
+        return items, True, totals

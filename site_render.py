@@ -195,6 +195,13 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
             if p.get("mock", week_mock):
                 it["mock"] = True
             items.append(it)
+    # 출원인별 '실제 전체 건수'(OPS @total-result-count). 저장 목록은 상한까지의
+    # 표본이지만 이 값은 상한과 무관해, 랭킹·규모 비교를 왜곡 없이 할 수 있다.
+    totals: dict[str, int] = {}
+    for wk in sorted(patent_weeks):                 # 최신 주 값이 이기도록 오름차순
+        for k, v in (patent_weeks[wk].get("totals") or {}).items():
+            totals[k] = v
+
     # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
     pubs = sorted(p["pub_date"] for p in items if p.get("pub_date"))
@@ -205,6 +212,7 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
                       for k, v in pcfg.COUNTRY_LABEL.items()],
         "perWeek": [{"x": w, "y": per_week[w]} for w in sorted(per_week)],
         "pubRange": {"from": pubs[0], "to": pubs[-1]} if pubs else None,
+        "totals": totals,
         "lookbackDays": pcfg.LOOKBACK_DAYS,
         "applicants": len(pcfg.APPLICANTS),
         "items": items,
@@ -771,15 +779,10 @@ function kpiHTML(){
         + (p.pubRange? '<small>건 · 공개 '+esc(p.pubRange.from)+' ~ '+esc(p.pubRange.to)+'</small>':'건'))
     + tile('🏢 분석 출원인', (ranked.length||0)
         + '<small class="rgs">'+regChips+'</small>')
-    + (function(){
-        const ci=_cappedInfo(ranked);
-        // 여러 곳이 상한에서 동점이면 '최다 출원인'은 정렬 우연이라 표시하지 않는다.
-        if(ci.n>1) return tile('📐 표본 상한', ci.cap
-          + '<small>건/출원인 · '+ci.n+'곳이 상한 도달<br>(건수 비교는 이 범위 안에서만)</small>');
-        return tile('🏆 최다 출원인', top
-          ? '<span class="topap">'+(top.flag||'')+' '+esc(top.name)+'</span><small>'+top.cnt+'건</small>'
-          : '—');
-      })()
+    + tile('🏆 최다 출원인', top
+        ? '<span class="topap">'+(top.flag||'')+' '+esc(top.name)+'</span><small>'
+          + top.total+'건 (실제 공개 기준)</small>'
+        : '—')
     + '</div>';
 }
 
@@ -973,22 +976,20 @@ function render(){
   syncHash();
 }
 
-// 수집 상한(출원인당 N건)에 걸린 출원인 수. 상한에 몰리면 '최다 출원인' 같은
-// 순위는 우연한 정렬 결과일 뿐이라, 그 사실을 드러내기 위해 쓴다.
-function _cappedInfo(ranked){
-  if(!ranked.length) return {cap:0, n:0};
-  const cap=ranked[0].cnt;
-  return {cap, n: ranked.filter(r=>r.cnt===cap).length};
-}
-
 // 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순
 function _rankApplicants(list){
+  const T=FEED.patents.totals||{};
   const byA={};
   list.forEach(it=>{ const nm=it.aName||'(미상)';
     const o=byA[nm]||(byA[nm]={cnt:0, flag:it.aFlag||'', region:it.aCountry||'', grid:{}});
     o.cnt++; o.grid[it.category]=(o.grid[it.category]||0)+1; if(!o.flag)o.flag=it.aFlag||''; });
-  return Object.keys(byA).map(nm=>Object.assign({name:nm}, byA[nm]))
-    .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
+  return Object.keys(byA).map(nm=>{
+    const o=Object.assign({name:nm}, byA[nm]);
+    // total: OPS 가 알려준 실제 전체 건수(있으면). cnt: 저장된 표본 수.
+    o.total = T[nm] || o.cnt;
+    o.sampled = o.total > o.cnt;    // 상한에 걸려 일부만 저장된 경우
+    return o;
+  }).sort((a,b)=> b.total-a.total || a.name.localeCompare(b.name));
 }
 // 한 지역(부분집합)의 출원인×분야 표. opts.total → 합계 열
 function matrixTableHTML(ranked, opts){
@@ -1045,31 +1046,24 @@ function renderStats(list){
   }).join('');
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
-  const capInfo=_cappedInfo(ranked);
-  const capped = c => capInfo.n>1 && c===capInfo.cap;
-  const top=ranked.slice(0,15), maxA=top[0].cnt||1;
-  const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.cnt/maxA*100);
-    const isCap=capped(r.cnt);
-    return '<div class="row"><div class="nm" title="'+esc(r.name)+'"><span class="rk">'
-      + (isCap? '–' : (i+1))+'</span>'
-      + (r.flag||'')+' '+esc(r.name)+'</div>'
-      + '<div class="bar'+(isCap?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
-      + '<div class="val">'+r.cnt+(isCap?'<span class="plus">+</span>':'')+'</div></div>'; }).join('');
-  const rankSub = capInfo.n>1
-    ? '전 지역 통합 · 수집 상한(출원인당 '+capInfo.cap+'건)에 걸린 '+capInfo.n
-      + '곳은 <b>'+capInfo.cap+'+</b> 로 표시했습니다 — 이들 사이의 순위는 의미가 없습니다.'
-    : '전 지역 통합 · 표본 내 총 출원 수.';
+  const top=ranked.slice(0,15), maxA=top[0].total||1;
+  const nSampled=ranked.filter(r=>r.sampled).length;
+  const leadRows=top.map((r,i)=>{ const w=Math.max(2,r.total/maxA*100);
+    return '<div class="row"><div class="nm" title="'+esc(r.name)
+      + (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')+'">'
+      + '<span class="rk">'+(i+1)+'</span>'+(r.flag||'')+' '+esc(r.name)+'</div>'
+      + '<div class="bar'+(r.sampled?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
+      + '<div class="val">'+r.total+'</div></div>'; }).join('');
+  const rankSub = '전 지역 통합 · <b>실제 공개 건수</b> 기준(수집 상한과 무관).'
+    + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '');
 
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
       + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
         + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
-      + (function(){ const ci=_cappedInfo(ranked);
-          if(ci.n>1) return '<div><div class="k">표본 상한</div><div class="v mono">'+ci.cap
-            + ' <span style="font-size:12px;color:var(--muted)">건/출원인 · '+ci.n+'곳 도달</span></div></div>';
-          return '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
-            + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.cnt+'건</span></div></div>'; })()
+      + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
+        + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.total+'건</span></div></div>'
       + '</div></div>'
     + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
       + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허로 이동. '
