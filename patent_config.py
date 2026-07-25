@@ -61,6 +61,10 @@ MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on 
 # (요청량 = 8 × (1 총계 + 6 특허청) = 56/일).
 OFFICE_COUNTS = os.getenv("PATENT_OFFICE_COUNTS", "on") != "off"
 OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "8"))   # 한 실행에서 처리할 출원인 수
+# 집계는 '있으면 좋은' 부가 정보다. OPS 가 느려도 매일 도는 뉴스 배포를 붙잡으면 안 되므로
+# 전체 소요에 상한을 두고, 넘으면 그 자리에서 접고 다음 날 이어서 채운다.
+OFFICE_BUDGET = float(os.getenv("PATENT_OFFICE_BUDGET", "180"))   # 초
+OFFICE_TIMEOUT = int(os.getenv("PATENT_OFFICE_TIMEOUT", "15"))    # 집계 요청 1건 타임아웃(초)
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)

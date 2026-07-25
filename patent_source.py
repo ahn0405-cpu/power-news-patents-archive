@@ -44,7 +44,8 @@ def _get_token() -> str:
         return json.loads(r.read())["access_token"]
 
 
-def _search(token: str, cql: str, start: int, end: int) -> tuple[dict, int]:
+def _search(token: str, cql: str, start: int, end: int,
+            timeout: int | None = None) -> tuple[dict, int]:
     """(응답, 조건에 맞는 전체 건수). 전체 건수는 받아온 건수와 무관하게 온다 →
     저장은 표본(상한)만 하면서도 '실제로 몇 건인지'를 정확히 알 수 있다."""
     url = SEARCH_URL + "?q=" + urllib.parse.quote(cql)
@@ -52,7 +53,7 @@ def _search(token: str, cql: str, start: int, end: int) -> tuple[dict, int]:
         "Authorization": "Bearer " + token,
         "Accept": "application/json",
         "X-OPS-Range": f"{start}-{end}"})
-    with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
+    with urllib.request.urlopen(req, timeout=timeout or cfg.REQUEST_TIMEOUT) as r:
         data = json.loads(r.read())
     return data, _total(data)
 
@@ -212,11 +213,11 @@ def _cql(applicant_q: str, days: int, today: datetime | None = None) -> str:
 
 def _count(token: str, cql: str) -> int:
     """1건만 받아 전체 건수만 얻는다(집계 전용, 응답이 가볍다)."""
-    _, total = _search(token, cql, 1, 1)
+    _, total = _search(token, cql, 1, 1, timeout=cfg.OFFICE_TIMEOUT)
     return total
 
 
-def _office_counts(token: str, ap: dict, today) -> tuple[dict, bool]:
+def _office_counts(token: str, ap: dict, today, deadline: float = 0.0) -> tuple[dict, bool]:
     """출원인이 어느 특허청에 몇 건 공개했는지 — '어느 시장에 출원하나' 축.
 
     같은 발명이 여러 특허청에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있다.
@@ -226,6 +227,8 @@ def _office_counts(token: str, ap: dict, today) -> tuple[dict, bool]:
     out, quota_hit = {}, False
     base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
     for off in cfg.OFFICES:
+        if deadline and time.monotonic() > deadline:
+            return out, True           # 시간 초과도 '중단' 취급 → 다음 날 이어서
         try:
             n = _count(token, f'{base} and pn any "{off["code"]}"')
         except Exception as e:
@@ -279,8 +282,12 @@ def collect_offices(today: datetime) -> dict:
         return {}
     totals: dict[str, int] = {}
     offices: dict[str, dict] = {}
+    deadline = time.monotonic() + cfg.OFFICE_BUDGET
     print(f"공개국 집계 {len(batch)}곳: {', '.join(a['name'] for a in batch)}")
     for ap in batch:
+        if time.monotonic() > deadline:
+            print(f"  (시간 상한 {cfg.OFFICE_BUDGET:.0f}초 — 나머지는 내일 이어서)")
+            break
         base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
         try:
             tot = _count(token, base)
@@ -296,13 +303,13 @@ def collect_offices(today: datetime) -> dict:
         if not tot:
             print(f"  · {ap['flag']} {ap['name']}: 0건")
             continue
-        oc, hit = _office_counts(token, ap, today)
+        oc, hit = _office_counts(token, ap, today, deadline)
         if oc:
             offices[ap["name"]] = oc
         print(f"  · {ap['flag']} {ap['name']}: {tot}건 · "
               + (" ".join(f"{k}{v}" for k, v in oc.items()) or "-"))
         if hit:
-            print("  (OPS 쿼터 한계 — 나머지는 내일 이어서)")
+            print("  (OPS 쿼터/시간 한계 — 나머지는 내일 이어서)")
             break
     return {"totals": totals, "offices": offices}
 
