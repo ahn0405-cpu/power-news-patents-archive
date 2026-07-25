@@ -34,7 +34,8 @@ def load_weeks(source_dir: Path) -> dict[str, dict]:
     if not ddir.exists():
         return weeks
     for f in ddir.glob("*.json"):
-        if f.name == "index.json":
+        # 같은 폴더의 목록(index)·집계(stats) 파일은 주별 버킷이 아니다.
+        if f.name in ("index.json", STATS_FILE):
             continue
         try:
             obj = json.loads(f.read_text(encoding="utf-8"))
@@ -45,7 +46,7 @@ def load_weeks(source_dir: Path) -> dict[str, dict]:
 
 
 def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
-               mock: bool, stats: dict | None = None) -> tuple[dict, int]:
+               mock: bool) -> tuple[dict, int]:
     prior = {k for w, wobj in weeks.items() if w != wk
              for p in wobj.get("patents", []) for k in (_key(p),) if k}
     week = weeks.get(wk, {"week": wk, "patents": []})
@@ -68,15 +69,8 @@ def merge_week(weeks: dict[str, dict], wk: str, fresh: list[dict],
     week["mock"] = any(x.get("mock") for x in week["patents"])
     # 출원인별 '실제 전체 건수'와 '특허청별 건수'(수집 상한과 무관). 저장 목록은
     # 표본이지만 이 값들로 규모 비교·랭킹을 정확히 할 수 있다. 매주 최신값으로 갱신.
-    # ★ 병합(덮어쓰기 금지). OPS 가 쿼터로 일부 출원인을 403 으로 막으면 그 실행의
-    #   집계는 부분집합인데, 통째로 대입하면 지난주에 잘 받아둔 값이 사라진다.
-    if stats:
-        if stats.get("totals"):
-            week.setdefault("totals", {}).update(stats["totals"])
-        if stats.get("offices"):
-            wo = week.setdefault("offices", {})
-            for name, per in stats["offices"].items():
-                wo.setdefault(name, {}).update(per)
+    # 집계(totals/offices)는 주별 버킷이 아니라 stats.json 에 따로 누적한다
+    # (매일 조금씩 갱신하므로 '수집한 주'와 묶으면 관리가 어긋난다) → save_stats 참조.
     weeks[wk] = week
     return week, added
 
@@ -100,3 +94,61 @@ def save(site_dir: Path, weeks: dict[str, dict], generated: str) -> None:
     (ddir / "index.json").write_text(
         json.dumps({"generated": generated, "weeks": index},
                    ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ── 출원인 집계(총 건수·특허청별) — 주별 버킷과 분리해 누적 ──────────
+# OPS 무료 쿼터 때문에 한 번에 전 출원인을 조회할 수 없어, 매일 일부만 갱신하고
+# 여기에 병합해 쌓는다. 덮어쓰지 않는 것이 핵심(부분집합 실행이 이전 값을 지우면 안 됨).
+STATS_FILE = "stats.json"
+
+
+def load_stats(source_dir: Path) -> dict:
+    f = _data_dir(Path(source_dir)) / STATS_FILE
+    if not f.exists():
+        return {"totals": {}, "offices": {}, "updated": {}}
+    try:
+        obj = json.loads(f.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[경고] 특허 집계 읽기 실패: {e}")
+        return {"totals": {}, "offices": {}, "updated": {}}
+    obj.setdefault("totals", {})
+    obj.setdefault("offices", {})
+    obj.setdefault("updated", {})
+    return obj
+
+
+def seed_stats(store: dict, weeks: dict[str, dict]) -> int:
+    """집계를 주별 버킷에 담던 시절 데이터를 stats.json 으로 한 번 옮긴다(하위호환).
+
+    stats.json 이 이미 있으면 아무것도 하지 않는다. 반환: 옮긴 출원인 수.
+    """
+    if store.get("totals") or store.get("offices"):
+        return 0
+    for wk in sorted(weeks):                     # 최신 주 값이 이기도록 오름차순
+        for k, v in (weeks[wk].get("totals") or {}).items():
+            store["totals"][k] = v
+        for k, v in (weeks[wk].get("offices") or {}).items():
+            store["offices"][k] = v
+    return len(store["totals"])
+
+
+def merge_stats(store: dict, fresh: dict | None, today: str = "") -> int:
+    """새로 받은 집계를 병합. 반환: 갱신된 출원인 수."""
+    if not fresh:
+        return 0
+    n = 0
+    for name, v in (fresh.get("totals") or {}).items():
+        store["totals"][name] = v
+        if today:
+            store["updated"][name] = today
+        n += 1
+    for name, per in (fresh.get("offices") or {}).items():
+        store["offices"].setdefault(name, {}).update(per)
+    return n
+
+
+def save_stats(site_dir: Path, store: dict) -> None:
+    d = _data_dir(Path(site_dir))
+    d.mkdir(parents=True, exist_ok=True)
+    (d / STATS_FILE).write_text(
+        json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -48,13 +48,13 @@
 | `news_config.py` / `patent_config.py` | 카테고리·검색 키워드·경로 설정 (뉴스 / 특허) |
 | `news_source.py` | Google 뉴스 RSS 수집·파싱 (차단/오프라인 시 MOCK 폴백) |
 | `patent_source.py` | EPO OPS 공식 API 수집 — 출원인×전력 CPC (키 없음/실패 시 MOCK 폴백) |
-| `news_archive.py` / `patent_archive.py` | 날짜별(뉴스)·주별(특허) JSON 누적 + 중복 제거 |
+| `news_archive.py` / `patent_archive.py` | 날짜별(뉴스)·주별(특허) JSON 누적 + 중복 제거 · 출원인 집계(`stats.json`) 누적 |
 | `insights.py` | 뉴스 트렌드 인사이트 계산 (뜨는 키워드·이슈 흐름) — 무LLM·순수 계산 |
 | `brief_archive.py` | 서술형 브리핑(brief.json) 날짜별 누적 |
 | `site_render.py` | 인터랙티브 SPA 렌더 (홈 대시보드 + 인라인 데이터 + 검색/필터/정렬, 라이트·다크) |
 | `build_site.py` | 수집→누적→사이트(index.html) 재생성 오케스트레이션 |
-| `.github/workflows/daily-power-news.yml` | 매일 08:00 KST → 뉴스 수집 후 배포 |
-| `.github/workflows/weekly-power-patents.yml` | 매주 월 08:20 KST → 특허 수집 후 배포 |
+| `.github/workflows/daily-power-news.yml` | 매일 08:00 KST → 뉴스 수집 + 출원인 집계 8곳 회전 후 배포 |
+| `.github/workflows/weekly-power-patents.yml` | 매주 월 08:20 KST → 특허 목록 수집 후 배포 |
 
 ## 로컬 미리보기
 ```bash
@@ -82,6 +82,13 @@ python build_site.py                 # 뉴스+특허 둘 다 수집 후 site/ �
   사이트는 실제 **공개일 범위**를 특허 탭 개요 타일·목록 상단·통계 뷰·홈 KPI 에 표시합니다.
 - 출원인당 최대 `PATENT_PER_APPLICANT`(기본 50)건까지 담으므로, 대형 출원인은 해당 기간의
   전수가 아니라 **최신 표본**입니다.
+- **랭킹은 표본이 아니라 실제 건수**로 냅니다. OPS 가 알려주는 전체 건수(`total-result-count`)를
+  `data/patents/stats.json` 에 따로 누적해, 저장 상한(50)에 랭킹이 왜곡되지 않습니다.
+  - 출원인별 **총 건수**: 특허 목록을 받을 때 함께(주 1회).
+  - 출원인 × **공개 특허청**(US/KR/CN/JP/EP/WO) 건수: 전 출원인을 한 번에 조회하면 OPS
+    무료 쿼터에 걸려 403 이 나므로(실측), **매일 뉴스 실행에 얹어 8곳씩 회전**합니다
+    (`PATENT_OFFICE_BATCH`, 31곳 ≈ **4일에 한 바퀴**). 집계는 항상 **병합**이라 부분 실행이
+    이전 값을 지우지 않고, 403 을 만나면 그 자리에서 멈추고 다음 날 이어서 채웁니다.
 
 ## 특허 소스에 대한 참고
 특허는 **EPO OPS(유럽특허청 공식 Open Patent Services)** 로 수집합니다. `developers.epo.org`

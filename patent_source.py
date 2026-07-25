@@ -8,6 +8,11 @@
 질의: pa="<출원인>" and pd within "<시작> <끝>" and (cpc="H02J" or cpc="H02M" ...)
       → 최근 N일 발행 + 전력 CPC 특허를 출원인별로 수집 → CPC 로 8개 분야에 분류.
 
+두 갈래로 나눠 돈다(OPS 무료 쿼터 보호):
+  - collect()         : 특허 목록 + 출원인 총계 — 주 1회(특허 워크플로).
+  - collect_offices() : 출원인×공개 특허청 정확 집계 — **매일** 일부(뉴스 워크플로에 얹어
+                        날짜 기준 회전, 31곳을 ~4일에 한 바퀴). 결과는 stats.json 에 병합.
+
 키는 GitHub Secret(OPS_KEY/OPS_SECRET). 키가 없거나 실패하면 MOCK 으로 폴백해
 뉴스 탭과 사이트 빌드는 항상 정상 동작한다.
 """
@@ -240,18 +245,66 @@ def _is_quota(e: Exception) -> bool:
 
 
 def _office_batch(today) -> list[dict]:
-    """이번 실행에서 특허청 집계를 돌릴 출원인 부분집합(주차 기준 회전).
+    """이번 실행에서 특허청 집계를 돌릴 출원인 부분집합(**날짜 기준 회전**).
 
     전체를 한 번에 돌리면 OPS 쿼터를 넘겨 403 이 나고 본 수집까지 실패한다(실측).
-    매주 일부만 갱신하고 아카이브에서 병합해 누적한다.
+    그래서 조금씩 나눠 돌리는데, 주 1회로 회전하면 31곳을 한 바퀴 도는 데 5~6주가
+    걸린다 → 뉴스가 매일 도니까 거기에 얹어 **매일** 회전한다(한 바퀴 ~4일).
     """
     n = len(cfg.APPLICANTS)
     if not cfg.OFFICE_COUNTS or cfg.OFFICE_BATCH <= 0 or not n:
         return []
-    week = (today or datetime.now()).isocalendar()[1]
-    start = (week * cfg.OFFICE_BATCH) % n
+    doy = (today or datetime.now()).timetuple().tm_yday
+    start = (doy * cfg.OFFICE_BATCH) % n
     order = cfg.APPLICANTS[start:] + cfg.APPLICANTS[:start]
     return order[:cfg.OFFICE_BATCH]
+
+
+def collect_offices(today: datetime) -> dict:
+    """오늘 배치 출원인의 정확 집계만 가볍게 수집 → {"totals":…, "offices":…}.
+
+    본 수집(특허 목록)과 분리돼 있어 **매일 뉴스 실행에 얹어** 돌린다. 출원인당
+    1(총계) + 특허청 수(기본 6) 요청이라 배치가 작으면 쿼터에 여유가 있다.
+    MOCK/키 없음이면 조용히 빈 dict(집계 없음 → 기존 stats.json 유지).
+    """
+    if cfg.is_mock() or not (cfg.OPS_KEY and cfg.OPS_SECRET):
+        return {}
+    batch = _office_batch(today)
+    if not batch:
+        return {}
+    try:
+        token = _get_token()
+    except Exception as e:
+        print(f"⚠️ 공개국 집계 건너뜀(토큰 실패): {e}")
+        return {}
+    totals: dict[str, int] = {}
+    offices: dict[str, dict] = {}
+    print(f"공개국 집계 {len(batch)}곳: {', '.join(a['name'] for a in batch)}")
+    for ap in batch:
+        base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
+        try:
+            tot = _count(token, base)
+        except Exception as e:
+            if _is_quota(e):
+                print("  (OPS 쿼터 한계 — 나머지는 내일 이어서)")
+                break
+            tot = 0                       # 404 = 해당 기간 공개 없음
+        if tot:
+            totals[ap["name"]] = tot
+        if cfg.REQUEST_DELAY:
+            time.sleep(cfg.REQUEST_DELAY)
+        if not tot:
+            print(f"  · {ap['flag']} {ap['name']}: 0건")
+            continue
+        oc, hit = _office_counts(token, ap, today)
+        if oc:
+            offices[ap["name"]] = oc
+        print(f"  · {ap['flag']} {ap['name']}: {tot}건 · "
+              + (" ".join(f"{k}{v}" for k, v in oc.items()) or "-"))
+        if hit:
+            print("  (OPS 쿼터 한계 — 나머지는 내일 이어서)")
+            break
+    return {"totals": totals, "offices": offices}
 
 
 def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
@@ -260,12 +313,8 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
     token = _get_token()
     collected: list[dict] = []
     totals: dict[str, int] = {}      # 출원인 → 실제 전체 건수(상한과 무관)
-    offices: dict[str, dict] = {}    # 출원인 → {특허청: 건수}
-    batch = _office_batch(today)     # 이번 실행에서 특허청 집계를 돌릴 부분집합
-    batch_names = {a["name"] for a in batch}
-    office_stop = False              # 403 을 만나면 이후 특허청 집계는 건너뛴다
-    if batch_names:
-        print(f"  (공개국 집계 대상 {len(batch_names)}곳: {', '.join(sorted(batch_names))})")
+    # 특허청별 집계는 여기서 하지 않는다 — 쿼터 때문에 매일 조금씩 나눠 돌린다
+    # (collect_offices). 본 수집은 목록 + 출원인 총계까지만 담당.
     seen: set[str] = set()
     errors = 0
     for ap in cfg.APPLICANTS:
@@ -318,15 +367,6 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
                 time.sleep(cfg.REQUEST_DELAY)
         tot = totals.get(ap["name"], 0)
         cap = " (상한, 실제 %d건)" % tot if tot > added else ""
-        # 공개국별 정확 집계 — 이번 주 배치에 든 출원인만(쿼터 보호). 403 이 뜨면 중단.
-        if tot and not office_stop and ap["name"] in batch_names:
-            oc, hit = _office_counts(token, ap, today)
-            if hit:
-                office_stop = True
-                print("    (OPS 쿼터 한계 — 공개국 집계는 다음 주에 이어서)")
-            if oc:
-                offices[ap["name"]] = oc
-                cap += " · " + " ".join(f"{k}{v}" for k, v in oc.items())
         print(f"  · {ap['flag']} {ap['name']} ({ap['region']}): {added}건{cap}")
         if cfg.REQUEST_DELAY:
             time.sleep(cfg.REQUEST_DELAY)

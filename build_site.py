@@ -6,8 +6,9 @@
 
 사용법:
   python build_site.py                 # (로컬) 뉴스+특허 둘 다 수집 후 빌드
-  python build_site.py --collect news  # 뉴스만 수집 (매일 워크플로)
-  python build_site.py --collect patents  # 특허만 수집 (매주 워크플로)
+  python build_site.py --collect news  # 뉴스 + 특허 공개국 집계 일부 (매일 워크플로)
+  python build_site.py --collect patents  # 특허 목록만 수집 (매주 워크플로)
+  python build_site.py --collect offices  # 특허 공개국 집계만 (수동 보충)
   python build_site.py --collect none  # 수집 없이 기존 데이터로 재빌드만
 
 환경변수:
@@ -62,7 +63,13 @@ def main() -> None:
     source_dir = ncfg.PREV_DIR or ncfg.SITE_DIR
     news_days = news_archive.load_days(source_dir)
     patent_weeks = patent_archive.load_weeks(source_dir)
-    print(f"기존 아카이브: 뉴스 {len(news_days)}일 · 특허 {len(patent_weeks)}주 ({source_dir})")
+    # 출원인 집계(총계·공개국별)는 주별 버킷과 분리해 누적한다 → 매일 조금씩 갱신 가능.
+    pstats_store = patent_archive.load_stats(source_dir)
+    seeded = patent_archive.seed_stats(pstats_store, patent_weeks)
+    if seeded:
+        print(f"  (예전 주별 버킷의 집계 {seeded}곳을 stats.json 으로 이전)")
+    print(f"기존 아카이브: 뉴스 {len(news_days)}일 · 특허 {len(patent_weeks)}주 "
+          f"· 집계 {len(pstats_store.get('totals', {}))}곳 ({source_dir})")
 
     # ── 뉴스 수집 ──
     if what in ("news", "both"):
@@ -76,12 +83,24 @@ def main() -> None:
         wk = patent_archive.week_start(now)
         print(f"{'[MOCK] ' if patent_source.cfg.is_mock() else ''}특허 수집 → {wk} 주")
         pfresh, pmock, pstats = patent_source.collect(now)
-        _, padded = patent_archive.merge_week(patent_weeks, wk, pfresh, pmock, pstats)
-        print(f"  특허 신규 {padded}건 (수집 {len(pfresh)}{' MOCK' if pmock else ''})")
+        _, padded = patent_archive.merge_week(patent_weeks, wk, pfresh, pmock)
+        n = patent_archive.merge_stats(pstats_store, pstats, today)
+        print(f"  특허 신규 {padded}건 (수집 {len(pfresh)}{' MOCK' if pmock else ''})"
+              f" · 집계 갱신 {n}곳")
+
+    # ── 출원인×공개 특허청 정확 집계 (매일 일부만 회전) ──
+    # 전 출원인을 한 번에 돌리면 OPS 쿼터에 걸리므로, 매일 도는 뉴스 실행에 얹어
+    # 날짜 기준으로 8곳씩 갱신한다(31곳 ≈ 4일 한 바퀴). 결과는 병합만 하고 덮어쓰지 않는다.
+    if what in ("news", "offices", "both"):
+        n = patent_archive.merge_stats(pstats_store, patent_source.collect_offices(now), today)
+        if n:
+            print(f"  공개국 집계 갱신 {n}곳 "
+                  f"(누적 {len(pstats_store.get('offices', {}))}곳)")
 
     # ── 저장 + 전체 사이트 재생성 ──
     news_archive.save(ncfg.SITE_DIR, news_days, generated)
     patent_archive.save(ncfg.SITE_DIR, patent_weeks, generated)
+    patent_archive.save_stats(ncfg.SITE_DIR, pstats_store)
 
     # 서술형 브리핑: 이전 아카이브 로드 → 현재 brief.json 병합(날짜별 누적) → 저장.
     briefs = brief_archive.load_briefs(source_dir)
@@ -92,7 +111,7 @@ def main() -> None:
     if brief_list:
         print(f"  브리핑: {len(brief_list)}개 (최신 {brief_list[0].get('date','?')})")
     index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
-                                   generated, briefs=brief_list)
+                                   generated, briefs=brief_list, stats=pstats_store)
 
     nt = sum(len(d.get("articles", [])) for d in news_days.values())
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())

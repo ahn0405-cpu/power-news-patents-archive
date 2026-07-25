@@ -56,9 +56,11 @@ REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "40"))
 REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "0.4"))         # OPS 쿼터 배려
 MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on | off
 # 출원인×특허청 정확 집계(공개국별 랭킹). 전 출원인을 한 번에 돌리면 OPS 무료 쿼터를
-# 넘어 403 이 나고 본 수집까지 망친다(실측) → 매주 일부만 돌려 누적한다(집계는 병합).
+# 넘어 403 이 나고 본 수집까지 망친다(실측) → **매일 뉴스 실행에 얹어** 일부만 돌리고
+# data/patents/stats.json 에 병합해 누적한다. 8곳/일이면 31곳을 4일에 한 바퀴 돈다
+# (요청량 = 8 × (1 총계 + 6 특허청) = 56/일).
 OFFICE_COUNTS = os.getenv("PATENT_OFFICE_COUNTS", "on") != "off"
-OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "6"))   # 한 실행에서 처리할 출원인 수
+OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "8"))   # 한 실행에서 처리할 출원인 수
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)

@@ -52,6 +52,11 @@ jobs:
           NEWS_PREV_DIR: _prev     # 이전 뉴스·특허 아카이브 로드
           NEWS_SITE_DIR: site      # 전체 사이트 재생성 대상
           NEWS_MOCK: "off"         # 뉴스 실데이터 강제 (러너는 외부망 정상)
+          # 특허 목록은 주간 워크플로가 담당하고, 여기서는 출원인×공개 특허청 '정확 집계'만
+          # 매일 8곳씩 회전 갱신한다(OPS 쿼터 보호 · 31곳 ≈ 4일 한 바퀴).
+          PATENT_MOCK: "off"
+          OPS_KEY: ${{ secrets.OPS_KEY }}
+          OPS_SECRET: ${{ secrets.OPS_SECRET }}
         run: python build_site.py --collect news
 
       - name: gh-pages 로 배포 (사이트 = 브랜치 루트)

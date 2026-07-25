@@ -158,7 +158,7 @@ def _news_feed(news_days: dict[str, dict]) -> dict:
     }
 
 
-def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
+def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> dict:
     items = []
     per_week: dict[str, int] = {}
     for wk in sorted(patent_weeks):
@@ -197,6 +197,8 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
             items.append(it)
     # 출원인별 '실제 전체 건수'(OPS @total-result-count). 저장 목록은 상한까지의
     # 표본이지만 이 값은 상한과 무관해, 랭킹·규모 비교를 왜곡 없이 할 수 있다.
+    # 지금은 stats.json(주별 버킷과 분리해 매일 누적)이 정본이고, 주별 버킷 읽기는
+    # 예전 데이터 하위호환용이다 → 먼저 주별을 깔고 stats 로 덮는다.
     totals: dict[str, int] = {}
     offices: dict[str, dict] = {}
     for wk in sorted(patent_weeks):                 # 최신 주 값이 이기도록 오름차순
@@ -204,6 +206,9 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
             totals[k] = v
         for k, v in (patent_weeks[wk].get("offices") or {}).items():
             offices[k] = v
+    totals.update((stats or {}).get("totals") or {})
+    for k, v in ((stats or {}).get("offices") or {}).items():
+        offices[k] = v
 
     # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
@@ -227,7 +232,8 @@ def _patent_feed(patent_weeks: dict[str, dict]) -> dict:
 
 def render_all(site_dir: Path, news_days: dict[str, dict],
                patent_weeks: dict[str, dict], generated: str,
-               briefs: list[dict] | None = None) -> Path:
+               briefs: list[dict] | None = None,
+               stats: dict | None = None) -> Path:
     site_dir = Path(site_dir)
     site_dir.mkdir(parents=True, exist_ok=True)
 
@@ -239,7 +245,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "briefs": briefs,                          # 최신순 전체(타임라인)
         "insights": _insights.build(news_days, patent_weeks),
         "news": _news_feed(news_days),
-        "patents": _patent_feed(patent_weeks),
+        "patents": _patent_feed(patent_weeks, stats),
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
