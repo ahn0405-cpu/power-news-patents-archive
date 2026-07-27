@@ -42,6 +42,9 @@ jobs:
             echo "gh-pages 브랜치 없음 → 첫 실행(빈 아카이브에서 시작)"
           fi
 
+      - name: 수집기 스모크 테스트 (네트워크 없이 라이브 경로 실행)
+        run: python selftest.py
+
       - name: 전력 특허 수집 + 사이트 생성 (뉴스+특허 탭)
         env:
           NEWS_PREV_DIR: _prev     # 이전 뉴스·특허 아카이브 로드

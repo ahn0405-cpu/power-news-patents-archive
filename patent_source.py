@@ -379,7 +379,8 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
             time.sleep(cfg.REQUEST_DELAY)
     if not collected and errors:
         raise RuntimeError("OPS 수집 실패(모든 출원인)")
-    return collected, {"totals": totals, "offices": offices}
+    # offices 는 여기서 만들지 않는다(매일 도는 collect_offices 담당) → totals 만 돌려준다.
+    return collected, {"totals": totals}
 
 
 # ── MOCK (키 없음/오프라인 폴백) ──────────────────────────────────

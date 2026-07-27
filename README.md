@@ -53,6 +53,7 @@
 | `brief_archive.py` | 서술형 브리핑(brief.json) 날짜별 누적 |
 | `site_render.py` | 인터랙티브 SPA 렌더 (홈 대시보드 + 인라인 데이터 + 검색/필터/정렬, 라이트·다크) |
 | `build_site.py` | 수집→누적→사이트(index.html) 재생성 오케스트레이션 |
+| `selftest.py` | 스모크 테스트 — OPS 응답을 스텁으로 끼워 라이브 수집 경로를 네트워크 없이 실행 |
 | `.github/workflows/daily-power-news.yml` | 매일 08:00 KST → 뉴스 수집 + 출원인 집계 8곳 회전 후 배포 |
 | `.github/workflows/weekly-power-patents.yml` | 매주 월 08:20 KST → 특허 목록 수집 후 배포 |
 
