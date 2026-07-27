@@ -68,17 +68,19 @@ OFFICE_TIMEOUT = int(os.getenv("PATENT_OFFICE_TIMEOUT", "15"))    # 집계 요�
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)
-# q   : OPS pa= 검색어(영문; 프로브로 매칭 확인)
+# q   : OPS pa= 검색어. 문자열 하나 또는 여러 표기의 목록(목록이면 OR 로 묶어 조회).
 # 편집 가능: 지역별로 자유롭게 추가/삭제(OPS 는 출원인당 1~2요청이라 여유 있음).
-# ※ ✔ 는 실수집으로 결과가 확인된 곳. 미표시는 OPS 색인명과 안 맞으면 0건이 날 수 있어
-#   실수집 로그를 보고 q 를 조정한다(현재 미확인: Dynapower·산일전기·제룡전기).
+# ※ ✔ 는 실수집으로 결과가 확인된 곳.
+# ※ 2026-07-27 프로브로 전 출원인 검색어를 실측 확인했다. Dynapower·산일전기·제룡전기는
+#   '검색어가 틀린 것이 아니라'(각각 45·56·56건이 색인에 있음) 최근 90일 전력 CPC 공개가
+#   0건이라 안 잡힌다 → 그대로 두고, 공개가 생기면 자동으로 들어온다.
 APPLICANTS = [
     # 🇺🇸 미국
     {"name": "General Electric", "region": "US", "flag": "🇺🇸", "q": "General Electric"},      # ✔
     {"name": "GE Vernova", "region": "US", "flag": "🇺🇸", "q": "GE Vernova"},                  # ✔
     {"name": "Eaton", "region": "US", "flag": "🇺🇸", "q": "Eaton"},                            # ✔
     {"name": "Caterpillar", "region": "US", "flag": "🇺🇸", "q": "Caterpillar"},
-    {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower Company"},
+    {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower"},   # ✔ 검색어 확인(최근 공개 0)
     # 🇰🇷 한국
     {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
@@ -88,8 +90,10 @@ APPLICANTS = [
     {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
     {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
     {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan"},
-    {"name": "산일전기", "region": "KR", "flag": "🇰🇷", "q": "Sanil"},
-    {"name": "제룡전기", "region": "KR", "flag": "🇰🇷", "q": "Jeryong"},
+    {"name": "산일전기", "region": "KR", "flag": "🇰🇷",
+     "q": ["Sanil Electric", "산일전기"]},          # ✔ 검색어 확인(최근 공개 0)
+    {"name": "제룡전기", "region": "KR", "flag": "🇰🇷",
+     "q": ["Jeryong", "제룡전기"]},                 # ✔ 검색어 확인(최근 공개 0)
     {"name": "그리드위즈", "region": "KR", "flag": "🇰🇷", "q": "Gridwiz"},
     # 🇨🇳 중국
     {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},  # ✔

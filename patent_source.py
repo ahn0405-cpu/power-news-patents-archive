@@ -200,14 +200,19 @@ def _normalize(doc: dict) -> dict | None:
 
 
 # ── 수집 ─────────────────────────────────────────────────────────
-def _cql(applicant_q: str, days: int, today: datetime | None = None) -> str:
+def _cql(applicant_q, days: int, today: datetime | None = None) -> str:
     # 기준일은 호출부(build_site)가 주는 KST 기준 '오늘'. utcnow() 는 3.12 에서
     # deprecated 이고 프로젝트의 다른 날짜 처리(KST)와도 어긋난다.
     end = (today or datetime.now()).date()
     start = end - timedelta(days=days)
     cpc_or = " or ".join(f'cpc="{c}"'
                          for cat in cfg.CATEGORIES for c in cat["cpc"])
-    return (f'pa="{applicant_q}" and pd within '
+    # q 는 문자열 하나 또는 여러 표기(영문·한글 등)의 목록. 한국 중견기업은 OPS 색인에
+    # 한글 원표기로만 잡히는 문서가 있어(실측: '산일전기' 56건 vs 'Sanil Electric' 5건)
+    # 표기를 OR 로 묶어야 놓치지 않는다.
+    names = [applicant_q] if isinstance(applicant_q, str) else list(applicant_q)
+    pa_or = " or ".join(f'pa="{n}"' for n in names)
+    return (f'({pa_or}) and pd within '
             f'"{start.strftime("%Y%m%d")} {end.strftime("%Y%m%d")}" and ({cpc_or})')
 
 
