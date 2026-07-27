@@ -289,19 +289,23 @@ def collect_offices(today: datetime) -> dict:
             print(f"  (시간 상한 {cfg.OFFICE_BUDGET:.0f}초 — 나머지는 내일 이어서)")
             break
         base = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
+        why = ""                          # 0 이 나온 이유(진짜 0건인지, 실패인지)
         try:
             tot = _count(token, base)
         except Exception as e:
             if _is_quota(e):
                 print("  (OPS 쿼터 한계 — 나머지는 내일 이어서)")
                 break
-            tot = 0                       # 404 = 해당 기간 공개 없음
+            # 404 는 '해당 기간 공개 없음'이지만 타임아웃·5xx 는 일시적 실패다.
+            # 둘을 똑같이 '0건'으로 찍으면 검색어가 틀린 것인지 그냥 실패한 것인지
+            # 로그로 구분할 수 없다(실제로 Sumitomo 가 이렇게 묻혔다).
+            tot, why = 0, ("" if "404" in str(e) else f" — 조회 실패: {e}")
         if tot:
             totals[ap["name"]] = tot
         if cfg.REQUEST_DELAY:
             time.sleep(cfg.REQUEST_DELAY)
         if not tot:
-            print(f"  · {ap['flag']} {ap['name']}: 0건")
+            print(f"  · {ap['flag']} {ap['name']}: 0건{why}")
             continue
         oc, hit = _office_counts(token, ap, today, deadline)
         if oc:
