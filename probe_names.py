@@ -9,10 +9,31 @@ A=0 이면 검색어가 틀린 것이고, A>0 이면서 B=0 이면 이름은 맞
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 import patent_config as cfg
 import patent_source as ps
+
+DELAY = 2.5      # OPS 분당 스로틀 회피(간격 없이 쏘면 403 이 쏟아진다)
+
+
+def count(token: str, cql: str):
+    """403 이면 한 번 쉬고 재시도. 404 는 '0건'."""
+    for attempt in (1, 2):
+        try:
+            n = ps._count(token, cql)
+            time.sleep(DELAY)
+            return n
+        except Exception as e:
+            if "404" in str(e):
+                time.sleep(DELAY)
+                return 0
+            if "403" in str(e) and attempt == 1:
+                time.sleep(30)
+                continue
+            time.sleep(DELAY)
+            return f"err({e})"
 
 CANDIDATES = {
     "Sumitomo Electric (대조군)": ["Sumitomo Electric"],
@@ -33,15 +54,9 @@ def main() -> None:
     for label, qs in CANDIDATES.items():
         print(f"\n== {label}")
         for q in qs:
-            try:
-                a = ps._count(token, f'pa="{q}"')
-            except Exception as e:
-                a = f"err({e})"
-            try:
-                b = ps._count(token, ps._cql(q, cfg.LOOKBACK_DAYS, today))
-            except Exception as e:
-                b = 0 if "404" in str(e) else f"err({e})"
-            print(f'  pa="{q}"  →  이름 전체 {a} · 최근90일+전력CPC {b}')
+            a = count(token, f'pa="{q}"')
+            b = count(token, ps._cql(q, cfg.LOOKBACK_DAYS, today))
+            print(f'  pa="{q}"  →  이름 전체 {a} · 최근90일+전력CPC {b}', flush=True)
 
 
 if __name__ == "__main__":
