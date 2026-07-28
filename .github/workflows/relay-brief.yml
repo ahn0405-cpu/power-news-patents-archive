@@ -15,7 +15,7 @@ name: 브리핑 중계 (claude/brief → main)
 on:
   push:
     branches:
-      - 'claude/brief**'
+      - 'claude/**'      # Routine 이 어떤 claude/* 브랜치를 쓰든 받아준다
     paths:
       - brief.json
   workflow_dispatch: {}    # 손으로 중계만 다시 돌리고 싶을 때
@@ -43,7 +43,7 @@ jobs:
           set -euo pipefail
           BR="${GITHUB_REF_NAME}"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            BR="claude/brief"
+            BR="claude/happy-bohr"   # 손으로 돌릴 때의 기본 원본 브랜치
           fi
           echo "중계 원본 브랜치: ${BR}"
           git fetch origin "+refs/heads/${BR}:refs/remotes/origin/${BR}"
