@@ -350,7 +350,9 @@ a{color:inherit}
 .homekpi .rgs{display:flex;gap:7px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 .homekpi .rgc{font-size:12px;font-weight:700;color:var(--ink)}
 .homekpi .topap{font-size:15.5px;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.homebot{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
+/* 오른쪽 '지난 브리핑'은 날짜+제목만 있으면 되므로 고정 폭으로 묶고, 남는 폭은 전부
+   왼쪽 매트릭스에 준다(분야 이름이 길어져 넓을수록 가로 스크롤 없이 다 보인다). */
+.homebot{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
 .homebot.single{grid-template-columns:1fr}
 .homepanel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px 16px;box-shadow:var(--shadow);min-width:0}
 .homepanel h3{font-size:14px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:7px}
