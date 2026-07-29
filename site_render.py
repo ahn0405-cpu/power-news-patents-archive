@@ -398,6 +398,10 @@ a{color:inherit}
 .homekpi .rgs{display:flex;gap:7px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 .homekpi .rgc{font-size:12px;font-weight:700;color:var(--ink)}
 .homekpi .topap{font-size:15.5px;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .k{display:flex;align-items:center;gap:4px}
+.tile .tq{font-size:11px;color:var(--muted);cursor:help;font-weight:700}
+.tile .tq:hover{color:var(--accent2)}
+.kpinote{color:var(--muted);font-size:11.5px;line-height:1.6;margin:9px 2px 0}
 /* 오른쪽 '지난 브리핑'은 날짜+제목만 있으면 되므로 고정 폭으로 묶고, 남는 폭은 전부
    왼쪽 매트릭스에 준다(분야 이름이 길어져 넓을수록 가로 스크롤 없이 다 보인다). */
 .homebot{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
@@ -916,18 +920,34 @@ function kpiHTML(){
   const regChips = p.countries.map(rg=>regCnt[rg.code]
       ? '<span class="rgc">'+rg.emoji+regCnt[rg.code]+'</span>' : '').filter(Boolean).join('');
   const top = ranked[0];
+  const lookback = p.lookbackDays||90;
+  const nAp = p.applicants||0;      // 설정에 등록된 출원인 수(수집 대상)
   return '<div class="homekpi">'
     + tile('📰 뉴스 누적', n.items.length.toLocaleString()
-        + '<small>건 · 최근 '+esc(nL.x)+' '+nL.y+'건</small>')
+        + '<small>건 · 최근 '+esc(nL.x)+' '+nL.y+'건</small>',
+        '수집을 시작한 뒤 쌓인 전체 기사 수입니다. Google 뉴스 RSS 를 매일 조회해 새 기사만 더합니다.')
     + tile('📄 특허 누적', p.items.length.toLocaleString()
-        + (p.pubRange? '<small>건 · 공개 '+esc(p.pubRange.from)+' ~ '+esc(p.pubRange.to)+'</small>':'건'))
+        + (p.pubRange? '<small>건 · 공개 '+esc(p.pubRange.from)+' ~ '+esc(p.pubRange.to)+'</small>':'건'),
+        '아카이브에 저장된 특허 문헌 수입니다. 매주 최근 '+lookback+'일 공개분을 조회해 새 것만 더하며, '
+        + '출원인당 저장 상한이 있어 대형 출원인은 전수가 아니라 표본입니다.')
     + tile('🏢 분석 출원인', (ranked.length||0)
-        + '<small class="rgs">'+regChips+'</small>')
+        + '<small class="rgs">'+regChips+'</small>',
+        '수집 대상으로 등록한 출원인은 '+nAp+'곳이고, 그중 지금 아카이브에 문헌이 있는 곳이 '
+        + (ranked.length||0)+'곳입니다. 국기 옆 숫자는 국적별 출원인 수입니다.')
     + tile('🏆 최다 출원인', top
         ? '<span class="topap">'+(top.flag||'')+' '+esc(top.name)+'</span><small>'
-          + top.total+'건 (실제 공개 기준)</small>'
-        : '—')
-    + '</div>';
+          + top.total.toLocaleString()+'건 · 최근 '+lookback+'일 전 세계 공개</small>'
+        : '—',
+        '산출 근거: 등록한 출원인 '+nAp+'곳 가운데, 최근 '+lookback+'일 사이 전력 CPC 로 공개된 문헌이 '
+        + '가장 많은 곳입니다. EPO OPS 의 전 세계 공개 데이터가 기준이며 IP5 나 국내(KR) 로 한정하지 '
+        + '않습니다. 같은 발명이 여러 나라에 공개되면 각각 세므로 특허 패밀리 수가 아니라 공개 문헌 '
+        + '수이고, 조회 조건이 전력 CPC 라 배터리처럼 해당 CPC 에 출원이 몰리는 분야가 크게 잡힙니다. '
+        + '기업의 기술력이나 시장 점유율을 뜻하지 않습니다.')
+    + '</div>'
+    // 툴팁은 모바일에서 뜨지 않는다 → 특허 수치의 산출 근거는 한 줄로도 항상 보이게.
+    + '<p class="kpinote">특허 수치는 <b>EPO OPS 전 세계 공개 데이터</b> 기준입니다 — IP5 나 국내(KR) 로 '
+    + '한정하지 않으며, 최근 '+lookback+'일 공개분을 등록 출원인 '+nAp+'곳에 대해 전력 CPC 로 조회한 값입니다. '
+    + '같은 발명이 여러 나라에 공개되면 각각 세므로 특허 패밀리 수가 아니라 공개 문헌 수입니다.</p>';
 }
 
 
@@ -1064,7 +1084,11 @@ function f_recentCount(f, news){
   const series = news? f.perDay : f.perWeek;
   return series.slice(news? -7 : -4).reduce((a,b)=>a+b.y,0).toLocaleString();
 }
-function tile(k,v){ return '<div class="tile"><div class="k">'+k+'</div><div class="v mono">'+v+'</div></div>'; }
+// tip 을 주면 라벨 옆에 ⓘ 를 달고 마우스를 올렸을 때 산출 근거를 보여준다.
+function tile(k,v,tip){
+  const q = tip? '<span class="tq" title="'+esc(tip)+'">ⓘ</span>' : '';
+  return '<div class="tile"><div class="k">'+k+q+'</div><div class="v mono">'+v+'</div></div>';
+}
 
 function renderChips(){
   if(state.tab==='home'){ $('#catChips').innerHTML=''; const cc=$('#countryChips'); cc.hidden=true; cc.innerHTML=''; return; }
