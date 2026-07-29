@@ -44,7 +44,8 @@ _PHRASES = [
     ("전기요금", r"전기\s*요금"), ("한국전력", r"한국\s*전력|한전"),
     ("해상풍력", r"해상\s*풍력"), ("태양광", r"태양광"), ("예비율", r"예비율"),
     ("송전", r"송전"), ("변전소", r"변전소"), ("원전", r"원전|원자력"),
-    ("SMR", r"\bSMR\b|소형모듈"), ("HVDC", r"\bHVDC\b"), ("ESS", r"\bESS\b"),
+    # '소형모듈원자로'처럼 뒤에 말이 붙는 형태까지 대표어로 흡수한다.
+    ("SMR", r"\bSMR\b|소형모듈[가-힣]*"), ("HVDC", r"\bHVDC\b"), ("ESS", r"\bESS\b"),
     ("AI", r"\bAI\b|인공지능"), ("변압기", r"변압기"), ("전력난", r"전력\s*난"),
 ]
 _HANGUL = re.compile(r"[가-힣]")
@@ -87,8 +88,19 @@ def _phrase_hits(title: str) -> set[str]:
 
 
 def _news_terms(title: str) -> set[str]:
-    """한 기사에서 뽑은 (중복 없는) 키워드 집합. 기사당 1회만 세도록 set 반환."""
-    return set(_tokens(title)) | _phrase_hits(title)
+    """한 기사에서 뽑은 (중복 없는) 키워드 집합. 기사당 1회만 세도록 set 반환.
+
+    _PHRASES 가 대표어로 묶은 표현은 낱개 토큰 쪽에서 지운다. 안 그러면 같은 말이
+    두 칩으로 갈라진다 — '한국전력'(대표어)과 '한전'(토큰), '원전'과 '원자력',
+    'AI'와 '인공지능' 이 각각 따로 집계되던 문제.
+    """
+    toks = set(_tokens(title))
+    hits = _phrase_hits(title)
+    for canon, pat in _PHRASES:
+        if canon in hits:
+            rx = re.compile(pat, re.I)
+            toks = {t for t in toks if not rx.fullmatch(t)}
+    return toks | hits
 
 
 def _iter_articles(news_days: dict):

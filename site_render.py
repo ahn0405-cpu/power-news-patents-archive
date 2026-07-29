@@ -454,9 +454,6 @@ a{color:inherit}
 .brief .bsec:last-child{margin-bottom:0}
 .brief .bsl{font-size:12px;font-weight:800;color:var(--accent2);letter-spacing:.02em;
   margin:0 0 5px;padding-bottom:4px;border-bottom:1px solid var(--line)}
-/* 특허 탭 상단 브리핑 — 홈의 .brief 스타일을 그대로 쓰되 아래 여백만 준다 */
-#pbrief{margin:0 0 14px}
-#pbrief .brief{margin:0}
 .pbpast{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .pbpast summary{font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
 .pbpast summary:hover{color:var(--ink)}
@@ -685,7 +682,6 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <span id="resCount" aria-live="polite"></span>
     <button class="reset" id="reset" hidden>필터 초기화</button>
   </div>
-  <div id="pbrief" hidden></div>
   <p class="scopewrap" id="scope" hidden></p>
   <main id="results"></main>
   <button class="more" id="more" hidden>더 보기</button>
@@ -709,7 +705,6 @@ const LS_SAVE='pnp_saved', LS_READ='pnp_read';
 let saved = new Set(JSON.parse(localStorage.getItem(LS_SAVE)||'[]'));
 let read  = new Set(JSON.parse(localStorage.getItem(LS_READ)||'[]'));
 let briefCollapsed = localStorage.getItem('pnp_briefClosed')==='1';
-let pbriefCollapsed = localStorage.getItem('pnp_pbriefClosed')==='1';
 function persist(){ localStorage.setItem(LS_SAVE,JSON.stringify([...saved])); localStorage.setItem(LS_READ,JSON.stringify([...read])); }
 
 const state = { tab:'home', view:'list', q:'', cats:new Set(), countries:new Set(),
@@ -907,8 +902,24 @@ function patentBriefHomeHTML(){
     + (b.headline?'<h4 class="pbh">'+esc(b.headline)+'</h4>':'')
     + '<div class="bbody">'+body+'</div>'
     + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + pastPatentBriefsHTML()
     + (b.basis?'<p class="pbfoot">'+esc(b.basis)+'</p>':'')
     + '</div>';
+}
+
+// 지난 특허 브리핑 — 특허 탭 배너를 없애면서 이리로 옮겼다(접어 둔다).
+function pastPatentBriefsHTML(){
+  const past=(FEED.patentBriefs||[]).slice(1);
+  if(!past.length) return '';
+  return '<details class="pbpast"><summary>지난 특허 브리핑 '+past.length+'건</summary>'
+    + '<div class="timeline">'
+    + past.map(x=>{
+        const ps=(x.sections&&x.sections.length)? x.sections.flatMap(s=>s.paras||[]) : (x.body||[]);
+        return '<div class="tl"><div class="tld">'+esc(x.week||'')+' 수집</div>'
+          + '<div class="tlh">'+esc(x.headline||'(제목 없음)')+'</div>'
+          + '<div class="tlb">'+ps.slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('')+'</div></div>';
+      }).join('')
+    + '</div></details>';
 }
 
 function kpiHTML(){
@@ -1007,45 +1018,6 @@ function patentPicks(n){
 }
 
 // 특허가 '어느 기간 공개분'인지 한 줄로. 주별 버킷은 수집한 주라서 공개일과 다르다.
-// 특허 브리핑(주 1회) — 표가 못 보여주는 '무슨 기술인가'를 제목을 읽고 서술한 것.
-// 뉴스 브리핑과 같은 스키마지만 키가 날짜가 아니라 수집 주(week)다.
-function patentBriefHTML(){
-  const b = FEED.patentBrief;
-  if(!b || !(b.headline || (b.body&&b.body.length) || (b.sections&&b.sections.length))) return '';
-  // 국내/해외를 나눠 쓰는 구조(sections)가 있으면 소제목과 함께, 없으면 옛 body 를 그대로.
-  const body = (b.sections&&b.sections.length)
-    ? b.sections.map(s=>'<div class="bsec"><div class="bsl">'+esc(s.label||'')+'</div>'
-        + (s.paras||[]).map(p=>'<p>'+esc(p)+'</p>').join('') + '</div>').join('')
-    : (b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
-  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
-    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
-  const foot=[];
-  if(b.author) foot.push('✍️ '+esc(b.author)+(b.mode?' · '+esc(b.mode):''));
-  if(b.basis) foot.push('<span class="sep">·</span> '+esc(b.basis));
-  if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
-  // 지난 주 브리핑은 접어서 아래에. 아직 하나뿐이면 아무것도 붙지 않는다.
-  const past=(FEED.patentBriefs||[]).slice(1);
-  const pastHTML = past.length ? '<details class="pbpast"><summary>지난 특허 브리핑 '
-      + past.length + '건</summary><div class="timeline">'
-      + past.map(x=>{
-          const ps = (x.sections&&x.sections.length)
-            ? x.sections.flatMap(s=>s.paras||[]) : (x.body||[]);
-          return '<div class="tl"><div class="tld">'+esc(x.week||'')+' 수집</div>'
-            + '<div class="tlh">'+esc(x.headline||'(제목 없음)')+'</div>'
-            + '<div class="tlb">'+ps.slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('')
-            + '</div></div>'; }).join('')
-      + '</div></details>' : '';
-  return '<div class="brief'+(pbriefCollapsed?' collapsed':'')+'">'
-    + '<div class="bhead"><span class="btag">🔬 이번 주 특허 브리핑</span>'
-    + (b.week?'<span class="bdate">'+esc(b.week)+' 수집분</span>':'')
-    + '<button class="btoggle" id="pbriefToggle">'+(pbriefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
-    + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
-    + '<div class="bbody">'+body+'</div>'
-    + (pts?'<div class="bpoints">'+pts+'</div>':'')
-    + (foot.length?'<div class="bfoot">'+foot.join(' ')+'</div>':'')
-    + pastHTML
-    + '</div>';
-}
 
 function patentScopeHTML(){
   const f=FEED.patents, r=f.pubRange;
@@ -1162,9 +1134,6 @@ function render(){
   $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
     + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
   // 특허 탭엔 '어느 기간 공개분인지'를 항상 명시(주별 버킷=수집 주와 혼동 방지)
-  const pb = state.tab==='patents' ? patentBriefHTML() : '';
-  $('#pbrief').innerHTML = pb;
-  $('#pbrief').hidden = !pb;
   $('#scope').innerHTML = state.tab==='patents' ? patentScopeHTML() : '';
   $('#scope').hidden = state.tab!=='patents';
   $('#reset').hidden = !active;
@@ -1338,9 +1307,9 @@ function krEntryHTML(list){
       + '<span class="kcnt">'+g.items.length+'건</span></div><ul class="klist">'+lis+more+'</ul></div>';
   }).join('');
   return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개</h3>'
-    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 나라 중 한국을 고른 건 '
-    + '그만큼 국내 시장에서 지킬 값어치가 있다고 본 기술이라는 뜻이고, 국내 업계에는 '
-    + '경쟁사가 무엇을 들고 들어왔는지를 보여주는 신호가 됩니다. 제목을 누르면 원문으로 이동. '
+    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
+    + '포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다. '
+    + '분야별 동향을 살피는 데 참고가 됩니다. 제목을 누르면 원문으로 이동. '
     + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
     + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
     + '<div class="krwrap">'+blocks+'</div></div>';
@@ -1494,15 +1463,6 @@ function wire(){
     const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
-  // 특허 브리핑 접기/펼치기 — 카드만 교체해 펼쳐둔 '지난 브리핑'이 닫히지 않게 한다.
-  $('#pbrief').onclick = e=>{
-    if(!e.target.closest('#pbriefToggle')) return;
-    pbriefCollapsed=!pbriefCollapsed;
-    localStorage.setItem('pnp_pbriefClosed', pbriefCollapsed?'1':'0');
-    const cur=$('#pbrief').querySelector('.brief');
-    if(cur){ const tmp=document.createElement('div'); tmp.innerHTML=patentBriefHTML();
-      const next=tmp.firstElementChild; if(next) cur.replaceWith(next); }
-  };
   $('#home').onclick = e=>{
     // 브리핑 접기/펼치기
     if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
