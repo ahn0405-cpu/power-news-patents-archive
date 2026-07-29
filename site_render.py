@@ -115,7 +115,7 @@ def _canon_assignee(name: str) -> str:
     return disp or s
 
 SITE_TITLE = "IP-Power 플랫폼"
-SITE_TAGLINE = "전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대"
+SITE_TAGLINE = "전력 이슈 뉴스와 특허를 한자리에 — 매일 자동으로 모으고 살핍니다"
 
 
 def _squash(s: str) -> str:
