@@ -697,6 +697,9 @@ const FEED = JSON.parse(document.getElementById('feed').textContent);
 const PAGE = 60;
 const $ = s => document.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// 링크 주소는 http(s) 만 허용한다. 제목·요약은 esc 로 막히지만 href 는 esc 를 통과해도
+// javascript: 스킴이 그대로 남아 클릭 한 번으로 실행된다(RSS·OPS 응답은 외부 입력이다).
+const safeUrl = u => { const s=String(u==null?'':u).trim(); return /^https?:\/\//i.test(s) ? s : ''; };
 const LS_KEY = 'pnp_lastVisit';
 const lastVisit = Number(localStorage.getItem(LS_KEY) || 0);
 
@@ -789,7 +792,7 @@ function card(it, cm){
   const isS = saved.has(it.url), isR = read.has(it.url);
   return '<article class="card'+(nw?' isnew':'')+(isR?' isread':'')+'">'
     + '<button class="star'+(isS?' on':'')+'" data-save="'+esc(it.url)+'" aria-label="저장" title="저장">'+(isS?'★':'☆')+'</button>'
-    + '<a class="t" href="'+esc(it.url)+'" target="_blank" rel="noopener" data-read="'+esc(it.url)+'">'+hl(it.title||'(제목 없음)')+'</a>'
+    + '<a class="t" href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener" data-read="'+esc(it.url)+'">'+hl(it.title||'(제목 없음)')+'</a>'
     + '<div class="meta">'+meta+mock+'<span class="tag">'+(c.emoji||'')+' '+esc(c.name)+'</span></div>'
     + sum + '</article>';
 }
@@ -842,11 +845,15 @@ function insightsHTML(){
   if(!ins || !ins.asOf) return '';
   const w = ins.window || {recentDays:7, recentWeeks:4};
 
+  // 비교할 '이전' 구간에 기사가 하나도 없으면(아카이브를 막 시작한 때) 증감을 숨긴다.
+  // 안 그러면 prev 가 전부 0 이라 모든 항목이 전량 급증한 것처럼 보인다.
+  const cmp = ins.comparable !== false;
+
   // 1) 최근 많이 언급된 키워드 (클릭 → 검색)
   const kws = (ins.trending||[]);
   const kwHtml = kws.length ? kws.map(k=>{
-    const up = k.rising ? '<span class="up" title="이전 대비 증가">▲'+(k.count-k.prev)+'</span>' : '';
-    return '<button class="kw'+(k.rising?' hot':'')+'" data-kw="'+esc(k.term)+'" title="'+esc(k.term)
+    const up = (cmp && k.rising) ? '<span class="up" title="이전 대비 증가">▲'+(k.count-k.prev)+'</span>' : '';
+    return '<button class="kw'+((cmp&&k.rising)?' hot':'')+'" data-kw="'+esc(k.term)+'" title="'+esc(k.term)
       +' — 검색">'+esc(k.term)+'<span class="c">'+k.count+'</span>'+up+'</button>';
   }).join('') : '<span class="iempty">데이터가 쌓이면 표시됩니다.</span>';
 
@@ -854,19 +861,24 @@ function insightsHTML(){
   const ct = (ins.catTrend||[]).slice(0,6);
   const ctHtml = ct.length ? ct.map(r=>{
     const d=r.delta; const cls=d>0?'up':(d<0?'dn':'fl'); const sym=d>0?'▲':(d<0?'▼':'–');
-    const dd=d===0?'':(' '+sym+Math.abs(d));
+    const dd=(!cmp || d===0)?'':(' '+sym+Math.abs(d));
     return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터"><div class="nm">'
       +r.emoji+' '+esc(r.name)+'</div><div class="d">'+r.recent+'<span class="n">건</span>'
-      +'<span class="'+cls+'">'+dd+'</span></div></div>';
+      +'<span class="'+(cmp?cls:'fl')+'">'+dd+'</span></div></div>';
   }).join('') : '<span class="iempty">–</span>';
+
+  const kwSub = cmp ? '최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색'
+                    : '최근 '+w.recentDays+'일 뉴스 제목 · 눌러서 검색 (비교할 이전 기간이 아직 쌓이지 않아 증감은 표시하지 않습니다)';
+  const ctSub = cmp ? '카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터'
+                    : '카테고리별 최근 '+w.recentDays+'일 새 기사 · 눌러서 필터';
 
   // '이번 주 공개 특허'는 아래 특허 섹션으로 옮겼다 — 인사이트는 뉴스 기반 둘만 둔다.
   return '<div class="insights two">'
     + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
-    + '<p class="isub">최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색</p>'
+    + '<p class="isub">'+kwSub+'</p>'
     + '<div class="kwrap">'+kwHtml+'</div></div>'
     + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
-    + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터</p>'
+    + '<p class="isub">'+ctSub+'</p>'
     + '<div class="trend">'+ctHtml+'</div></div></div>';
 }
 
@@ -877,7 +889,7 @@ function patentPickPanelHTML(){
   const pkHtml = picks.map(p=>{
     // 국기는 매트릭스와 같은 출원인 국적(aFlag)으로 통일 — 같은 화면에서 달라 보이지 않게.
     const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
-    return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
+    return '<a class="pk" href="'+esc(safeUrl(p.url))+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
       +'<span class="pf">'+(p.aFlag||'📄')+'</span>'
       +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
   }).join('');
@@ -1298,7 +1310,7 @@ function krEntryHTML(list){
   const blocks=order.map(([nm,g])=>{
     const lis=g.items.slice(0,12).map(it=>{
       const c=cm[it.category];
-      return '<li><a href="'+esc(it.url)+'" target="_blank" rel="noopener">'+esc(it.title)+'</a>'
+      return '<li><a href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener">'+esc(it.title)+'</a>'
         + (c?'<span class="kc">'+esc(c.name)+'</span>':'')
         + '<span class="kn mono">'+esc(it.number||'')+'</span></li>';
     }).join('');

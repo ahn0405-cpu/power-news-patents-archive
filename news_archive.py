@@ -103,7 +103,13 @@ def merge_today(days: dict[str, dict], date: str, fresh: list[dict],
     added = 0
     for art in fresh:
         key = _norm_key(art.get("title", ""))
+        url = art.get("url")
+        # 제목 완전일치와 URL 동일을 모두 본다. URL 검사가 빠져 있어 같은 기사가
+        # 제목만 바뀌어 다시 들어오던 문제가 있었다(prior 에 URL 을 담아두고도
+        # 조회하지 않았다).
         if not key or key in prior or key in today_keys:
+            continue
+        if url and (url in prior or url in today_keys):
             continue
         # 같은 사건의 다른 매체·다른 날 기사(제목만 조금 다른 경우) 제외
         bg = bigrams(art.get("title", ""))
@@ -111,9 +117,19 @@ def merge_today(days: dict[str, dict], date: str, fresh: list[dict],
             continue
         recent_bg.append(bg)
         today_keys.add(key)
+        if url:
+            today_keys.add(url)
+        # mock 여부는 항목별로 남긴다. 하루 안에 라이브 수집과 MOCK 폴백이 섞이면
+        # 날짜 단위 플래그로는 실데이터에 '샘플' 배지가 붙거나 그 반대가 된다
+        # (특허 쪽 merge_week 와 같은 방식).
+        if mock:
+            art["mock"] = True
+        else:
+            art.pop("mock", None)
         today["articles"].append(art)
         added += 1
-    today["mock"] = mock
+    # 날짜 단위 플래그는 '이 날 샘플이 하나라도 섞였는가'로만 쓴다(하위호환).
+    today["mock"] = any(a.get("mock") for a in today["articles"])
     days[date] = today
     return today, added
 

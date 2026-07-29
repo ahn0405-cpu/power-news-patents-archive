@@ -119,6 +119,34 @@ def main() -> int:
         pa.merge_stats(store, st, "2026-07-27")
         check(store["totals"].get("기존") == 1, "이전 출원인 값이 남는다")
         check(len(store["totals"]) > 1, "새 값이 더해진다")
+
+        print("· 뉴스 아카이브 중복 판정·MOCK 표시")
+        import news_archive as na
+        # URL 동일 판정: 제목이 완전히 달라도 같은 기사면 다시 담기지 않아야 한다.
+        days = {"2026-07-28": {"date": "2026-07-28", "articles": [
+            {"title": "제목 A", "url": "https://ex.com/same"}]}}
+        _, n = na.merge_today(days, "2026-07-29", [
+            {"title": "완전히 딴판인 제목 B 입니다", "url": "https://ex.com/same"}], False)
+        check(n == 0, "같은 URL 기사는 제목이 달라도 다시 담지 않는다")
+        _, n = na.merge_today(days, "2026-07-29", [
+            {"title": "아주 새로운 기사 제목 하나", "url": "https://ex.com/new"}], False)
+        check(n == 1, "새 기사는 정상적으로 담긴다")
+        # 하루 안에 라이브와 MOCK 이 섞여도 실데이터에 샘플 표시가 붙으면 안 된다.
+        d2 = {}
+        na.merge_today(d2, "2026-07-29", [{"title": "실데이터 기사", "url": "u1"}], False)
+        na.merge_today(d2, "2026-07-29", [{"title": "샘플 기사", "url": "u2"}], True)
+        arts = d2["2026-07-29"]["articles"]
+        check(not arts[0].get("mock") and arts[1].get("mock") is True,
+              "MOCK 표시는 항목별로 남는다")
+
+        print("· 링크 스킴 제한 (javascript: 차단)")
+        import re as _re
+        import site_render as sr
+        hrefs = _re.findall(r"href=\"'\+esc\((\w+)\(", sr._JS)
+        raw = _re.findall(r"href=\"'\+esc\((?!safeUrl)", sr._JS)
+        check("const safeUrl" in sr._JS, "safeUrl 헬퍼가 있다")
+        check(bool(hrefs) and not raw,
+              f"모든 링크 href 가 safeUrl 을 거친다 ({len(hrefs)}곳)")
     finally:
         ps._search, ps._get_token = orig[0], orig[1]
         cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY = orig[2], orig[3], orig[4]

@@ -91,7 +91,7 @@ def main() -> None:
 
     # ── 출원인×공개 특허청 정확 집계 (매일 일부만 회전) ──
     # 전 출원인을 한 번에 돌리면 OPS 쿼터에 걸리므로, 매일 도는 뉴스 실행에 얹어
-    # 날짜 기준으로 8곳씩 갱신한다(31곳 ≈ 4일 한 바퀴). 결과는 병합만 하고 덮어쓰지 않는다.
+    # 날짜 기준으로 일부만 갱신한다(PATENT_OFFICE_BATCH, 65곳 ≈ 6일 한 바퀴). 결과는 병합만 하고 덮어쓰지 않는다.
     if what in ("news", "offices", "both"):
         n = patent_archive.merge_stats(pstats_store, patent_source.collect_offices(now), today)
         if n:

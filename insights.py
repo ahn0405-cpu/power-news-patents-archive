@@ -49,6 +49,8 @@ _PHRASES = [
     ("AI", r"\bAI\b|인공지능"), ("변압기", r"변압기"), ("전력난", r"전력\s*난"),
 ]
 _HANGUL = re.compile(r"[가-힣]")
+# 기사마다 도는 경로라 패턴은 미리 컴파일해 둔다(제목 수 × 표현 수만큼 호출된다).
+_PHRASE_RX = [(canon, re.compile(pat, re.I)) for canon, pat in _PHRASES]
 
 
 def _to_date(s: str):
@@ -96,10 +98,10 @@ def _news_terms(title: str) -> set[str]:
     """
     toks = set(_tokens(title))
     hits = _phrase_hits(title)
-    for canon, pat in _PHRASES:
-        if canon in hits:
-            rx = re.compile(pat, re.I)
-            toks = {t for t in toks if not rx.fullmatch(t)}
+    if hits:
+        for canon, rx in _PHRASE_RX:
+            if canon in hits:
+                toks = {t for t in toks if not rx.fullmatch(t)}
     return toks | hits
 
 
@@ -167,9 +169,16 @@ def build(news_days: dict, patent_weeks: dict) -> dict:
     latest = max(dates)
     recent_from = latest - timedelta(days=RECENT_DAYS - 1)
     prior_from = latest - timedelta(days=RECENT_DAYS - 1 + PRIOR_DAYS)
+    # 아카이브를 막 시작했으면 '이전' 창이 비어 prev 가 전부 0 이 된다. 그대로 두면
+    # 모든 키워드에 증가 표시가 붙어 전부 급증한 것처럼 보인다 → 비교 가능 여부를
+    # 함께 내보내고 화면에서 증감 표시를 감춘다.
+    prior_n = sum(1 for d, _a in _iter_articles(news_days)
+                  if d is not None and prior_from <= d < recent_from)
     return {
         "asOf": latest.isoformat(),
         "window": {"recentDays": RECENT_DAYS, "priorDays": PRIOR_DAYS},
+        "priorArticles": prior_n,
+        "comparable": prior_n > 0,
         "trending": _trending(news_days, recent_from, prior_from),
         "catTrend": _cat_trend(news_days, recent_from, prior_from),
     }
