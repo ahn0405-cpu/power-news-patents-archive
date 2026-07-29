@@ -60,7 +60,8 @@ MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on 
 # data/patents/stats.json 에 병합해 누적한다. 8곳/일이면 31곳을 4일에 한 바퀴 돈다
 # (요청량 = 8 × (1 총계 + 6 특허청) = 56/일).
 OFFICE_COUNTS = os.getenv("PATENT_OFFICE_COUNTS", "on") != "off"
-OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "8"))   # 한 실행에서 처리할 출원인 수
+OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "11"))  # 한 실행에서 처리할 출원인 수
+# (출원인이 40→65곳으로 늘며 8곳/일이면 한 바퀴에 8일이 걸린다. 11곳/일이면 6일.)
 # 집계는 '있으면 좋은' 부가 정보다. OPS 가 느려도 매일 도는 뉴스 배포를 붙잡으면 안 되므로
 # 전체 소요에 상한을 두고, 넘으면 그 자리에서 접고 다음 날 이어서 채운다.
 OFFICE_BUDGET = float(os.getenv("PATENT_OFFICE_BUDGET", "180"))   # 초
@@ -90,6 +91,9 @@ APPLICANTS = [
     {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower"},   # ✔ 검색어 확인(최근 공개 0)
     {"name": "Westinghouse", "region": "US", "flag": "🇺🇸", "q": "Westinghouse Electric"},
     {"name": "Kairos Power", "region": "US", "flag": "🇺🇸", "q": "Kairos Power"},
+    {"name": "NuScale", "region": "US", "flag": "🇺🇸", "q": "NuScale"},
+    {"name": "TerraPower", "region": "US", "flag": "🇺🇸", "q": "TerraPower"},
+    {"name": "Vertiv", "region": "US", "flag": "🇺🇸", "q": "Vertiv"},   # 데이터센터 전원
     # 🇰🇷 한국
     {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
@@ -106,8 +110,13 @@ APPLICANTS = [
     {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
     {"name": "LG에너지솔루션", "region": "KR", "flag": "🇰🇷", "q": "LG Energy Solution"},
     {"name": "삼성SDI", "region": "KR", "flag": "🇰🇷", "q": "Samsung SDI"},
+    {"name": "SK온", "region": "KR", "flag": "🇰🇷", "q": ["SK On", "에스케이온"]},
     {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
     {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan"},
+    # 해저·초고압 케이블. 대한전선만 있고 빠져 있었다(정규화 별칭 표에는 등록돼 있었음).
+    {"name": "LS전선", "region": "KR", "flag": "🇰🇷", "q": ["LS Cable", "엘에스전선"]},
+    {"name": "한화솔루션", "region": "KR", "flag": "🇰🇷", "q": ["Hanwha Solutions", "한화솔루션"]},
+    {"name": "씨에스윈드", "region": "KR", "flag": "🇰🇷", "q": ["CS Wind", "씨에스윈드"]},
     {"name": "산일전기", "region": "KR", "flag": "🇰🇷",
      "q": ["Sanil Electric", "산일전기"]},          # ✔ 검색어 확인(최근 공개 0)
     {"name": "제룡전기", "region": "KR", "flag": "🇰🇷",
@@ -118,6 +127,13 @@ APPLICANTS = [
     {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": "Huawei"},                          # ✔
     {"name": "CATL", "region": "CN", "flag": "🇨🇳", "q": "Contemporary Amperex Technology"},   # ✔
     {"name": "CNNC", "region": "CN", "flag": "🇨🇳", "q": "China National Nuclear"},   # 중국핵공업집단
+    {"name": "CGN", "region": "CN", "flag": "🇨🇳", "q": "China General Nuclear"},     # 중국광핵집단
+    {"name": "Sungrow", "region": "CN", "flag": "🇨🇳", "q": "Sungrow"},               # 인버터·ESS PCS
+    {"name": "TBEA", "region": "CN", "flag": "🇨🇳", "q": "TBEA"},                     # 변압기
+    {"name": "Goldwind", "region": "CN", "flag": "🇨🇳", "q": "Goldwind"},
+    {"name": "Ming Yang", "region": "CN", "flag": "🇨🇳", "q": "Mingyang"},
+    {"name": "Envision", "region": "CN", "flag": "🇨🇳", "q": "Envision Energy"},
+    {"name": "BYD", "region": "CN", "flag": "🇨🇳", "q": "BYD"},
     # 🇯🇵 일본
     {"name": "Hitachi Energy", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Energy"},          # ✔
     # 히타치제작소(Hitachi, Ltd.). 그냥 "Hitachi" 로 두면 위 Hitachi Energy 까지 걸려
@@ -131,12 +147,27 @@ APPLICANTS = [
     {"name": "Toyota", "region": "JP", "flag": "🇯🇵", "q": "Toyota"},
     {"name": "Sumitomo Electric", "region": "JP", "flag": "🇯🇵", "q": "Sumitomo Electric"},    # ✔
     {"name": "Furukawa Electric", "region": "JP", "flag": "🇯🇵", "q": "Furukawa Electric"},
+    {"name": "Fuji Electric", "region": "JP", "flag": "🇯🇵", "q": "Fuji Electric"},   # 전력반도체·인버터
+    {"name": "Meidensha", "region": "JP", "flag": "🇯🇵", "q": "Meidensha"},
     # 🇪🇺 유럽
+    # Siemens 계열은 구체적인 쪽을 먼저 둔다. q="Siemens" 가 Energy·Gamesa 문서까지
+    # 걸리므로, 목록에서 앞선 항목이 공개번호 dedup 으로 먼저 가져가게 하려는 것.
+    # (stats 의 총계는 출원인별 독립 질의라 Siemens 총계에 두 곳이 섞여 있다 — 월요일
+    #  로그에서 실제 건수를 보고 필요하면 q 를 "Siemens Aktiengesellschaft" 로 좁힌다.)
+    {"name": "Siemens Energy", "region": "EU", "flag": "🇩🇪", "q": "Siemens Energy"},
+    {"name": "Siemens Gamesa", "region": "EU", "flag": "🇪🇸", "q": "Siemens Gamesa"},
     {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens"},                        # ✔
     {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
     {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
     {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
     {"name": "Vestas", "region": "EU", "flag": "🇩🇰", "q": "Vestas Wind Systems"},
+    {"name": "Nordex", "region": "EU", "flag": "🇩🇪", "q": "Nordex"},
+    {"name": "Prysmian", "region": "EU", "flag": "🇮🇹", "q": "Prysmian"},     # 해저·초고압 케이블
+    {"name": "Nexans", "region": "EU", "flag": "🇫🇷", "q": "Nexans"},
+    {"name": "NKT", "region": "EU", "flag": "🇩🇰", "q": "NKT"},               # HVDC 케이블
+    {"name": "Framatome", "region": "EU", "flag": "🇫🇷", "q": "Framatome"},
+    {"name": "Rolls-Royce SMR", "region": "EU", "flag": "🇬🇧", "q": "Rolls-Royce SMR"},
+    {"name": "Legrand", "region": "EU", "flag": "🇫🇷", "q": "Legrand"},
 ]
 
 # ── 분야(기술 카테고리) — CPC 분류 기반 ────────────────────────────
