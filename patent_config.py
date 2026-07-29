@@ -86,6 +86,10 @@ APPLICANTS = [
     # 🇰🇷 한국
     {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
+    # 영문 표기가 "KOREA HYDRO & NUCLEAR POWER" 라 '&' 때문에 어구가 끊길 수 있어
+    # 앞부분만 쓰고, 한글 원표기도 함께 묶는다(산일전기 사례 — 한글로만 잡히는 문서가 있다).
+    {"name": "한국수력원자력", "region": "KR", "flag": "🇰🇷",
+     "q": ["Korea Hydro", "한국수력원자력"]},
     {"name": "HD현대일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "Hyundai Electric"},            # ✔
     {"name": "효성중공업", "region": "KR", "flag": "🇰🇷", "q": "Hyosung Heavy Industries"},       # ✔
     # 2022년 두산중공업 → 두산에너빌리티로 사명 변경. 변경 전 출원이 옛 이름으로 남아 둘 다 조회.
