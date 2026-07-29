@@ -388,7 +388,10 @@ a{color:inherit}
 .homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,.homemode #scope,
 .homemode #more,.homemode #viewToggle{display:none!important}
 .home{display:flex;flex-direction:column;gap:16px}
-.home .sec{font-size:12px;font-weight:800;margin:4px 2px 2px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+/* 섹션 구분(트렌드 인사이트 / 뉴스 / 특허). 한글이라 대문자 변환은 쓰지 않는다 */
+.home .sec{font-size:13px;font-weight:800;color:var(--ink);letter-spacing:-.01em;
+  margin:20px 2px 8px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.home .sec:first-child{margin-top:4px}
 .homekpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .homekpi .tile .v{font-size:21px;line-height:1.25}
 .homekpi .tile small{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-top:3px}
@@ -413,13 +416,21 @@ a{color:inherit}
 .timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
 .timeline .tl.open .tlb{display:block}
 .mxmini{overflow-x:auto}
-/* 홈 하단 왼쪽 = 특허 브리핑 요약 */
-.pbmini .pbh{font-size:15px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:2px 0 11px}
-.pbmini .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-.pbmini .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
-.pbmini .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
-.pbmini .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
-@media (max-width:900px){ .pbmini .bpoints{grid-template-columns:1fr} }
+/* 홈 특허 섹션 = 브리핑 전문(접기 없음) */
+.pbhome .pbw{font-size:11px;font-weight:600;color:var(--muted);margin-left:2px}
+.pbhome .pbh{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:4px 0 11px}
+.pbhome .bbody{font-size:13px;line-height:1.75}
+.pbhome .bbody p{margin:0 0 7px}
+.pbhome .bsec{margin:0 0 12px}
+.pbhome .bsl{font-size:12px;font-weight:800;color:var(--accent2);margin:0 0 5px;
+  padding-bottom:4px;border-bottom:1px solid var(--line)}
+.pbhome .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:11px}
+.pbhome .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.pbhome .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.pbhome .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
+.pbhome .pbfoot{color:var(--muted);font-size:11px;margin:11px 0 0;padding-top:9px;
+  border-top:1px solid var(--line)}
+@media (max-width:1100px){ .pbhome .bpoints{grid-template-columns:1fr} }
 /* 해외 출원인의 국내 공개 */
 .krwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .krow{min-width:0}
@@ -450,6 +461,7 @@ a{color:inherit}
 @media (max-width:720px){ .homekpi{grid-template-columns:repeat(2,1fr)} }
 /* 트렌드 인사이트 바 */
 .insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
+.insights.two{grid-template-columns:1.15fr 1fr}   /* '이번 주 공개 특허'를 특허 섹션으로 뺀 뒤 */
 .insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:12px 14px;box-shadow:var(--shadow);min-width:0}
 .insights h3{font-size:12px;font-weight:800;letter-spacing:.01em;margin:0 0 2px;display:flex;
@@ -849,26 +861,50 @@ function insightsHTML(){
       +'<span class="'+cls+'">'+dd+'</span></div></div>';
   }).join('') : '<span class="iempty">–</span>';
 
-  // 3) 이번 주 공개 특허 (질적 노출 — 건수 아님). 최신 주 특허 중 최근 공개분 일부.
-  const picks = patentPicks(5);
-  const pkHtml = picks.length ? picks.map(p=>{
-    // 국기는 매트릭스와 같은 출원인 국적(aFlag)으로 통일 — 같은 화면에서 달라 보이지 않게.
-    const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
-    return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
-      +'<span class="pf">'+(p.aFlag||'📄')+'</span>'
-      +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
-  }).join('') : '<span class="iempty">최근 공개 특허가 아직 없습니다.</span>';
-
-  return '<div class="insights">'
+  // '이번 주 공개 특허'는 아래 특허 섹션으로 옮겼다 — 인사이트는 뉴스 기반 둘만 둔다.
+  return '<div class="insights two">'
     + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
     + '<p class="isub">최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색</p>'
     + '<div class="kwrap">'+kwHtml+'</div></div>'
     + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
     + '<p class="isub">카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터</p>'
-    + '<div class="trend">'+ctHtml+'</div></div>'
-    + '<div class="ipanel"><h3>📄 이번 주 공개 특허</h3>'
-    + '<p class="isub">최근 공개분 일부 · 무엇을/누가 출원했는지 (건수 아님) · 클릭 시 원문</p>'
-    + '<div class="ppick">'+pkHtml+'</div></div></div>';
+    + '<div class="trend">'+ctHtml+'</div></div></div>';
+}
+
+// 이번 주 공개 특허 — 인사이트에 있던 것을 특허 섹션으로 옮겼다(질적 노출, 건수 아님).
+function patentPickPanelHTML(){
+  const picks = patentPicks(8);
+  if(!picks.length) return '';
+  const pkHtml = picks.map(p=>{
+    // 국기는 매트릭스와 같은 출원인 국적(aFlag)으로 통일 — 같은 화면에서 달라 보이지 않게.
+    const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
+    return '<a class="pk" href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
+      +'<span class="pf">'+(p.aFlag||'📄')+'</span>'
+      +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
+  }).join('');
+  return '<div class="homepanel"><h3>📄 이번 주 공개 특허</h3>'
+    + '<p class="sub">최근 공개분 일부 · 무엇을 누가 출원했는지(건수 아님) · 누르면 원문.</p>'
+    + '<div class="ppick">'+pkHtml+'</div></div>';
+}
+
+// 홈에서는 특허 브리핑을 접기 없이 전문으로 보여준다(특허 탭 배너와 달리 토글 없음).
+function patentBriefHomeHTML(){
+  const b=FEED.patentBrief;
+  if(!b || !(b.headline || (b.sections&&b.sections.length) || (b.body&&b.body.length))) return '';
+  const body = (b.sections&&b.sections.length)
+    ? b.sections.map(s=>'<div class="bsec"><div class="bsl">'+esc(s.label||'')+'</div>'
+        + (s.paras||[]).map(p=>'<p>'+esc(p)+'</p>').join('') + '</div>').join('')
+    : (b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
+  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
+    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
+  return '<div class="homepanel pbhome"><h3>🔬 이번 주 특허 브리핑'
+    + (b.week? '<span class="pbw">'+esc(b.week)+' 수집분</span>':'')
+    + '<span class="morelink" data-go="patents">특허 탭 →</span></h3>'
+    + (b.headline?'<h4 class="pbh">'+esc(b.headline)+'</h4>':'')
+    + '<div class="bbody">'+body+'</div>'
+    + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + (b.basis?'<p class="pbfoot">'+esc(b.basis)+'</p>':'')
+    + '</div>';
 }
 
 function kpiHTML(){
@@ -894,22 +930,6 @@ function kpiHTML(){
     + '</div>';
 }
 
-// 홈용 특허 브리핑 요약 — 본문은 빼고 헤드라인+포인트만. 전문은 특허 탭에 있다.
-// 뉴스 브리핑(매일)과 나란히 두면 주 1회짜리가 매일 새 것처럼 보이므로, 설명하는
-// 대상인 매트릭스 바로 위에 붙여 '특허 블록'으로 묶는다.
-function patentBriefMiniHTML(){
-  const b=FEED.patentBrief;
-  if(!b || !b.headline) return '';
-  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
-    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
-  return '<div class="homepanel pbmini"><h3>🔬 이번 주 특허 브리핑'
-    + '<span class="morelink" data-go="patents">특허 탭에서 전문 →</span></h3>'
-    + '<p class="sub">'+(b.week? esc(b.week)+' 수집분 · ':'')
-    + '건수만으로는 안 보이는 기술 갈래를 제목까지 읽어 정리합니다(주 1회, 해외 출원인 중심).</p>'
-    + '<h4 class="pbh">'+esc(b.headline)+'</h4>'
-    + (pts?'<div class="bpoints">'+pts+'</div>':'')
-    + '</div>';
-}
 
 
 function timelineHTML(){
@@ -925,17 +945,31 @@ function timelineHTML(){
     + '<div class="timeline">'+inner+'</div></div>';
 }
 
+// 홈 구성: 아카이브 현황(숫자) → 트렌드 인사이트(계산) → 뉴스 → 특허.
+// 주제별로 묶어 읽히게 한다. 예전에는 뉴스 브리핑과 특허 브리핑 사이에 KPI·인사이트가
+// 끼어 있어 어디까지가 뉴스 얘기인지 흐렸다.
 function renderHome(){
   const parts=[];
-  const bh=briefHTML(); if(bh) parts.push(bh);
   parts.push(kpiHTML());
-  const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
+  const ih=insightsHTML(); if(ih) parts.push('<div class="sec">🔎 트렌드 인사이트</div>'+ih);
+
+  // 📰 뉴스 — 브리핑 전문 + 지난 브리핑 타임라인.
   // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
-  const hasPast=(FEED.briefs||[]).length>1;
-  // 왼쪽 = 특허 브리핑 요약, 오른쪽 = 지난 뉴스 브리핑.
+  const bh=briefHTML();
+  if(bh){
+    const hasPast=(FEED.briefs||[]).length>1;
+    parts.push('<div class="sec">📰 뉴스</div>'
+      + '<div class="homebot'+(hasPast?'':' single')+'">'
+      + bh + (hasPast? timelineHTML() : '') + '</div>');
+  }
+
+  // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허.
   // 매트릭스는 특허 탭에 전체가 있어 홈에서는 뺐다(같은 표를 두 번 보여주게 된다).
-  parts.push('<div class="homebot'+(hasPast?'':' single')+'">'
-    + (patentBriefMiniHTML()||'') + timelineHTML() + '</div>');
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML();
+  if(pb||pk){
+    parts.push('<div class="sec">📄 특허</div>'
+      + '<div class="homebot'+((pb&&pk)?'':' single')+'">' + (pb||'') + (pk||'') + '</div>');
+  }
   $('#home').innerHTML = parts.join('');
 }
 
