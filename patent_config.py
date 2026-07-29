@@ -65,6 +65,13 @@ OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "8"))   # 한 실행에서 �
 # 전체 소요에 상한을 두고, 넘으면 그 자리에서 접고 다음 날 이어서 채운다.
 OFFICE_BUDGET = float(os.getenv("PATENT_OFFICE_BUDGET", "180"))   # 초
 OFFICE_TIMEOUT = int(os.getenv("PATENT_OFFICE_TIMEOUT", "15"))    # 집계 요청 1건 타임아웃(초)
+# 해외 출원인의 '국내(KR) 공개' 전용 수집.
+# 본 수집은 출원인당 상한(50) 안에서 최신순이라 KR 공개가 뒤로 밀려난다 — 실측으로
+# CATL 은 집계상 KR 60건인데 표본에는 0건이었다. 해외 출원인이 한국에 낸 건 그들이
+# 한국 시장에서 지킬 값어치가 있다고 본 기술이라 따로 한 번 더 훑는다(pn any "KR").
+KR_FOCUS = os.getenv("PATENT_KR_FOCUS", "on") != "off"
+KR_LIMIT = int(os.getenv("PATENT_KR_LIMIT", "15"))          # 해외 출원인당 최대 수집
+KR_BUDGET = float(os.getenv("PATENT_KR_BUDGET", "240"))     # 초, 넘으면 접고 다음 주에
 
 # ── 주요 출원인(큐레이션) ────────────────────────────────────────
 # name: 표시명 / region: 그룹(미국·한국·중국·일본·유럽) / flag: 행 국기(국적)

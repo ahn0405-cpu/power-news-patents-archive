@@ -388,8 +388,74 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
             time.sleep(cfg.REQUEST_DELAY)
     if not collected and errors:
         raise RuntimeError("OPS 수집 실패(모든 출원인)")
+    if cfg.KR_FOCUS:
+        _collect_kr(token, today, seen, collected)
     # offices 는 여기서 만들지 않는다(매일 도는 collect_offices 담당) → totals 만 돌려준다.
     return collected, {"totals": totals}
+
+
+def _collect_kr(token: str, today, seen: set[str], collected: list[dict]) -> int:
+    """해외 출원인이 **한국에 공개한** 건만 따로 훑어 목록에 더한다.
+
+    왜 따로 도나: 본 수집은 출원인당 상한(PER_APPLICANT_LIMIT) 안에서 최신순이라
+    KR 공개가 상한 밖으로 밀려난다(실측 — CATL 은 집계상 KR 60건인데 표본엔 0건).
+    해외 출원인의 국내 공개는 '그들이 한국 시장에서 지킬 값어치가 있다고 본 기술'이라
+    국내 업계에 가장 쓸모 있는 신호인데, 정작 목록에서 빠져 있었다.
+
+    국내 출원인은 건너뛴다(당연히 KR 에 낸다 — 신호가 되지 않는다).
+    쿼터(403)나 시간 예산을 만나면 그 자리에서 접고 다음 주에 이어서 채운다.
+    반환: 새로 더한 건수.
+    """
+    deadline = time.monotonic() + cfg.KR_BUDGET if cfg.KR_BUDGET else 0.0
+    n_new = 0
+    print("  국내(KR) 공개 추가 수집 — 해외 출원인만")
+    for ap in cfg.APPLICANTS:
+        if ap["region"] == "KR":
+            continue
+        if deadline and time.monotonic() > deadline:
+            print("    (시간 예산 초과 — 나머지는 다음 주에)")
+            break
+        cql = _cql(ap["q"], cfg.LOOKBACK_DAYS, today) + ' and pn any "KR"'
+        added, start = 0, 1
+        while added < cfg.KR_LIMIT and start <= cfg.KR_LIMIT:
+            end = min(start + 24, cfg.KR_LIMIT)
+            try:
+                data, _total = _search(token, cql, start, end)
+            except Exception as e:
+                if _is_quota(e):
+                    print("    (쿼터 초과 — 나머지는 다음 주에)")
+                    return n_new
+                break                      # 404 = 국내 공개 없음
+            docs = _docs(data)
+            if not docs:
+                break
+            for d in docs:
+                it = _normalize(d)
+                if not it:
+                    continue
+                key = it["number"].upper()
+                if key in seen:
+                    continue
+                seen.add(key)
+                it["applicant"] = ap["name"]
+                it["country"] = ap["region"]
+                it["flag"] = ap["flag"]
+                collected.append(it)
+                added += 1
+                n_new += 1
+                if added >= cfg.KR_LIMIT:
+                    break
+            if len(docs) < (end - start + 1):
+                break
+            start = end + 1
+            if cfg.REQUEST_DELAY:
+                time.sleep(cfg.REQUEST_DELAY)
+        if added:
+            print(f"    🇰🇷 {ap['flag']} {ap['name']}: 국내 공개 {added}건 추가")
+        if cfg.REQUEST_DELAY:
+            time.sleep(cfg.REQUEST_DELAY)
+    print(f"  국내 공개 추가 {n_new}건")
+    return n_new
 
 
 # ── MOCK (키 없음/오프라인 폴백) ──────────────────────────────────

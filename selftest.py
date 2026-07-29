@@ -75,6 +75,36 @@ def main() -> int:
         check(all(i.get("category") and i.get("number") for i in items),
               "모든 항목에 분야·공개번호가 있다")
 
+        print("· 국내(KR) 공개 추가 수집 (해외 출원인 한정)")
+        # KR 전용 질의(pn any "KR")가 해외 출원인에게만 나가는지, 그 결과가 목록에
+        # 더해지는지 확인한다. 스텁은 질의 문자열을 기록만 하고 문서를 돌려준다.
+        seen_cql: list[str] = []
+
+        class KrStub(Stub):
+            def __call__(self, token, cql, start, end, timeout=None):
+                seen_cql.append(cql)
+                return super().__call__(token, cql, start, end, timeout)
+
+        ps._search = KrStub(total=3, per_call=3)
+        seen, collected = set(), []
+        n = ps._collect_kr("stub-token", today, seen, collected)
+        check(bool(seen_cql) and all('pn any "KR"' in q for q in seen_cql),
+              "모든 질의가 KR 공개로 한정된다")
+        kr_names = {a["name"] for a in cfg.APPLICANTS if a["region"] == "KR"}
+        foreign = {a["name"] for a in cfg.APPLICANTS if a["region"] != "KR"}
+        kr_terms = [a["q"] for a in cfg.APPLICANTS if a["region"] == "KR"]
+        kr_terms = [t for q in kr_terms for t in ([q] if isinstance(q, str) else q)]
+        check(not any(f'pa="{t}"' in q for q in seen_cql for t in kr_terms),
+              f"국내 출원인({len(kr_names)}곳)에게는 질의하지 않는다")
+        check(n > 0 and len(collected) == n, f"국내 공개를 목록에 더한다 ({n}건)")
+        check(all(i.get("applicant") in foreign for i in collected),
+              "더해진 항목은 전부 해외 출원인 것이다")
+        per_ap: dict[str, int] = {}
+        for i in collected:
+            per_ap[i["applicant"]] = per_ap.get(i["applicant"], 0) + 1
+        check(max(per_ap.values()) <= cfg.KR_LIMIT,
+              f"출원인당 상한({cfg.KR_LIMIT})을 넘지 않는다")
+
         print("· collect_offices (매일 공개국 집계 경로)")
         ps._search = Stub(total=5, per_call=1)
         st = ps.collect_offices(today)

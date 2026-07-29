@@ -245,6 +245,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
         "lookbackDays": pcfg.LOOKBACK_DAYS,
+        "krLimit": pcfg.KR_LIMIT,
         "perApplicantLimit": pcfg.PER_APPLICANT_LIMIT,   # 표본 상한(랭킹의 '이상' 표기용)
         "applicants": len(pcfg.APPLICANTS),
         "items": items,
@@ -419,6 +420,20 @@ a{color:inherit}
 .pbmini .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
 .pbmini .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
 @media (max-width:900px){ .pbmini .bpoints{grid-template-columns:1fr} }
+/* 해외 출원인의 국내 공개 */
+.krwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.krow{min-width:0}
+.kap{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;
+  padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line)}
+.kap .kcnt{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted)}
+.klist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.klist li{font-size:12.5px;line-height:1.5}
+.klist a{color:var(--ink);text-decoration:none}
+.klist a:hover{color:var(--accent2);text-decoration:underline}
+.klist .kc{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:700;color:var(--muted);
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.klist .kn{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
+.klist .kmore{color:var(--muted);font-size:11.5px}
 /* 국내/해외 소제목 구분 */
 .brief .bsec{margin:0 0 13px}
 .brief .bsec:last-child{margin-bottom:0}
@@ -1241,6 +1256,35 @@ function officeRankHTML(ranked){
   return out || '<span class="unknown">—</span>';
 }
 
+// 해외 출원인이 한국에 공개한 특허 — 그들이 국내 시장에서 지킬 값어치가 있다고 본 기술.
+// 국내 업계 입장에선 '누가 무엇을 들고 들어왔나'가 가장 실용적인 신호다.
+function krEntryHTML(list){
+  const rows=list.filter(it=>it.office==='KR' && it.aCountry!=='KR');
+  if(!rows.length) return '';
+  const by={};
+  rows.forEach(it=>{ (by[it.aName]||(by[it.aName]={flag:it.aFlag,items:[]})).items.push(it); });
+  const order=Object.entries(by).sort((a,b)=>b[1].items.length-a[1].items.length||a[0].localeCompare(b[0]));
+  const cm={}; FEED.patents.categories.forEach(c=>cm[c.key]=c);
+  const blocks=order.map(([nm,g])=>{
+    const lis=g.items.slice(0,12).map(it=>{
+      const c=cm[it.category];
+      return '<li><a href="'+esc(it.url)+'" target="_blank" rel="noopener">'+esc(it.title)+'</a>'
+        + (c?'<span class="kc">'+esc(c.name)+'</span>':'')
+        + '<span class="kn mono">'+esc(it.number||'')+'</span></li>';
+    }).join('');
+    const more=g.items.length>12? '<li class="kmore">… 외 '+(g.items.length-12)+'건</li>':'';
+    return '<div class="krow"><div class="kap">'+(g.flag||'')+' '+esc(nm)
+      + '<span class="kcnt">'+g.items.length+'건</span></div><ul class="klist">'+lis+more+'</ul></div>';
+  }).join('');
+  return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개</h3>'
+    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 나라 중 한국을 고른 건 '
+    + '그만큼 국내 시장에서 지킬 값어치가 있다고 본 기술이라는 뜻이고, 국내 업계에는 '
+    + '경쟁사가 무엇을 들고 들어왔는지를 보여주는 신호가 됩니다. 제목을 누르면 원문으로 이동. '
+    + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
+    + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
+    + '<div class="krwrap">'+blocks+'</div></div>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const cats=FEED.patents.categories, regions=FEED.patents.countries;
@@ -1283,6 +1327,7 @@ function renderStats(list){
       + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허로 이동. '
       + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.</p>'
       + regionMatrixHTML(list, {total:true}) + '</div>'
+    + krEntryHTML(list)
     + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
       + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
