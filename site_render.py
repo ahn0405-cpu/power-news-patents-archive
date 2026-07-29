@@ -116,6 +116,24 @@ def _canon_assignee(name: str) -> str:
 
 SITE_TITLE = "IP-Power 플랫폼"
 SITE_TAGLINE = "전력 이슈 뉴스와 특허를 한자리에 — 매일 자동으로 모으고 살핍니다"
+SITE_ORG = "지식재산처 전기통신심사국 전기심사과"
+
+# 운영 기관 CI. assets/ci.svg|png|jpg 중 먼저 발견되는 파일을 빌드 시점에 data URI 로
+# 인라인한다(사이트가 index.html 한 장으로 자족하는 구조라 외부 파일을 두지 않는다).
+# 파일이 없으면 로고 없이 기관명만 나가므로 빌드가 깨지지 않는다.
+_CI_MIME = {".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+
+
+def _ci_markup() -> str:
+    import base64
+    for name in ("ci.svg", "ci.png", "ci.jpg", "ci.jpeg"):
+        p = Path(__file__).resolve().parent / "assets" / name
+        if not p.is_file():
+            continue
+        src = "data:%s;base64,%s" % (_CI_MIME[p.suffix.lower()],
+                                     base64.b64encode(p.read_bytes()).decode())
+        return '<img class="ci" src="%s" alt="%s" width="150">' % (src, _esc(SITE_ORG))
+    return ""
 
 
 def _squash(s: str) -> str:
@@ -241,7 +259,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
     briefs = briefs or []
     feed = {
         "generated": generated,
-        "title": SITE_TITLE, "tagline": SITE_TAGLINE,
+        "title": SITE_TITLE, "tagline": SITE_TAGLINE, "org": SITE_ORG,
         "brief": briefs[0] if briefs else None,   # 최신(홈 상단)
         "briefs": briefs,                          # 최신순 전체(타임라인)
         "insights": _insights.build(news_days, patent_weeks),
@@ -252,6 +270,8 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
 
     html = _PAGE.replace("__TITLE__", _esc(SITE_TITLE)) \
                .replace("__TAGLINE__", _esc(SITE_TAGLINE)) \
+               .replace("__ORG__", _esc(SITE_ORG)) \
+               .replace("__CI__", _ci_markup()) \
                .replace("__CSS__", _CSS) \
                .replace("__JS__", _JS) \
                .replace("__FEED__", payload)
@@ -297,7 +317,14 @@ a{color:inherit}
 .wrap{max-width:1600px;margin:0 auto;padding:22px 32px 72px}
 /* 상세(뉴스·특허) 목록은 가독성을 위해 읽기 폭을 가운데 정렬로 제한. 홈/통계는 전체 폭. */
 .readcol{max-width:1120px}
-.mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0}
+.mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.mast .masttext{min-width:0}
+/* 운영 기관: 서비스명과 경쟁하지 않게 오른쪽 끝에 작게 */
+.mast .org{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.mast .org .ci{height:26px;width:auto;max-width:200px;display:block}
+.mast .org .orgname{color:var(--muted);font-size:11.5px;font-weight:600;white-space:nowrap}
+@media (max-width:640px){ .mast .org{align-items:flex-start} .mast .org .orgname{white-space:normal} }
 .mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px}
 /* 제목 자체가 홈으로 가는 버튼. 글자처럼 보이게 버튼 기본 스타일을 지운다 */
 .mast h1 .brand{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;
@@ -554,8 +581,11 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <body>
 <div class="wrap">
   <header class="mast">
-    <h1><button type="button" id="brand" class="brand" aria-label="__TITLE__ — 홈으로"><span class="bolt">⚡</span> __TITLE__</button></h1>
-    <p class="tag">__TAGLINE__</p>
+    <div class="masttext">
+      <h1><button type="button" id="brand" class="brand" aria-label="__TITLE__ — 홈으로"><span class="bolt">⚡</span> __TITLE__</button></h1>
+      <p class="tag">__TAGLINE__</p>
+    </div>
+    <div class="org">__CI__<span class="orgname">__ORG__</span></div>
   </header>
   <nav class="tabs" role="tablist" aria-label="보기 전환">
     <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
@@ -1333,7 +1363,8 @@ $('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: EPO 
   + (FEED.patents.lookbackDays||90) + '일 공개분, 새로 공개된 것만 누적). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
   + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
-  + '건 · 특허 '+FEED.patents.items.length+'건';
+  + '건 · 특허 '+FEED.patents.items.length+'건'
+  + (FEED.org? '<br>운영 <b>'+esc(FEED.org)+'</b>' : '');
 
 loadHash();
 $('#q').value = state.q;
