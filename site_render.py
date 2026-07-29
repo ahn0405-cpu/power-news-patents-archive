@@ -412,6 +412,14 @@ a{color:inherit}
 .timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
 .timeline .tl.open .tlb{display:block}
 .mxmini{overflow-x:auto}
+/* 홈 하단 왼쪽 = 특허 블록(브리핑 요약 + 매트릭스) */
+.hbcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pbmini .pbh{font-size:15px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:2px 0 11px}
+.pbmini .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.pbmini .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.pbmini .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.pbmini .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
+@media (max-width:900px){ .pbmini .bpoints{grid-template-columns:1fr} }
 /* 특허 탭 상단 브리핑 — 홈의 .brief 스타일을 그대로 쓰되 아래 여백만 준다 */
 #pbrief{margin:0 0 14px}
 #pbrief .brief{margin:0}
@@ -867,6 +875,23 @@ function kpiHTML(){
     + '</div>';
 }
 
+// 홈용 특허 브리핑 요약 — 본문은 빼고 헤드라인+포인트만. 전문은 특허 탭에 있다.
+// 뉴스 브리핑(매일)과 나란히 두면 주 1회짜리가 매일 새 것처럼 보이므로, 설명하는
+// 대상인 매트릭스 바로 위에 붙여 '특허 블록'으로 묶는다.
+function patentBriefMiniHTML(){
+  const b=FEED.patentBrief;
+  if(!b || !b.headline) return '';
+  const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
+    +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
+  return '<div class="homepanel pbmini"><h3>🔬 이번 주 특허 브리핑'
+    + '<span class="morelink" data-go="patents">특허 탭에서 전문 →</span></h3>'
+    + '<p class="sub">'+(b.week? esc(b.week)+' 수집분 · ':'')
+    + '건수만으로는 안 보이는 기술 갈래를 제목까지 읽어 정리합니다(주 1회, 해외 출원인 중심).</p>'
+    + '<h4 class="pbh">'+esc(b.headline)+'</h4>'
+    + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + '</div>';
+}
+
 function matrixMiniHTML(){
   const list=FEED.patents.items; if(!list.length) return '';
   const r=FEED.patents.pubRange;
@@ -897,8 +922,10 @@ function renderHome(){
   const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
   // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
   const hasPast=(FEED.briefs||[]).length>1;
+  // 왼쪽 열 = 특허 블록(브리핑 요약 → 그 브리핑이 설명하는 매트릭스), 오른쪽 = 지난 뉴스 브리핑.
   parts.push('<div class="homebot'+(hasPast?'':' single')+'">'
-    + (matrixMiniHTML()||'') + timelineHTML() + '</div>');
+    + '<div class="hbcol">' + (patentBriefMiniHTML()||'') + (matrixMiniHTML()||'') + '</div>'
+    + timelineHTML() + '</div>');
   $('#home').innerHTML = parts.join('');
 }
 
@@ -1383,7 +1410,9 @@ function wire(){
     // 키워드 → 뉴스 탭에서 검색
     const kw=e.target.closest('[data-kw]'); if(kw){ gotoTab('news', {q:kw.getAttribute('data-kw')}); return; }
     // 특허 통계 전체 보기
-    const go=e.target.closest('[data-go]'); if(go){ gotoTab('patents', {view:'stats'}); return; }
+    // data-go="patents-stats" → 통계 뷰, "patents" → 목록 뷰(브리핑 전문이 그 위에 있다)
+    const go=e.target.closest('[data-go]');
+    if(go){ gotoTab('patents', go.getAttribute('data-go')==='patents-stats'?{view:'stats'}:{}); return; }
     // 매트릭스 칸 → 특허 탭에서 그 출원인·분야
     const mc=e.target.closest('.pmx td.has[data-ap]');
     if(mc){ gotoTab('patents', {q:mc.getAttribute('data-ap'), cat:mc.getAttribute('data-cat')}); return; }
