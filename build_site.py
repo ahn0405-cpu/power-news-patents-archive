@@ -31,17 +31,18 @@ import brief_archive
 import site_render
 
 
-def _load_brief() -> dict | None:
-    """저장소에 커밋된 서술형 브리핑(brief.json)을 읽는다. 반자동(사람이 갱신·커밋)이라
-    수집·빌드 자동화와 분리돼 있고, 파일이 없거나 깨지면 조용히 건너뛴다(뉴스는 정상)."""
-    f = Path(__file__).resolve().parent / "brief.json"
+def _load_brief(name: str = "brief.json") -> dict | None:
+    """저장소에 커밋된 서술형 브리핑을 읽는다(뉴스=brief.json 매일, 특허=patent_brief.json
+    매주). 반자동(사람이 갱신·커밋)이라 수집·빌드 자동화와 분리돼 있고, 파일이 없거나
+    깨지면 조용히 건너뛴다(수집·렌더는 정상)."""
+    f = Path(__file__).resolve().parent / name
     if not f.exists():
         return None
     try:
         obj = json.loads(f.read_text(encoding="utf-8"))
         return obj or None
     except Exception as e:
-        print(f"[경고] brief.json 읽기 실패(무시): {e}")
+        print(f"[경고] {name} 읽기 실패(무시): {e}")
         return None
 
 
@@ -110,8 +111,18 @@ def main() -> None:
     brief_list = brief_archive.sorted_list(briefs)
     if brief_list:
         print(f"  브리핑: {len(brief_list)}개 (최신 {brief_list[0].get('date','?')})")
+
+    # 특허 브리핑(주 1회): 같은 방식이되 키가 수집 주(week)다.
+    pbriefs = brief_archive.load_briefs(source_dir, brief_archive.PATENT_BRIEF_SUBDIR, "week")
+    brief_archive.merge(pbriefs, _load_brief("patent_brief.json"), "week")
+    brief_archive.save(ncfg.SITE_DIR, pbriefs, brief_archive.PATENT_BRIEF_SUBDIR)
+    pbrief_list = brief_archive.sorted_list(pbriefs)
+    if pbrief_list:
+        print(f"  특허 브리핑: {len(pbrief_list)}개 (최신 {pbrief_list[0].get('week','?')})")
+
     index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
-                                   generated, briefs=brief_list, stats=pstats_store)
+                                   generated, briefs=brief_list, stats=pstats_store,
+                                   pbriefs=pbrief_list)
 
     nt = sum(len(d.get("articles", [])) for d in news_days.values())
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())

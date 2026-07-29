@@ -1,12 +1,17 @@
-name: 브리핑 중계 (claude/brief → main)
+name: 브리핑 중계 (claude/* → main)
 
 # ── 왜 이 워크플로가 있나 ──────────────────────────────────
-# 매일 브리핑을 쓰는 Routine 세션은 `claude/` 접두사 브랜치에만 푸시할 수 있다.
+# 브리핑을 쓰는 Routine 세션은 `claude/` 접두사 브랜치에만 푸시할 수 있다.
 # (Claude가 생성한 Routine 에는 'Allow unrestricted branch pushes' 토글이 없어
 #  main 직접 푸시가 거부된다.)
-# 그래서 Routine 은 claude/brief 브랜치에 brief.json 만 올리고,
+# 그래서 Routine 은 claude/* 브랜치에 브리핑 파일만 올리고,
 # 이 워크플로가 그 파일을 main 으로 옮긴 뒤 배포 워크플로를 직접 호출한다.
 # GITHUB_TOKEN 은 이 저장소에 쓰기 권한이 있으므로 별도 설정이 필요 없다.
+#
+# 대상 파일 두 개:
+#   brief.json         뉴스 서술형 브리핑(매일, 키=date)
+#   patent_brief.json  특허 서술형 브리핑(매주, 키=week)
+# 한 번에 둘 다 바뀌어도 각각 검증해 함께 커밋한다.
 #
 # 주의: GITHUB_TOKEN 으로 만든 push 는 다른 워크플로의 push 트리거를 발동시키지
 # 않는다(무한 루프 방지). 그래서 마지막에 workflow_dispatch 로 명시 호출한다 —
@@ -18,7 +23,12 @@ on:
       - 'claude/**'      # Routine 이 어떤 claude/* 브랜치를 쓰든 받아준다
     paths:
       - brief.json
-  workflow_dispatch: {}    # 손으로 중계만 다시 돌리고 싶을 때
+      - patent_brief.json
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 중계할 원본 claude/* 브랜치
+        default: claude/happy-bohr
 
 permissions:
   contents: write   # main 에 커밋·푸시
@@ -38,40 +48,72 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: 푸시된 브랜치에서 brief.json 가져와 검증
+      - name: 푸시된 브랜치에서 브리핑 파일 가져와 검증
         run: |
           set -euo pipefail
           BR="${GITHUB_REF_NAME}"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            BR="claude/happy-bohr"   # 손으로 돌릴 때의 기본 원본 브랜치
+            BR="${{ inputs.branch }}"
           fi
           echo "중계 원본 브랜치: ${BR}"
           git fetch origin "+refs/heads/${BR}:refs/remotes/origin/${BR}"
-          git show "origin/${BR}:brief.json" > /tmp/brief.json
+          mkdir -p /tmp/relay
+          # 브랜치에 있는 파일만 가져온다(둘 중 하나만 바뀌는 게 보통).
+          for f in brief.json patent_brief.json; do
+            if git cat-file -e "origin/${BR}:${f}" 2>/dev/null; then
+              git show "origin/${BR}:${f}" > "/tmp/relay/${f}"
+              echo "가져옴: ${f}"
+            fi
+          done
           python3 - <<'PY'
-          import json
-          d = json.load(open('/tmp/brief.json'))
-          for k in ('date', 'headline', 'body', 'points'):
-              assert d.get(k), f'brief.json 에 {k} 가 비어 있음'
-          assert len(d['points']) == 3, f"points 는 3개여야 함 (현재 {len(d['points'])})"
-          print('검증 OK —', d['date'], '|', d['headline'][:50])
+          import json, pathlib
+          # 뉴스는 date, 특허는 week 가 키. 나머지 필수 필드는 같다.
+          for name, keyfield in (('brief.json', 'date'), ('patent_brief.json', 'week')):
+              p = pathlib.Path('/tmp/relay') / name
+              if not p.is_file():
+                  continue
+              d = json.loads(p.read_text(encoding='utf-8'))
+              for k in (keyfield, 'headline', 'body', 'points'):
+                  assert d.get(k), f'{name} 에 {k} 가 비어 있음'
+              assert len(d['points']) == 3, \
+                  f"{name} 의 points 는 3개여야 함 (현재 {len(d['points'])})"
+              print(f'검증 OK — {name}: {d[keyfield]} | {d["headline"][:50]}')
           PY
 
       - name: main 에 반영
         id: apply
         run: |
           set -euo pipefail
-          if cmp -s /tmp/brief.json brief.json; then
-            echo "main 의 brief.json 과 동일 — 중계 생략"
+          CHANGED=""
+          for f in brief.json patent_brief.json; do
+            [ -f "/tmp/relay/${f}" ] || continue
+            if [ -f "${f}" ] && cmp -s "/tmp/relay/${f}" "${f}"; then
+              echo "${f}: main 과 동일 — 생략"
+              continue
+            fi
+            cp "/tmp/relay/${f}" "${f}"
+            CHANGED="${CHANGED} ${f}"
+          done
+          if [ -z "${CHANGED}" ]; then
+            echo "바뀐 브리핑 없음 — 중계 생략"
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          cp /tmp/brief.json brief.json
-          D=$(python3 -c "import json;print(json.load(open('brief.json'))['date'])")
+          MSG=$(python3 - <<'PY'
+          import json, pathlib
+          bits = []
+          for name, keyfield, label in (('brief.json', 'date', '브리핑'),
+                                        ('patent_brief.json', 'week', '특허 브리핑')):
+              p = pathlib.Path(name)
+              if p.is_file():
+                  bits.append(f'{label} {json.loads(p.read_text(encoding="utf-8"))[keyfield]}')
+          print('갱신: ' + ', '.join(bits))
+          PY
+          )
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add brief.json
-          git commit -m "브리핑 갱신: ${D}"
+          git add ${CHANGED}
+          git commit -m "${MSG}"
           git push origin HEAD:main
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
