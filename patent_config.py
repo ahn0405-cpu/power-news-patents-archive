@@ -86,8 +86,13 @@ APPLICANTS = [
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
     {"name": "HD현대일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "Hyundai Electric"},            # ✔
     {"name": "효성중공업", "region": "KR", "flag": "🇰🇷", "q": "Hyosung Heavy Industries"},       # ✔
+    # 2022년 두산중공업 → 두산에너빌리티로 사명 변경. 변경 전 출원이 옛 이름으로 남아 둘 다 조회.
+    {"name": "두산에너빌리티", "region": "KR", "flag": "🇰🇷",
+     "q": ["Doosan Enerbility", "Doosan Heavy Industries"]},
     {"name": "LS일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "LS Electric"},                    # ✔
     {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
+    {"name": "LG에너지솔루션", "region": "KR", "flag": "🇰🇷", "q": "LG Energy Solution"},
+    {"name": "삼성SDI", "region": "KR", "flag": "🇰🇷", "q": "Samsung SDI"},
     {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
     {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan"},
     {"name": "산일전기", "region": "KR", "flag": "🇰🇷",
