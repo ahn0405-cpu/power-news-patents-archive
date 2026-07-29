@@ -81,6 +81,8 @@ APPLICANTS = [
     {"name": "Eaton", "region": "US", "flag": "🇺🇸", "q": "Eaton"},                            # ✔
     {"name": "Caterpillar", "region": "US", "flag": "🇺🇸", "q": "Caterpillar"},
     {"name": "Dynapower", "region": "US", "flag": "🇺🇸", "q": "Dynapower"},   # ✔ 검색어 확인(최근 공개 0)
+    {"name": "Westinghouse", "region": "US", "flag": "🇺🇸", "q": "Westinghouse Electric"},
+    {"name": "Kairos Power", "region": "US", "flag": "🇺🇸", "q": "Kairos Power"},
     # 🇰🇷 한국
     {"name": "한국전력공사", "region": "KR", "flag": "🇰🇷", "q": "Korea Electric Power"},          # ✔
     {"name": "한국전력기술", "region": "KR", "flag": "🇰🇷", "q": "KEPCO Engineering Construction"},
@@ -104,8 +106,13 @@ APPLICANTS = [
     {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},  # ✔
     {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": "Huawei"},                          # ✔
     {"name": "CATL", "region": "CN", "flag": "🇨🇳", "q": "Contemporary Amperex Technology"},   # ✔
+    {"name": "CNNC", "region": "CN", "flag": "🇨🇳", "q": "China National Nuclear"},   # 중국핵공업집단
     # 🇯🇵 일본
     {"name": "Hitachi Energy", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Energy"},          # ✔
+    # 히타치제작소(Hitachi, Ltd.). 그냥 "Hitachi" 로 두면 위 Hitachi Energy 까지 걸려
+    # 총계가 부풀려지므로 어구로 묶어 분리한다(목록 중복은 공개번호 dedup 이 막지만
+    # stats 의 총계는 출원인별 독립 질의라 겹치면 그대로 부푼다).
+    {"name": "Hitachi", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Ltd"},
     {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵", "q": "Mitsubishi Electric"},# ✔
     {"name": "Toshiba", "region": "JP", "flag": "🇯🇵", "q": "Toshiba"},                        # ✔
     {"name": "Panasonic", "region": "JP", "flag": "🇯🇵", "q": "Panasonic"},                    # ✔
@@ -118,6 +125,7 @@ APPLICANTS = [
     {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
     {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
     {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
+    {"name": "Vestas", "region": "EU", "flag": "🇩🇰", "q": "Vestas Wind Systems"},
 ]
 
 # ── 분야(기술 카테고리) — CPC 분류 기반 ────────────────────────────
