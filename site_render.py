@@ -503,6 +503,10 @@ a{color:inherit}
 .pmx{border-collapse:separate;border-spacing:2px;font-size:12.5px;min-width:100%}
 .pmx th{font-weight:600;color:var(--muted);text-align:center;padding:3px 4px;font-size:13px;white-space:nowrap}
 .pmx th.cnr{text-align:left;font-size:11px;font-weight:600}
+/* 분야 머리글: 아이콘 대신 이름. <wbr> 위치(가운뎃점)에서만 접힌다 */
+.pmx th.cth{font-size:10.5px;font-weight:600;line-height:1.25;white-space:normal;word-break:keep-all;
+  max-width:80px;vertical-align:bottom}
+.pmx th.cth .seg{white-space:nowrap}
 .pmx td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px;font-size:12px}
 .pmx td.c{text-align:center;border-radius:5px;font-variant-numeric:tabular-nums;min-width:34px;
   padding:5px 4px;color:var(--muted);background:var(--bg)}
@@ -1019,7 +1023,13 @@ function matrixTableHTML(ranked, opts){
   const cats=FEED.patents.categories; opts=opts||{};
   if(!ranked.length) return '';
   let maxCell=1; ranked.forEach(r=>cats.forEach(c=>{const v=r.grid[c.key]||0; if(v>maxCell)maxCell=v;}));
-  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th title="'+esc(c.name)+'">'+c.emoji+'</th>').join('')
+  // 분야는 아이콘 대신 이름으로. 가운뎃점(·) 단위로 조각을 내어 조각 안에서는 절대 줄이 바뀌지
+  // 않게 하고(.seg{nowrap}), 조각 사이 <wbr> 에서만 접히게 한다. 그냥 두면 좁은 폭에서 '·' 가
+  // 혼자 한 줄을 차지한다. '·' 는 앞 조각에 붙여 '데이터센터·' / '무정전전원' 으로 접히게 한다.
+  const catHead=c=>{ const parts=c.name.split('·');
+    return parts.map((s,i)=>'<span class="seg">'+esc(s)+(i<parts.length-1?'·':'')+'</span>').join('<wbr>'); };
+  const head='<tr><th class="cnr"></th>'+cats.map(c=>'<th class="cth" title="'+esc(c.name)+'">'
+      +catHead(c)+'</th>').join('')
     +(opts.total?'<th>합계</th>':'')+'</tr>';
   const body=ranked.map(r=>{
     const cells=cats.map(c=>{ const v=r.grid[c.key]||0; const a=v?(0.14+v/maxCell*0.78).toFixed(2):0;
