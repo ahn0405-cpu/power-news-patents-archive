@@ -114,7 +114,7 @@ def _canon_assignee(name: str) -> str:
                   r"S\.?A\.?|N\.?V\.?|A\.?G\.?)\s*$", "", s, flags=re.I).strip().strip(",.")
     return disp or s
 
-SITE_TITLE = "IP·Power"
+SITE_TITLE = "IP-Power 플랫폼"
 SITE_TAGLINE = "전력 이슈 뉴스(매일)·특허(매주)·트렌드 브리핑을 한자리에 — 반도체 클러스터·AI 데이터센터·3대 메가프로젝트 시대"
 
 
@@ -298,7 +298,12 @@ a{color:inherit}
 /* 상세(뉴스·특허) 목록은 가독성을 위해 읽기 폭을 가운데 정렬로 제한. 홈/통계는 전체 폭. */
 .readcol{max-width:1120px}
 .mast{border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:0}
-.mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;display:flex;gap:9px;align-items:center}
+.mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px}
+/* 제목 자체가 홈으로 가는 버튼. 글자처럼 보이게 버튼 기본 스타일을 지운다 */
+.mast h1 .brand{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;
+  display:flex;gap:9px;align-items:center;text-align:left}
+.mast h1 .brand:hover{color:var(--accent2)}
+.mast h1 .brand:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
 .mast h1 .bolt{color:var(--accent)}
 .mast .tag{color:var(--muted);font-size:13px;margin:0}
 .tabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--line)}
@@ -549,7 +554,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <body>
 <div class="wrap">
   <header class="mast">
-    <h1><span class="bolt">⚡</span> __TITLE__</h1>
+    <h1><button type="button" id="brand" class="brand" aria-label="__TITLE__ — 홈으로"><span class="bolt">⚡</span> __TITLE__</button></h1>
     <p class="tag">__TAGLINE__</p>
   </header>
   <nav class="tabs" role="tablist" aria-label="보기 전환">
@@ -1246,6 +1251,8 @@ function setTab(t){
 
 function wire(){
   document.querySelectorAll('.tabs button').forEach(b=> b.onclick=()=>setTab(b.dataset.tab));
+  // 상단 제목 → 홈. 이미 홈이면 setTab 이 그냥 빠져나오므로 맨 위로 올려주기만 한다.
+  $('#brand').onclick = ()=>{ setTab('home'); window.scrollTo({top:0, behavior:'smooth'}); };
   $('#viewToggle').onclick = e=>{ const b=e.target.closest('[data-view]'); if(!b) return;
     state.view=b.dataset.view; updateViewToggle(); render(); };
   let deb; $('#q').oninput = e=>{ clearTimeout(deb); deb=setTimeout(()=>{ state.q=e.target.value.trim(); state.limit=PAGE; render(); },140); };
