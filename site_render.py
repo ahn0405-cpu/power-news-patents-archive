@@ -117,6 +117,8 @@ def _canon_assignee(name: str) -> str:
 SITE_TITLE = "IP-Power 플랫폼"
 SITE_TAGLINE = "전력 이슈 뉴스와 특허를 한자리에 — 매일 자동으로 모으고 살핍니다"
 SITE_ORG = "지식재산처 전기통신심사국 전기심사과"
+# 헤더에서는 CI 에 '지식재산처' 가 이미 들어 있으므로 소속 부서만 덧붙인다.
+SITE_DEPT = "전기통신심사국 전기심사과"
 
 # 운영 기관 CI. assets/ci.svg|png|jpg 중 먼저 발견되는 파일을 빌드 시점에 data URI 로
 # 인라인한다(사이트가 index.html 한 장으로 자족하는 구조라 외부 파일을 두지 않는다).
@@ -271,6 +273,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
     html = _PAGE.replace("__TITLE__", _esc(SITE_TITLE)) \
                .replace("__TAGLINE__", _esc(SITE_TAGLINE)) \
                .replace("__ORG__", _esc(SITE_ORG)) \
+               .replace("__DEPT__", _esc(SITE_DEPT)) \
                .replace("__CI__", _ci_markup()) \
                .replace("__CSS__", _CSS) \
                .replace("__JS__", _JS) \
@@ -322,8 +325,13 @@ a{color:inherit}
 .mast .masttext{min-width:0}
 /* 운영 기관: 서비스명과 경쟁하지 않게 오른쪽 끝에 작게 */
 .mast .org{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
-.mast .org .ci{height:26px;width:auto;max-width:200px;display:block}
+.mast .org .ci{height:38px;width:auto;max-width:220px;display:block}
 .mast .org .orgname{color:var(--muted);font-size:11.5px;font-weight:600;white-space:nowrap}
+/* CI 는 흰 바탕에 쓰도록 만들어진 원색 로고다. 어두운 배경에 그대로 얹지 않고
+   흰 판을 깔아 규정대로 흰 바탕 위에 놓이게 한다(라이트 모드 배경은 이미 거의 흰색). */
+@media (prefers-color-scheme:dark){
+  .mast .org .ci{background:#fff;padding:5px 8px;border-radius:6px;height:48px}
+}
 @media (max-width:640px){ .mast .org{align-items:flex-start} .mast .org .orgname{white-space:normal} }
 .mast h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px}
 /* 제목 자체가 홈으로 가는 버튼. 글자처럼 보이게 버튼 기본 스타일을 지운다 */
@@ -585,7 +593,7 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
       <h1><button type="button" id="brand" class="brand" aria-label="__TITLE__ — 홈으로"><span class="bolt">⚡</span> __TITLE__</button></h1>
       <p class="tag">__TAGLINE__</p>
     </div>
-    <div class="org">__CI__<span class="orgname">__ORG__</span></div>
+    <div class="org">__CI__<span class="orgname">__DEPT__</span></div>
   </header>
   <nav class="tabs" role="tablist" aria-label="보기 전환">
     <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
