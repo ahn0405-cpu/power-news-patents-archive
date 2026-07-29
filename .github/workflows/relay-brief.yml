@@ -67,14 +67,20 @@ jobs:
           done
           python3 - <<'PY'
           import json, pathlib
-          # 뉴스는 date, 특허는 week 가 키. 나머지 필수 필드는 같다.
+          # 뉴스는 date, 특허는 week 가 키. 본문은 body(문단 배열) 또는
+          # sections(국내/해외로 나눈 구조) 중 하나만 있으면 된다.
           for name, keyfield in (('brief.json', 'date'), ('patent_brief.json', 'week')):
               p = pathlib.Path('/tmp/relay') / name
               if not p.is_file():
                   continue
               d = json.loads(p.read_text(encoding='utf-8'))
-              for k in (keyfield, 'headline', 'body', 'points'):
+              for k in (keyfield, 'headline', 'points'):
                   assert d.get(k), f'{name} 에 {k} 가 비어 있음'
+              assert d.get('body') or d.get('sections'), \
+                  f'{name} 에 body 도 sections 도 없음'
+              for s in (d.get('sections') or []):
+                  assert s.get('label') and s.get('paras'), \
+                      f'{name} 의 sections 항목에 label/paras 가 비어 있음'
               assert len(d['points']) == 3, \
                   f"{name} 의 points 는 3개여야 함 (현재 {len(d['points'])})"
               print(f'검증 OK — {name}: {d[keyfield]} | {d["headline"][:50]}')

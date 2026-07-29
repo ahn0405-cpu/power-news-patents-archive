@@ -412,14 +412,18 @@ a{color:inherit}
 .timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
 .timeline .tl.open .tlb{display:block}
 .mxmini{overflow-x:auto}
-/* 홈 하단 왼쪽 = 특허 블록(브리핑 요약 + 매트릭스) */
-.hbcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+/* 홈 하단 왼쪽 = 특허 브리핑 요약 */
 .pbmini .pbh{font-size:15px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:2px 0 11px}
 .pbmini .bpoints{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .pbmini .pt{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
 .pbmini .pt .pl{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;margin-bottom:3px}
 .pbmini .pt .px{font-size:11.5px;color:var(--muted);line-height:1.5}
 @media (max-width:900px){ .pbmini .bpoints{grid-template-columns:1fr} }
+/* 국내/해외 소제목 구분 */
+.brief .bsec{margin:0 0 13px}
+.brief .bsec:last-child{margin-bottom:0}
+.brief .bsl{font-size:12px;font-weight:800;color:var(--accent2);letter-spacing:.02em;
+  margin:0 0 5px;padding-bottom:4px;border-bottom:1px solid var(--line)}
 /* 특허 탭 상단 브리핑 — 홈의 .brief 스타일을 그대로 쓰되 아래 여백만 준다 */
 #pbrief{margin:0 0 14px}
 #pbrief .brief{margin:0}
@@ -892,15 +896,6 @@ function patentBriefMiniHTML(){
     + '</div>';
 }
 
-function matrixMiniHTML(){
-  const list=FEED.patents.items; if(!list.length) return '';
-  const r=FEED.patents.pubRange;
-  return '<div class="homepanel"><h3>🧩 출원인 × 분야 <span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3). 칸을 누르면 특허 탭 상세.'
-    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 매주 최근 '
-         +(FEED.patents.lookbackDays||90)+'일 공개분을 조회해 새 것만 누적.' : '') + '</p>'
-    + '<div class="mxmini">'+regionMatrixHTML(list, {top:3})+'</div></div>';
-}
 
 function timelineHTML(){
   const past=(FEED.briefs||[]).slice(1);   // 최신은 위에 크게 노출, 나머지를 타임라인으로
@@ -922,10 +917,10 @@ function renderHome(){
   const ih=insightsHTML(); if(ih) parts.push('<div class="sec">트렌드 인사이트</div>'+ih);
   // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
   const hasPast=(FEED.briefs||[]).length>1;
-  // 왼쪽 열 = 특허 블록(브리핑 요약 → 그 브리핑이 설명하는 매트릭스), 오른쪽 = 지난 뉴스 브리핑.
+  // 왼쪽 = 특허 브리핑 요약, 오른쪽 = 지난 뉴스 브리핑.
+  // 매트릭스는 특허 탭에 전체가 있어 홈에서는 뺐다(같은 표를 두 번 보여주게 된다).
   parts.push('<div class="homebot'+(hasPast?'':' single')+'">'
-    + '<div class="hbcol">' + (patentBriefMiniHTML()||'') + (matrixMiniHTML()||'') + '</div>'
-    + timelineHTML() + '</div>');
+    + (patentBriefMiniHTML()||'') + timelineHTML() + '</div>');
   $('#home').innerHTML = parts.join('');
 }
 
@@ -944,8 +939,12 @@ function patentPicks(n){
 // 뉴스 브리핑과 같은 스키마지만 키가 날짜가 아니라 수집 주(week)다.
 function patentBriefHTML(){
   const b = FEED.patentBrief;
-  if(!b || !(b.headline || (b.body&&b.body.length))) return '';
-  const body=(b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
+  if(!b || !(b.headline || (b.body&&b.body.length) || (b.sections&&b.sections.length))) return '';
+  // 국내/해외를 나눠 쓰는 구조(sections)가 있으면 소제목과 함께, 없으면 옛 body 를 그대로.
+  const body = (b.sections&&b.sections.length)
+    ? b.sections.map(s=>'<div class="bsec"><div class="bsl">'+esc(s.label||'')+'</div>'
+        + (s.paras||[]).map(p=>'<p>'+esc(p)+'</p>').join('') + '</div>').join('')
+    : (b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
   const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
     +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
   const foot=[];
@@ -956,10 +955,13 @@ function patentBriefHTML(){
   const past=(FEED.patentBriefs||[]).slice(1);
   const pastHTML = past.length ? '<details class="pbpast"><summary>지난 특허 브리핑 '
       + past.length + '건</summary><div class="timeline">'
-      + past.map(x=>'<div class="tl"><div class="tld">'+esc(x.week||'')+' 수집</div>'
-          + '<div class="tlh">'+esc(x.headline||'(제목 없음)')+'</div>'
-          + '<div class="tlb">'+(x.body||[]).slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('')
-          + '</div></div>').join('')
+      + past.map(x=>{
+          const ps = (x.sections&&x.sections.length)
+            ? x.sections.flatMap(s=>s.paras||[]) : (x.body||[]);
+          return '<div class="tl"><div class="tld">'+esc(x.week||'')+' 수집</div>'
+            + '<div class="tlh">'+esc(x.headline||'(제목 없음)')+'</div>'
+            + '<div class="tlb">'+ps.slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('')
+            + '</div></div>'; }).join('')
       + '</div></details>' : '';
   return '<div class="brief'+(pbriefCollapsed?' collapsed':'')+'">'
     + '<div class="bhead"><span class="btag">🔬 이번 주 특허 브리핑</span>'
