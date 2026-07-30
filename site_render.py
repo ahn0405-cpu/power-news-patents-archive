@@ -434,6 +434,7 @@ a{color:inherit}
 .timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
 .timeline .tl.open .tlb{display:block}
 .mxmini{overflow-x:auto}
+.homemx{margin-top:14px}   /* 브리핑 아래 매트릭스 */
 /* 홈 특허 섹션 = 브리핑 전문(접기 없음) */
 .pbhome .pbw{font-size:11px;font-weight:600;color:var(--muted);margin-left:2px}
 .pbhome .pbh{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:4px 0 11px}
@@ -899,6 +900,21 @@ function insightsHTML(){
 }
 
 // 이번 주 공개 특허 — 인사이트에 있던 것을 특허 섹션으로 옮겼다(질적 노출, 건수 아님).
+// 홈 특허 섹션의 출원인×분야 요약(지역별 상위 3곳). 특허 탭 통계 뷰에는 현재 필터가
+// 반영된 전체 매트릭스가 있고, 여기 것은 브리핑 서술을 수치로 받쳐 주는 용도다.
+function matrixMiniHTML(){
+  const list=FEED.patents.items; if(!list.length) return '';
+  const r=FEED.patents.pubRange;
+  return '<div class="homepanel"><h3>🧩 출원인 × 분야'
+    + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
+    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3곳). '
+    + '칸을 누르면 그 출원인·분야의 특허 목록으로 이동합니다.'
+    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 매주 최근 '
+         +(FEED.patents.lookbackDays||90)+'일 공개분을 조회해 새로 공개된 것만 누적.' : '')
+    + '</p>'
+    + '<div class="mxmini">'+regionMatrixHTML(list, {top:3})+'</div></div>';
+}
+
 function patentPickPanelHTML(){
   const picks = patentPicks(8);
   if(!picks.length) return '';
@@ -1025,12 +1041,14 @@ function renderHome(){
       + bh + (hasPast? timelineHTML() : '') + '</div>');
   }
 
-  // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허.
-  // 매트릭스는 특허 탭에 전체가 있어 홈에서는 뺐다(같은 표를 두 번 보여주게 된다).
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML();
-  if(pb||pk){
+  // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 매트릭스를 전체 폭으로.
+  // 브리핑이 설명하는 표가 바로 아래 붙어 서술과 수치가 이어져 읽힌다(특허 탭에는 필터가
+  // 반영된 전체 매트릭스가 있고, 여기 것은 지역별 상위 3곳만 추린 요약이다).
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=matrixMiniHTML();
+  if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
-      + '<div class="homebot'+((pb&&pk)?'':' single')+'">' + (pb||'') + (pk||'') + '</div>');
+      + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
+      + (mx? '<div class="homemx">'+mx+'</div>' : ''));
   }
   $('#home').innerHTML = parts.join('');
 }
