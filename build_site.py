@@ -17,7 +17,9 @@
 """
 from __future__ import annotations
 
+import gzip
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -128,6 +130,27 @@ def main() -> None:
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())
     print(f"\n완료 → {index}")
     print(f"       뉴스 {len(news_days)}일/{nt}건 · 특허 {len(patent_weeks)}주/{pt}건")
+    _report_payload(index)
+
+
+# 전체 아카이브를 index.html 에 인라인하는 구조라 페이지 용량이 계속 자란다.
+# 항목별 필드를 다듬는 최적화는 실측상 의미가 없었다 — 중복 필드(특허 url·country·
+# aFlag·week)를 다 걷어내도 gzip 기준 3.6% 뿐이다. 반복이 많은 데이터는 압축이 이미
+# 처리한다. 실제로 관리해야 하는 건 총량이라, 매 빌드마다 압축 전송량을 찍고 임계를
+# 넘으면 경고한다. 넘어가면 최근 구간만 인라인하고 과거분은 따로 받는 구조를 볼 시점이다.
+PAYLOAD_WARN_KB = int(os.getenv("NEWS_PAYLOAD_WARN_KB", "700"))
+
+
+def _report_payload(index_path) -> None:
+    try:
+        raw = Path(index_path).read_bytes()
+    except Exception:
+        return
+    gz = len(gzip.compress(raw, 6))
+    print(f"       페이지 {len(raw)/1024:,.0f} KB · 압축 전송 약 {gz/1024:,.0f} KB")
+    if gz / 1024 > PAYLOAD_WARN_KB:
+        print(f"       ⚠️ 압축 전송량이 기준({PAYLOAD_WARN_KB} KB)을 넘었습니다 — "
+              "최근 구간만 인라인하고 과거 아카이브는 분리 로딩하는 방안을 검토하세요.")
 
 
 if __name__ == "__main__":
