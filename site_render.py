@@ -119,6 +119,10 @@ SITE_TAGLINE = "전력 이슈 뉴스와 특허를 한자리에 — 매일 자동
 SITE_ORG = "지식재산처 전기통신심사국 전기심사과"
 # 헤더에서는 CI 에 '지식재산처' 가 이미 들어 있으므로 소속 부서만 덧붙인다.
 SITE_DEPT = "전기통신심사국 전기심사과"
+# 호스팅 주소가 기관 도메인이 아니어서, 이용자가 주소만으로는 공식 서비스인지 확인할 수
+# 없다. 기관 홈페이지에서 이 사이트로 링크를 걸고, 여기서도 기관 홈페이지로 되걸어
+# 양방향으로 확인되게 한다(같은 CI 를 붙인 사칭 사이트와 구별되는 지점).
+SITE_ORG_URL = "https://www.moip.go.kr/"
 
 # 운영 기관 CI. assets/ci.svg|png|jpg 중 먼저 발견되는 파일을 빌드 시점에 data URI 로
 # 인라인한다(사이트가 index.html 한 장으로 자족하는 구조라 외부 파일을 두지 않는다).
@@ -265,6 +269,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
     feed = {
         "generated": generated,
         "title": SITE_TITLE, "tagline": SITE_TAGLINE, "org": SITE_ORG,
+        "orgUrl": SITE_ORG_URL,
         "brief": briefs[0] if briefs else None,   # 최신(홈 상단)
         "briefs": briefs,                          # 최신순 전체(타임라인)
         "patentBrief": pbriefs[0] if pbriefs else None,   # 최신(특허 탭 상단)
@@ -279,6 +284,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                .replace("__TAGLINE__", _esc(SITE_TAGLINE)) \
                .replace("__ORG__", _esc(SITE_ORG)) \
                .replace("__DEPT__", _esc(SITE_DEPT)) \
+               .replace("__ORGURL__", _esc(SITE_ORG_URL)) \
                .replace("__CI__", _ci_markup()) \
                .replace("__CSS__", _CSS) \
                .replace("__JS__", _JS) \
@@ -329,7 +335,10 @@ a{color:inherit}
   display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .mast .masttext{min-width:0}
 /* 운영 기관: 서비스명과 경쟁하지 않게 오른쪽 끝에 작게 */
-.mast .org{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.mast .org{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;
+  text-decoration:none;color:inherit}
+.mast .org:hover .orgname{color:var(--accent2)}
+.mast .org:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 .mast .org .ci{height:38px;width:auto;max-width:220px;display:block}
 .mast .org .orgname{color:var(--muted);font-size:11.5px;font-weight:600;white-space:nowrap}
 /* CI 는 흰 바탕에 쓰도록 만들어진 원색 로고다. 어두운 배경에 그대로 얹지 않고
@@ -644,7 +653,8 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
       <h1><button type="button" id="brand" class="brand" aria-label="__TITLE__ — 홈으로"><span class="bolt">⚡</span> __TITLE__</button></h1>
       <p class="tag">__TAGLINE__</p>
     </div>
-    <div class="org">__CI__<span class="orgname">__DEPT__</span></div>
+    <a class="org" href="__ORGURL__" target="_blank" rel="noopener"
+       title="__ORG__ — 기관 홈페이지로 이동">__CI__<span class="orgname">__DEPT__</span></a>
   </header>
   <nav class="tabs" role="tablist" aria-label="보기 전환">
     <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
@@ -1539,7 +1549,10 @@ $('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: EPO 
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
   + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
   + '건 · 특허 '+FEED.patents.items.length+'건'
-  + (FEED.org? '<br>운영 <b>'+esc(FEED.org)+'</b>' : '');
+  // 기관 홈페이지로 되걸어 공식 서비스임을 확인할 수 있게 한다(주소가 기관 도메인이 아니다).
+  + (FEED.org? '<br>운영 <b>'+esc(FEED.org)+'</b>'
+      + (FEED.orgUrl? ' · <a href="'+esc(safeUrl(FEED.orgUrl))+'" target="_blank" rel="noopener">기관 홈페이지</a>' : '')
+      : '');
 
 loadHash();
 $('#q').value = state.q;
