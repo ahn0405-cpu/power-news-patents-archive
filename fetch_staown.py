@@ -94,15 +94,51 @@ def _err(xml: str) -> str:
 
 
 def _seq(item: dict) -> str:
-    """항목의 고유키 추정. 'seq' 가 들어간 필드를 우선 쓰고, 없으면 전체를 키로."""
+    """항목의 고유키 추정. 'seq' 가 들어간 필드를 우선 쓰고, 없으면 전체를 키로.
+
+    요청 파라미터는 스네이크(sel_seq)인데 응답 필드는 카멜(selSeq)이라 이름이
+    엇갈린다 → 대소문자를 지우고 'seq' 포함 여부로 찾는다.
+    """
     for k, v in item.items():
         if "seq" in k.lower() and v:
             return v
     return json.dumps(item, ensure_ascii=False, sort_keys=True)
 
 
-def collect(key: str, keywords: list[str], max_calls: int) -> dict:
-    result: dict[str, dict[str, dict]] = {"free": {}, "pay": {}}
+def _relevant(title: str, kw: str) -> bool:
+    """제목 검색이 부분일치라 엉뚱한 게 딸려 온다 → 낱말 첫머리인지로 거른다.
+
+    실측('전력' 6건): '회전력을 이용한 양식김의 부착력 테스트 장치', '회전자석의
+    기전력에 의한…' 두 건이 '회전력'·'기전력' 때문에 걸렸다. 낱말 첫머리 규칙을
+    적용하면 이 둘만 정확히 떨어지고 나머지 넷은 남는다.
+
+    다만 '자가발전형' 처럼 정당한데 탈락하는 경우도 있어, 떨어뜨린 것도 버리지
+    않고 따로 담는다(규칙을 고칠 때 근거가 된다).
+    """
+    for tok in title.replace(",", " ").replace("(", " ").replace(")", " ").split():
+        if tok.startswith(kw):
+            return True
+    return False
+
+
+def _title(item: dict) -> str:
+    for k, v in item.items():
+        if "title" in k.lower():
+            return v or ""
+    return ""
+
+
+def collect(key: str, keywords: list[str], max_calls: int,
+            detail: bool = True) -> dict:
+    """무상·유상 목록을 훑고, 걸러 남은 것만 상세를 채운다.
+
+    목록에는 제목·일련번호·등록일뿐이라 '누구에게 받는지' 를 알 수 없다.
+    상세(getFree/PayTLDetail)를 불러야 권리자(pemUser)·출원번호(outNo)·
+    권리유형(selTypedesc)이 나온다. 상세는 목록과 다른 오퍼레이션이라 일일
+    트래픽도 따로 잡힌다.
+    """
+    kept: dict[str, dict[str, dict]] = {"free": {}, "pay": {}}
+    dropped: list[dict] = []
     calls = 0
     stopped = ""
     for kind, op in (("free", "getFreeTL"), ("pay", "getPayTL")):
@@ -129,22 +165,48 @@ def collect(key: str, keywords: list[str], max_calls: int) -> dict:
                     break
                 continue
             got = _items(xml)
+            n_ok = 0
             for it in got:
-                result[kind].setdefault(_seq(it), it)
-            print(f"  · {op} '{kw}': {len(got)}건 "
-                  f"(누적 {len(result[kind])})")
+                if _relevant(_title(it), kw):
+                    it["_kw"] = kw
+                    kept[kind].setdefault(_seq(it), it)
+                    n_ok += 1
+                else:
+                    dropped.append({**it, "_kw": kw, "_kind": kind})
+            print(f"  · {op} '{kw}': {len(got)}건 중 {n_ok}건 채택 "
+                  f"(누적 {len(kept[kind])})")
             if DELAY:
                 time.sleep(DELAY)
         if stopped:
             break
+
+    if detail and not stopped:
+        for kind, op in (("free", "getFreeTLDetail"), ("pay", "getPayTLDetail")):
+            for seq, it in kept[kind].items():
+                try:
+                    xml = _get(op, key, {"sel_seq": seq})
+                except Exception as e:
+                    print(f"  ! [{op}/{seq}] {type(e).__name__}: {e}")
+                    continue
+                if _err(xml):
+                    continue
+                more = _items(xml)
+                if more:
+                    it.update({k: v for k, v in more[0].items() if v})
+                if DELAY:
+                    time.sleep(DELAY)
+            print(f"  · {op}: {len(kept[kind])}건 상세 채움")
+
     return {
         "generated": datetime.now(KST).strftime("%Y-%m-%d %H:%M KST"),
         "source": "공공데이터포털 · 지식재산처 특허기술거래 국유판매기술정보",
         "keywords": keywords,
         "calls": calls,
         "stopped": stopped,
-        "free": list(result["free"].values()),
-        "pay": list(result["pay"].values()),
+        "free": list(kept["free"].values()),
+        "pay": list(kept["pay"].values()),
+        # 낱말 첫머리 규칙에 걸러진 것들. 버리지 않고 남겨 규칙을 다시 볼 근거로.
+        "dropped": dropped,
     }
 
 
@@ -168,9 +230,11 @@ def main() -> int:
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print(f"\n무상 {len(data['free'])}건 · 유상 {len(data['pay'])}건 "
-          f"(요청 {data['calls']}회) → {out}")
+          f"· 걸러냄 {len(data['dropped'])}건 (요청 {data['calls']}회) → {out}")
     sample = (data["free"] or data["pay"])[0]
     print("첫 항목 필드:", ", ".join(sample.keys()))
+    if data["dropped"]:
+        print("걸러낸 예:", "; ".join(_title(d) for d in data["dropped"][:3]))
     return 0
 
 
