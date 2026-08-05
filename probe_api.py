@@ -21,14 +21,14 @@ DEFAULT_ENDPOINT = "https://apis.data.go.kr/1431000/StaownTradePatentInfoService
 # 지식재산처 '특허기술거래 국유판매기술정보' 의 상세기능(활용신청 승인 목록 기준).
 # 무상(Free) 쪽이 먼저다 — 국유특허 중 무상 실시가 가능한 기술은 중소기업이 돈을
 #들이지 않고 쓸 수 있는 목록이라, 거래 정보보다 실용적이다.
-DEFAULT_OPS = [
+DEFAULT_OPS = [   # 연결이 막히면 앞의 한두 개만 봐도 판정된다
     "getFreeTL",          # 무상 · 발명의 명칭 리스트
     "getFreePatentee",    # 무상 · 권리자 리스트
     "getPayTL",           # 유상 · 발명의 명칭 리스트
     "getPayPatentee",     # 유상 · 권리자 리스트
     "getDateList",        # 날짜 리스트
 ]
-TIMEOUT = 20
+TIMEOUT = 25
 HEAD = 1400          # 응답 앞부분만 찍는다(로그가 길면 읽기 어렵다)
 
 
@@ -59,6 +59,35 @@ def _try(endpoint: str, op: str, key: str, label: str) -> bool:
     return ok
 
 
+def _connectivity(endpoint: str) -> None:
+    """어디서 막히는지 단계별로 확인 — DNS / TCP / TLS / 애플리케이션.
+
+    타임아웃만 보면 '서버가 느린 건지, 아예 못 닿는 건지, 해외 IP 를 막는 건지'
+    구분이 안 된다. 국내 공공 API 는 해외 IP 를 막아 두는 경우가 있어, 러너에서
+    쓸 수 있는지 자체가 설계 판단(자동화 가능 여부)에 직결된다.
+    """
+    import socket
+    host = urllib.parse.urlparse(endpoint).hostname or ""
+    print(f"\n[연결 진단] host={host}")
+    try:
+        infos = socket.getaddrinfo(host, None)
+        ips = sorted({i[4][0] for i in infos})
+        print(f"  DNS  ✅ {', '.join(ips)}")
+    except Exception as e:
+        print(f"  DNS  ❌ {type(e).__name__}: {e}")
+        return
+    for port in (443, 80):
+        s = socket.socket()
+        s.settimeout(10)
+        try:
+            s.connect((ips[0], port))
+            print(f"  TCP {port} ✅ 연결됨")
+        except Exception as e:
+            print(f"  TCP {port} ❌ {type(e).__name__}: {e}")
+        finally:
+            s.close()
+
+
 def main() -> int:
     key = os.getenv("DATA_GO_KR_KEY", "").strip()
     if not key:
@@ -70,18 +99,29 @@ def main() -> int:
     print(f"엔드포인트: {endpoint}")
     print(f"오퍼레이션 후보 {len(ops)}개: {', '.join(ops)}")
     print(f"키 길이 {len(key)}자 · '%' 포함: {'%' in key}")
+    _connectivity(endpoint)
 
     variants = [("인코딩", key)]
     dec = urllib.parse.unquote(key)
     if dec != key:
         variants.append(("디코딩", urllib.parse.quote(dec, safe="")))
+    # https 가 막혀도 http 는 열려 있는 서비스가 있다(공공 API 에 드물지 않다).
+    schemes = [endpoint]
+    if endpoint.startswith("https://"):
+        schemes.append("http://" + endpoint[len("https://"):])
 
     hit = []
     for op in ops:
-        for label, k in variants:
-            if _try(endpoint, op, k, label):
-                hit.append((op, label))
-                break            # 한 형태가 되면 다른 형태는 볼 필요 없다
+        done = False
+        for base in schemes:
+            for label, k in variants:
+                tag = label + ("/http" if base.startswith("http://") else "")
+                if _try(base, op, k, tag):
+                    hit.append((op, tag))
+                    done = True
+                    break        # 한 형태가 되면 다른 형태는 볼 필요 없다
+            if done:
+                break
     print("\n" + "=" * 60)
     print("정상 응답:", ", ".join(f"{o}({l})" for o, l in hit) or "없음")
     if not hit:
