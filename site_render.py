@@ -462,8 +462,7 @@ a{color:inherit}
 .timeline .tlh:hover{color:var(--accent2)}
 .timeline .tlb{font-size:12px;color:var(--muted);line-height:1.65;display:none}
 .timeline .tl.open .tlb{display:block}
-.mxmini{overflow-x:auto}
-.homemx{margin-top:14px}   /* 브리핑 아래 매트릭스 */
+.homemx{margin-top:14px}   /* 브리핑 아래 분야별 경쟁 구도 */
 /* 홈 특허 섹션 = 브리핑 전문(접기 없음) */
 .pbhome .pbw{font-size:11px;font-weight:600;color:var(--muted);margin-left:2px}
 .pbhome .pbh{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.45;margin:4px 0 11px}
@@ -665,7 +664,7 @@ a{color:inherit}
 /* 분야별 집중도(상위 3곳 점유율). 막대 하나로 분야끼리 눈으로 비교되게 한다 */
 .catlead .clab{display:flex;align-items:center;gap:8px}
 .catlead .conc{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11px;font-weight:700}
-.catlead .cbar{width:74px;height:6px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
+.catlead .cbar{width:96px;height:6px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
 .catlead .cbar i{display:block;height:100%;border-radius:999px;background:var(--muted)}
 .catlead .conc.hi .cbar i{background:#c2410c}
 .catlead .conc.mid .cbar i{background:#b45309}
@@ -966,17 +965,22 @@ function insightsHTML(){
 // 이번 주 공개 특허 — 인사이트에 있던 것을 특허 섹션으로 옮겼다(질적 노출, 건수 아님).
 // 홈 특허 섹션의 출원인×분야 요약(지역별 상위 3곳). 특허 탭 통계 뷰에는 현재 필터가
 // 반영된 전체 매트릭스가 있고, 여기 것은 브리핑 서술을 수치로 받쳐 주는 용도다.
-function matrixMiniHTML(){
+// 홈의 특허 요약. 예전엔 출원인×분야 매트릭스를 줄여 놓았는데, 지역별 상위 3곳만
+// 남기면 표가 커서 자리는 많이 먹으면서 '그래서 뭐' 가 남지 않았다. 같은 데이터로
+// '이 분야를 몇 곳이 나눠 갖고 있나'를 답하는 쪽이 한 화면에서 더 쓸모 있다.
+// 전체 매트릭스는 특허 탭 통계 뷰에 그대로 있고, 아래 링크로 바로 간다.
+function concPanelHTML(){
   const list=FEED.patents.items; if(!list.length) return '';
+  const rows=concentration(list); if(!rows.length) return '';
   const r=FEED.patents.pubRange;
-  return '<div class="homepanel"><h3>🧩 출원인 × 분야'
+  return '<div class="homepanel"><h3>🧭 분야별 경쟁 구도'
     + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">국가·지역별 대표 출원인이 어느 분야에 특허를 내는지(지역별 상위 3곳). '
-    + '칸을 누르면 그 출원인·분야의 특허 목록으로 이동합니다.'
-    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 매주 최근 '
-         +(FEED.patents.lookbackDays||90)+'일 공개분을 조회해 새로 공개된 것만 누적.' : '')
+    + '<p class="sub">각 기술분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 상위 3곳의 몫, '
+    + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수, 칩의 %는 분야 안에서의 지분입니다.'
+    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 추적 중인 주요 출원인 '
+         +(FEED.patents.applicants||0)+'곳 기준 추정이며 시장 점유율이 아닙니다.' : '')
     + '</p>'
-    + '<div class="mxmini">'+regionMatrixHTML(list, {top:3})+'</div></div>';
+    + '<div class="catlead">'+concRowsHTML(rows)+'</div></div>';
 }
 
 function patentPickPanelHTML(){
@@ -1105,10 +1109,9 @@ function renderHome(){
       + bh + (hasPast? timelineHTML() : '') + '</div>');
   }
 
-  // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 매트릭스를 전체 폭으로.
-  // 브리핑이 설명하는 표가 바로 아래 붙어 서술과 수치가 이어져 읽힌다(특허 탭에는 필터가
-  // 반영된 전체 매트릭스가 있고, 여기 것은 지역별 상위 3곳만 추린 요약이다).
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=matrixMiniHTML();
+  // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 분야별 경쟁 구도를
+  // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=concPanelHTML();
   if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
@@ -1444,25 +1447,69 @@ function krEntryHTML(list){
     + '<div class="krwrap">'+blocks+'</div></div>';
 }
 
-// 분야 집중도 = 상위 3곳이 그 분야 표본에서 차지하는 비율(CR3).
-// 이 값은 '시장 점유율'이 아니다 — 우리가 고른 주요 출원인 안에서의 편중이다.
-// 출원인이 3곳 이하면 정의상 100% 라 계산하지 않는다(수치가 뜻을 갖지 못한다).
-const CONC_MIN = 4;
-function concHTML(entries){
-  const n = entries.length;
-  if(n < CONC_MIN) return '<span class="conc na" title="이 분야에 등장한 출원인이 '
-    + n + '곳뿐이라 집중도를 계산하지 않습니다(3곳 이하면 상위 3곳 점유율이 항상 100%)">'
-    + '출원인 '+n+'곳</span>';
-  const tot = entries.reduce((s,e)=>s+e[1],0);
-  const top = entries.slice(0,3).reduce((s,e)=>s+e[1],0);
-  const pct = tot? Math.round(top/tot*100) : 0;
-  const lv = pct>=70 ? ['집중','hi'] : pct>=40 ? ['보통','mid'] : ['분산','lo'];
-  const tip = '상위 3곳이 이 분야 표본 '+tot+'건 중 '+top+'건('+pct+'%)을 차지합니다 · '
-    + '등장 출원인 '+n+'곳. 표본에 담긴 주요 출원인 안에서의 편중이며 시장 점유율이 아닙니다.';
-  return '<span class="conc '+lv[1]+'" title="'+esc(tip)+'">'
-    + '<span class="cbar"><i style="width:'+pct+'%"></i></span>'
-    + '<span class="cpct mono">'+pct+'%</span><span class="clv">'+lv[0]+'</span>'
-    + '<span class="cn">'+n+'곳</span></span>';
+// ── 분야별 경쟁 구도 ───────────────────────────────────────────────
+// 표본을 그대로 세면 안 된다. 수집은 출원인당 상한(PER_APPLICANT_LIMIT)이 있어
+// 큰 기업일수록 잘려 나가고, 잘린 곳들이 표본의 대부분을 차지한다. 실측하면
+// LG에너지솔루션은 실제 2,264건인데 표본엔 52건뿐이었다 — 이 상태로 세면
+// 재생에너지 분야가 '분산'(31%)으로 나오지만, 규모를 되돌리면 '소수 집중'(74%)이다.
+//
+// 그래서 두 값을 나눠 쓴다:
+//   분야 구성비 → 표본에서 (그 출원인이 어느 분야에 내는지의 비율은 표본으로도 보인다)
+//   규모        → OPS 가 알려준 실제 총계 (상한과 무관하게 정확하다)
+//   추정 건수 = 실제 총계 × (그 분야 표본 / 그 출원인 표본 전체)
+//
+// 지표는 둘이다.
+//   CR3   : 상위 3곳의 몫. 한눈에 읽히지만 4위 이하의 모양을 못 본다.
+//   실질 N: 1/HHI(지분 제곱합의 역수). 규모 차이를 반영한 '실질 경쟁자 수'로,
+//           출원인이 35곳이어도 셋이 다 가져가면 4곳 수준으로 나온다.
+const CONC_MIN = 4;          // 등장 출원인이 이보다 적으면 CR3 가 항상 100% 라 무의미
+function concentration(list){
+  const ranked = _rankApplicants(list).filter(r=>r.name!=='(미상)');
+  return (FEED.patents.categories||[]).map(c=>{
+    const sh=[];
+    ranked.forEach(r=>{ const g=r.grid[c.key]||0;
+      if(!g || !r.cnt) return;
+      sh.push({name:r.name, flag:r.flag, v:r.total*g/r.cnt, raw:g}); });
+    if(!sh.length) return null;
+    sh.sort((a,b)=> b.v-a.v || a.name.localeCompare(b.name));
+    const tot = sh.reduce((s,x)=>s+x.v,0);
+    // 보정 전(표본 그대로) 값도 같이 낸다 — 툴팁에서 보정 폭을 밝히기 위해서다.
+    const rawSorted = sh.map(x=>x.raw).sort((a,b)=>b-a);
+    const rawTot = rawSorted.reduce((s,v)=>s+v,0);
+    return {cat:c, n:sh.length, tot,
+      cr3: tot? sh.slice(0,3).reduce((s,x)=>s+x.v,0)/tot : 0,
+      neff: tot? 1/sh.reduce((s,x)=>s+(x.v/tot)*(x.v/tot),0) : 0,
+      rawCr3: rawTot? rawSorted.slice(0,3).reduce((s,v)=>s+v,0)/rawTot : 0,
+      top: sh.slice(0,3)};
+  }).filter(Boolean).sort((a,b)=> b.cr3-a.cr3);
+}
+
+function concRowsHTML(rows){
+  return rows.map(r=>{
+    let metric;
+    if(r.n < CONC_MIN){
+      metric = '<span class="conc na" title="이 분야에 등장한 출원인이 '+r.n
+        + '곳뿐이라 집중도를 계산하지 않습니다(3곳 이하면 상위 3곳 몫이 항상 100%)">'
+        + '출원인 '+r.n+'곳</span>';
+    } else {
+      const pct = Math.round(r.cr3*100), ne = r.neff;
+      const lv = ne<5 ? ['소수 집중','hi'] : ne<8 ? ['중간','mid'] : ['경쟁 분산','lo'];
+      const tip = '상위 3곳이 이 분야의 '+pct+'%를 차지합니다. 등장 출원인은 '+r.n
+        + '곳이지만 규모 차이를 반영하면 실질 경쟁자는 '+ne.toFixed(1)+'곳 수준입니다. '
+        + '표본을 그대로 세면 '+Math.round(r.rawCr3*100)+'%지만, 출원인당 수집 상한 때문에 '
+        + '큰 기업이 잘려 있어 실제 공개 총계로 규모를 되돌려 계산한 값입니다.';
+      metric = '<span class="conc '+lv[1]+'" title="'+esc(tip)+'">'
+        + '<span class="cbar"><i style="width:'+pct+'%"></i></span>'
+        + '<span class="cpct mono">'+pct+'%</span><span class="clv">'+lv[0]+'</span>'
+        + '<span class="cn">실질 '+ne.toFixed(1)+'곳 / '+r.n+'곳</span></span>';
+    }
+    // 칩의 수치는 건수가 아니라 분야 내 지분(%)이다 — 추정치라 건수로 쓰면
+    // 없는 정밀도를 있는 것처럼 보이게 한다.
+    const chips = r.top.map(t=>'<span class="cta">'+(t.flag||'')+' '+esc(t.name)
+      + '<span class="ctn">'+Math.round(t.v/r.tot*100)+'%</span></span>').join('');
+    return '<div class="crow"><div class="clab">'+r.cat.emoji+' '+esc(r.cat.name)+metric+'</div>'
+      + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
+  }).join('');
 }
 
 function renderStats(list){
@@ -1472,14 +1519,7 @@ function renderStats(list){
   const uniq=ranked.length, topA=ranked[0];
   const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
   const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ');
-  // 분야별 주요 출원인 + 집중도
-  const byCatA={}; list.forEach(it=>{const k=it.category,nm=it.aName||'(미상)'; (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1;});
-  const catLeadRows=cats.filter(c=>byCatA[c.key]).map(c=>{
-    const entries=Object.entries(byCatA[c.key]).filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
-    const chips=entries.slice(0,3).map(([n,v])=>'<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
-    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+concHTML(entries)+'</div>'
-      + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
-  }).join('');
+  const catLeadRows = concRowsHTML(concentration(list));
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
   const nSampled=ranked.filter(r=>r.sampled).length;
@@ -1509,11 +1549,12 @@ function renderStats(list){
       + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.</p>'
       + regionMatrixHTML(list, {total:true}) + '</div>'
     + krEntryHTML(list)
-    + '<div class="panel"><h3>🏭 분야별 주요 출원인 · 집중도</h3>'
-      + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수)과, <b>상위 3곳이 그 분야에서 차지하는 비율</b>입니다. '
-      + '비율이 높을수록 소수 기업이 분야를 쥐고 있어 회피설계·라이선스 검토가 먼저 필요하고, 낮을수록 여러 기업이 나눠 갖고 있습니다. '
-      + '<b>※ 시장 점유율이 아닙니다</b> — 우리가 추적하는 주요 출원인 '+(FEED.patents.applicants||0)+'곳 안에서의 편중이며, '
-      + '표본은 출원인마다 상한이 있어 큰 기업일수록 실제보다 작게 잡힙니다(집중도가 낮게 나오는 쪽으로 치우칩니다).</p>'
+    + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
+      + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
+      + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수입니다(출원인이 35곳이어도 셋이 대부분을 가져가면 4곳 수준으로 나옵니다). '
+      + '칩의 %는 그 분야 안에서의 지분입니다. 집중된 분야일수록 회피설계·라이선스 검토가 먼저 필요합니다.<br>'
+      + '수집은 출원인마다 상한이 있어 큰 기업이 잘려 있습니다 → 분야 구성비는 표본에서, 규모는 실제 공개 총계에서 가져와 되돌린 <b>추정치</b>입니다. '
+      + '<b>※ 시장 점유율이 아닙니다</b> — 추적 중인 주요 출원인 '+(FEED.patents.applicants||0)+'곳 안에서의 분포입니다.</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹'
       + '<span class="rankseg">'
