@@ -284,7 +284,7 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "news": _news_feed(news_days),
         "patents": _patent_feed(patent_weeks, stats),
         # 거래·지원 탭(수집과 무관한 사람 관리 상수 → ip_guide.py 에서만 고친다)
-        "guide": ip_guide.GUIDE,
+        "guide": ip_guide.guide(),        # 주소가 확인된 항목만(뼈대는 코드에만 남는다)
         "guideNote": ip_guide.NOTE,
         "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,

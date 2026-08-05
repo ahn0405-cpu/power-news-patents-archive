@@ -208,15 +208,21 @@ def main() -> int:
               f"카드 링크에 이름·URL 이 다 있다 ({len(ln)}종)")
         check(all("{n}" in l["url"] for l in ln),
               "카드 링크 URL 에 공개번호 자리({n})가 있다")
-        items = [i for g in ig.GUIDE for i in g["items"]]
-        check(bool(ig.GUIDE) and bool(items),
-              f"안내 항목이 있다 ({len(ig.GUIDE)}묶음 {len(items)}곳)")
-        check(all(i.get("name") and i.get("what") and i.get("url") for i in items),
-              "안내 항목마다 이름·설명·링크가 있다")
-        urls = [l["url"] for l in ln] + [i["url"] for i in items]
+        allitems = [i for g in ig.GUIDE for i in g["items"]]
+        shown = [i for g in ig.guide() for i in g["items"]]
+        check(bool(ig.guide()) and bool(shown),
+              f"안내 항목이 있다 ({len(ig.guide())}묶음 {len(shown)}곳 표시"
+              f" · 주소 미확인 {len(ig.pending())}곳)")
+        check(all(i.get("name") and i.get("org") and i.get("what") for i in allitems),
+              "뼈대 항목도 이름·기관·설명은 다 갖춘다")
+        # 주소를 못 채운 항목이 화면으로 새면 안 된다 — 확인 안 된 링크를 기관
+        # 사이트에 올리지 않으려고 url 유무로 거르는 구조다.
+        check(all(i.get("url") for i in shown), "표시되는 항목은 전부 주소가 있다")
+        check(len(shown) + len(ig.pending()) == len(allitems),
+              "표시 + 미확인 = 전체 (조용히 사라지는 항목이 없다)")
+        urls = [l["url"] for l in ln] + [i["url"] for i in shown]
         check(all(u.startswith("https://") for u in urls),
               f"모든 링크가 https 다 ({len(urls)}개)")
-        check(len({i["url"] for i in items}) == len(items), "안내 링크가 중복되지 않는다")
     finally:
         ps._search, ps._get_token = orig[0], orig[1]
         cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY = orig[2], orig[3], orig[4]

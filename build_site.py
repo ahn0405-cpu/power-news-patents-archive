@@ -30,6 +30,7 @@ import news_archive
 import patent_archive
 import patent_source
 import brief_archive
+import ip_guide
 import site_render
 
 
@@ -121,6 +122,12 @@ def main() -> None:
     pbrief_list = brief_archive.sorted_list(pbriefs)
     if pbrief_list:
         print(f"  특허 브리핑: {len(pbrief_list)}개 (최신 {pbrief_list[0].get('week','?')})")
+
+    # 거래·지원 안내에서 주소를 아직 못 채운 항목은 화면에 나오지 않는다 → 로그로
+    # 남기지 않으면 뼈대만 만들어 두고 잊게 된다.
+    todo = ip_guide.pending()
+    if todo:
+        print(f"  거래·지원 안내: 주소 미확인 {len(todo)}곳(미표시) — " + ", ".join(todo))
 
     index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
                                    generated, briefs=brief_list, stats=pstats_store,
