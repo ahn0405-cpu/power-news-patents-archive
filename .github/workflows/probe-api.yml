@@ -29,6 +29,25 @@ jobs:
         with:
           python-version: "3.11"
 
+      # 시크릿이 비어 오면 이름이 다른 건지, 환경(Environment) 시크릿으로 들어간
+      # 건지 로그만으로는 알 수 없다 → 흔한 이름 몇 개의 '길이'만 찍어 어느 것이
+      # 채워져 있는지 본다. 값은 찍지 않는다(길이만).
+      - name: 시크릿 이름 확인 (값은 찍지 않음)
+        env:
+          A: ${{ secrets.DATA_GO_KR_KEY }}
+          B: ${{ secrets.DATA_GO_KR }}
+          C: ${{ secrets.DATAGOKR_KEY }}
+          D: ${{ secrets.PUBLIC_DATA_KEY }}
+          E: ${{ secrets.SERVICE_KEY }}
+          F: ${{ secrets.DATA_API_KEY }}
+        run: |
+          for n in A B C D E F; do
+            v=$(eval echo \$$n)
+            printf '%s: %s자\n' "$n" "${#v}"
+          done
+          echo "A=DATA_GO_KR_KEY B=DATA_GO_KR C=DATAGOKR_KEY D=PUBLIC_DATA_KEY E=SERVICE_KEY F=DATA_API_KEY"
+          echo "전부 0자면: 이름이 다르거나, 저장소 시크릿이 아니라 Environment/Dependabot 쪽에 등록된 경우입니다."
+
       - name: API 두드려 보기
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
