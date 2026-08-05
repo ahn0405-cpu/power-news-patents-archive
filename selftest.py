@@ -134,6 +134,30 @@ def main() -> int:
         check(len(covered) >= min(n, span * 3),
               f"4주 안에 {len(covered)}/{n}곳이 앞 {span}순위 안에 든다")
 
+        print("· 출원인 질의어 겹침 (총계 부풀림 방지)")
+        # 목록은 공개번호 dedup 이 막아 주지만, 총계(stats)는 출원인별 독립 질의라
+        # 막을 방법이 없다. 한 출원인의 검색 어구가 다른 출원인의 이름·어구에 통째로
+        # 들어 있으면 그 회사 문서까지 세어 총계가 부풀려진다 — 실측으로 q="Siemens"
+        # 가 Siemens Energy(53)·Gamesa(75) 를 삼켜 183 이 나왔다. 분야별 경쟁 구도의
+        # 지분이 그만큼 틀어지므로 설정 단계에서 막는다.
+        def _qs(a):
+            q = a["q"]
+            return [q] if isinstance(q, str) else list(q)
+
+        overlaps = []
+        for a in cfg.APPLICANTS:
+            for b in cfg.APPLICANTS:
+                if a is b:
+                    continue
+                for x in _qs(a):
+                    for y in _qs(b) + [b["name"]]:
+                        if x.lower() != y.lower() and x.lower() in y.lower():
+                            overlaps.append(f'{a["name"]} q="{x}" ⊂ {b["name"]}("{y}")')
+        for o in overlaps:
+            print("    " + o)
+        check(not overlaps,
+              f"어떤 질의어도 다른 출원인을 삼키지 않는다 ({len(cfg.APPLICANTS)}곳)")
+
         print("· collect_offices (매일 공개국 집계 경로)")
         ps._search = Stub(total=5, per_call=1)
         st = ps.collect_offices(today)

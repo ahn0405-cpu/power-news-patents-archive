@@ -50,7 +50,11 @@ OFFICES = [
 # (무키 시절의 출원인×분야 개별 조회가 아니라 출원인당 1~2요청 → 회전 불필요)
 OPS_KEY = os.getenv("OPS_KEY", "")
 OPS_SECRET = os.getenv("OPS_SECRET", "")
-PER_APPLICANT_LIMIT = int(os.getenv("PATENT_PER_APPLICANT", "50"))  # 출원인당 최대 수집
+# 출원인당 최대 수집. 50 → 30 으로 낮췄다. 실측(8/3) 상 쿼터에 걸리기 전까지
+# 24곳밖에 못 돌았는데, 상한이 낮으면 같은 쿼터로 더 많은 출원인에 닿는다
+# (24곳 × 50 ≈ 40곳 × 30). 표본이 작아지면 분야 구성비 추정이 거칠어지지만,
+# 규모는 표본이 아니라 OPS 총계에서 오므로(경쟁 구도 지표) 영향이 제한적이다.
+PER_APPLICANT_LIMIT = int(os.getenv("PATENT_PER_APPLICANT", "30"))
 LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "90"))        # 최근 N일 발행분
 REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "40"))
 REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "0.4"))         # OPS 쿼터 배려
@@ -72,7 +76,7 @@ OFFICE_BATCH = int(os.getenv("PATENT_OFFICE_BATCH", "11"))  # 한 실행에서 �
 OFFICE_BUDGET = float(os.getenv("PATENT_OFFICE_BUDGET", "180"))   # 초
 OFFICE_TIMEOUT = int(os.getenv("PATENT_OFFICE_TIMEOUT", "15"))    # 집계 요청 1건 타임아웃(초)
 # 해외 출원인의 '국내(KR) 공개' 전용 수집.
-# 본 수집은 출원인당 상한(50) 안에서 최신순이라 KR 공개가 뒤로 밀려난다 — 실측으로
+# 본 수집은 출원인당 상한(PER_APPLICANT_LIMIT) 안에서 최신순이라 KR 공개가 뒤로 밀려난다 — 실측으로
 # CATL 은 집계상 KR 60건인데 표본에는 0건이었다. 해외 출원인이 한국에 낸 건 그들이
 # 한국 시장에서 지킬 값어치가 있다고 본 기술이라 따로 한 번 더 훑는다(pn any "KR").
 KR_FOCUS = os.getenv("PATENT_KR_FOCUS", "on") != "off"
@@ -155,15 +159,18 @@ APPLICANTS = [
     {"name": "Fuji Electric", "region": "JP", "flag": "🇯🇵", "q": "Fuji Electric"},   # 전력반도체·인버터
     {"name": "Meidensha", "region": "JP", "flag": "🇯🇵", "q": "Meidensha"},
     # 🇪🇺 유럽
-    # Siemens 계열은 구체적인 쪽을 먼저 둔다. q="Siemens" 가 Energy·Gamesa 문서까지
-    # 걸리므로, 목록에서 앞선 항목이 공개번호 dedup 으로 먼저 가져가게 하려는 것.
-    # (stats 의 총계는 출원인별 독립 질의라 Siemens 총계에 두 곳이 섞여 있다 — 월요일
-    #  로그에서 실제 건수를 보고 필요하면 q 를 "Siemens Aktiengesellschaft" 로 좁힌다.)
+    # Siemens 계열은 구체적인 쪽을 먼저 둔다. 목록에서 앞선 항목이 공개번호 dedup 으로
+    # 먼저 가져가게 하려는 것.
+    # 총계는 출원인별 독립 질의라 dedup 이 듣지 않는다 → 넓은 q="Siemens" 로는 Energy·
+    # Gamesa 가 그대로 합산됐다(실측: Siemens 183 · Energy 53 · Gamesa 75). 총계가
+    # 겹치면 분야별 경쟁 구도의 지분이 부풀려지므로 모회사 법인명으로 좁힌다.
+    # 표기가 문서마다 흔들려(AKTIENGESELLSCHAFT / AG) 둘을 OR 로 묶었다.
     {"name": "Siemens Energy", "region": "EU", "flag": "🇩🇪", "q": "Siemens Energy"},
     {"name": "Siemens Gamesa", "region": "EU", "flag": "🇪🇸", "q": "Siemens Gamesa"},
     # seq: '앞 항목보다 뒤에 와야 한다'는 표시. 주간 수집이 시작점을 회전시키므로
     # (_collect_order) 회전이 이 사이를 끊고 들어오지 못하게 막는다.
-    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens", "seq": True},           # ✔
+    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "seq": True,
+     "q": ["Siemens Aktiengesellschaft", "Siemens AG"]},                                      # ✔
     {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
     {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
     {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
