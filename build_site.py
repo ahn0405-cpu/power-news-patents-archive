@@ -129,9 +129,16 @@ def main() -> None:
     if todo:
         print(f"  거래·지원 안내: 주소 미확인 {len(todo)}곳(미표시) — " + ", ".join(todo))
 
+    # 국유판매기술: 국내에서 받아 커밋한 파일(자동 수집 불가 — apis.data.go.kr 이
+    # 해외 IP 를 막는다). 없으면 조용히 건너뛴다.
+    staown = ip_guide.staown_power(_load_brief("staown.json"))
+    if staown:
+        print(f"  국유판매기술: 무상 {len(staown['free'])}건 · "
+              f"유상 {len(staown['pay'])}건 (수집 {staown.get('generated','?')})")
+
     index = site_render.render_all(ncfg.SITE_DIR, news_days, patent_weeks,
                                    generated, briefs=brief_list, stats=pstats_store,
-                                   pbriefs=pbrief_list)
+                                   pbriefs=pbrief_list, staown=staown)
 
     nt = sum(len(d.get("articles", [])) for d in news_days.values())
     pt = sum(len(w.get("patents", [])) for w in patent_weeks.values())

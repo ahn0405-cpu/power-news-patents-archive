@@ -327,7 +327,8 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                patent_weeks: dict[str, dict], generated: str,
                briefs: list[dict] | None = None,
                stats: dict | None = None,
-               pbriefs: list[dict] | None = None) -> Path:
+               pbriefs: list[dict] | None = None,
+               staown: dict | None = None) -> Path:
     site_dir = Path(site_dir)
     site_dir.mkdir(parents=True, exist_ok=True)
 
@@ -347,6 +348,8 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         # 거래·지원 탭(수집과 무관한 사람 관리 상수 → ip_guide.py 에서만 고친다)
         "guide": ip_guide.guide(),        # 주소가 확인된 항목만(뼈대는 코드에만 남는다)
         "guideNote": ip_guide.NOTE,
+        "staown": staown or None,
+        "staownNote": ip_guide.STAOWN_NOTE,
         "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
                   "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE},
@@ -504,6 +507,18 @@ a{color:inherit}
 .trow .tr{margin:8px 0 0;font-size:12.5px;line-height:1.7;color:var(--muted);word-break:keep-all}
 .trow .tk{margin:8px 0 0;display:flex;gap:5px;flex-wrap:wrap}
 .trow .tcaveat{margin:7px 0 0;font-size:11px;line-height:1.6;color:var(--muted);opacity:.85}
+/* 국유특허 목록 — 건수가 적어 표 대신 줄 목록으로 */
+.stlist{display:flex;flex-direction:column;gap:2px}
+.strow{border:1px solid var(--line);border-radius:9px;background:var(--card);padding:9px 12px}
+.strow .stt{display:flex;align-items:baseline;gap:7px;font-size:13.5px;font-weight:700;flex-wrap:wrap}
+.strow .stt a{color:inherit;text-decoration:none;word-break:keep-all}
+.strow .stt a:hover{color:var(--accent2)}
+.strow .stfree,.strow .stpay{font-size:10.5px;font-weight:800;border-radius:999px;
+  padding:2px 7px;flex:none;border:1px solid var(--line)}
+.strow .stfree{color:#15803d;border-color:#15803d}
+.strow .stpay{color:var(--muted)}
+@media (prefers-color-scheme:dark){ .strow .stfree{color:#4ade80;border-color:#4ade80} }
+.strow .stm{font-size:11.5px;color:var(--muted);margin-top:3px;font-weight:600}
 /* 거래·지원 안내 */
 #guide .gdesc{color:var(--muted);font-size:12.5px;line-height:1.7;margin:0 2px 10px}
 #guide .glist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
@@ -1452,11 +1467,39 @@ function tradeSectionHTML(){
     + '<p class="gnote">' + esc(T.note) + '</p>';
 }
 
+// 국유판매기술 — 권리자가 국가라 창구가 분명하고, 무상은 비용 없이 실시할 수 있다.
+// 건수가 적어(전력 분야는 수십 건 규모) 표 하나로 충분하다. 규모를 부풀리지 않는다.
+function staownHTML(){
+  const S=FEED.staown; if(!S) return '';
+  const row=(it, free)=>{
+    // outNo 는 출원번호다(공개번호가 아니라 정확히 매칭되는 링크를 만들 수 없다)
+    // → 검색으로 연결하고, 번호 자체도 보여 KIPRIS 에 직접 넣을 수 있게 한다.
+    const q='https://patents.google.com/?q='+encodeURIComponent(it.no||it.title)+'&hl=ko';
+    return '<div class="strow"><div class="stt">'
+      + (free? '<span class="stfree">무상</span>' : '<span class="stpay">유상</span>')
+      + '<a href="'+esc(safeUrl(q))+'" target="_blank" rel="noopener">'+esc(it.title)+' ↗</a></div>'
+      + '<div class="stm">'+esc(it.org||'')
+      + (it.type? ' <span aria-hidden="true">·</span> '+esc(it.type) : '')
+      + (it.no? ' <span class="mono">'+esc(it.no)+'</span>' : '')
+      + '</div></div>';
+  };
+  const rows = (S.free||[]).map(i=>row(i,true)).join('')
+             + (S.pay||[]).map(i=>row(i,false)).join('');
+  if(!rows) return '';
+  return '<div class="sec">🏛️ 국유특허 — 전력 관련</div>'
+    + '<p class="gdesc">'+esc(FEED.staownNote||'')+'</p>'
+    + '<div class="stlist">'+rows+'</div>'
+    + '<p class="tcaveat">무상 '+(S.free||[]).length+'건 · 유상 '+(S.pay||[]).length
+    + '건 · 공공데이터포털 「지식재산처 특허기술거래 국유판매기술정보」'
+    + (S.generated? ' · 받은 때 '+esc(S.generated) : '')
+    + '. 제목에 전력 설비·계통 표현이 있는 것만 추렸습니다.</p>';
+}
+
 // 거래·지원: 수집 데이터와 무관한 안내 화면. 검색·필터가 필요 없어 홈과 같은
 // 'homemode'(컨트롤 숨김)로 그린다.
 function renderGuide(){
   const G = FEED.guide||[];
-  $('#guide').innerHTML = tradeSectionHTML() + G.map(g=>
+  $('#guide').innerHTML = tradeSectionHTML() + staownHTML() + G.map(g=>
     '<div class="sec">'+esc(g.emoji||'')+' '+esc(g.name)+'</div>'
     + (g.desc? '<p class="gdesc">'+esc(g.desc)+'</p>' : '')
     + '<div class="glist">' + (g.items||[]).map(it=>
