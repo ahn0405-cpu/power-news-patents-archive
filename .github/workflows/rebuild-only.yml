@@ -1,0 +1,71 @@
+# 수집 없이 재배포 (수동 실행 전용).
+#
+# 화면만 바뀌는 변경(레이아웃·문구·링크)에는 수집이 필요 없다. 그런데 지금까지
+# 그런 변경도 매일 워크플로를 그대로 돌려 배포했고, 그때마다 OPS 를 두드렸다.
+# 실측(8/5): 하루에 아홉 번 그렇게 돌린 끝에 OPS 토큰 발급이 401 로 거부됐다.
+#
+# 이 워크플로는 --collect none 으로 기존 아카이브를 그대로 다시 그리기만 한다.
+# OPS 도, 뉴스 수집도 건드리지 않는다 → 화면 변경 배포는 이쪽을 쓴다.
+name: 수집 없이 재배포 (수동)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# 매일 워크플로와 같은 그룹 — gh-pages 를 서로 덮어쓰지 않도록 직렬화한다.
+concurrency:
+  group: power-news-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: 이전 아카이브 복원 (gh-pages → _prev)
+        run: |
+          mkdir -p _prev
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git archive FETCH_HEAD | tar -x -C _prev
+            echo "이전 아카이브 복원 완료"
+          else
+            echo "gh-pages 브랜치 없음 — 재배포할 아카이브가 없습니다"
+            exit 1
+          fi
+
+      - name: 스모크 테스트
+        run: python selftest.py
+
+      # 키를 아예 넘기지 않는다. 넘기지 않으면 실수로 수집 경로를 타더라도
+      # OPS 에 닿을 수 없다(--collect none 과 이중 안전장치).
+      - name: 사이트 재생성 (수집 없음)
+        env:
+          NEWS_PREV_DIR: _prev
+          NEWS_SITE_DIR: site
+        run: python build_site.py --collect none
+
+      - name: gh-pages 로 배포
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch site/.nojekyll
+          cd site
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "사이트 재생성 (수집 없음, $(date -u +%F))"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

@@ -34,14 +34,31 @@ SEARCH_URL = "https://ops.epo.org/3.2/rest-services/published-data/search/biblio
 
 
 # ── OPS 접근 ─────────────────────────────────────────────────────
+def _body(e) -> str:
+    """오류 응답 본문에서 사람이 읽을 부분만. XML/JSON 어느 쪽이든 태그를 걷어낸다."""
+    try:
+        raw = e.read().decode("utf-8", "replace")
+    except Exception:
+        return "(본문 없음)"
+    txt = re.sub(r"<[^>]+>", " ", raw)
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return txt[:300] or "(본문 비어 있음)"
+
+
 def _get_token() -> str:
     cred = base64.b64encode(f"{cfg.OPS_KEY}:{cfg.OPS_SECRET}".encode()).decode()
     req = urllib.request.Request(
         AUTH_URL, data=b"grant_type=client_credentials",
         headers={"Authorization": "Basic " + cred,
                  "Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
-        return json.loads(r.read())["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=cfg.REQUEST_TIMEOUT) as r:
+            return json.loads(r.read())["access_token"]
+    except urllib.error.HTTPError as e:
+        # EPO 는 거부 사유를 본문에 적어 보낸다(자격 오류인지, 쓴 만큼 막힌 것인지).
+        # 그걸 안 읽으면 로그에 'HTTP Error 401' 만 남아 원인을 알 수 없다 —
+        # 실측으로 401 이 났을 때 자격이 틀린 건지 계정이 잠긴 건지 구분하지 못했다.
+        raise RuntimeError(f"OPS 토큰 실패 {e.code}: {_body(e)}") from None
 
 
 def _search(token: str, cql: str, start: int, end: int,
@@ -53,8 +70,12 @@ def _search(token: str, cql: str, start: int, end: int,
         "Authorization": "Bearer " + token,
         "Accept": "application/json",
         "X-OPS-Range": f"{start}-{end}"})
-    with urllib.request.urlopen(req, timeout=timeout or cfg.REQUEST_TIMEOUT) as r:
-        data = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout or cfg.REQUEST_TIMEOUT) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        # 코드는 유지한다(_is_quota 가 '403' 문자열을 본다) + 사유를 덧붙인다.
+        raise RuntimeError(f"HTTP Error {e.code}: {_body(e)}") from None
     return data, _total(data)
 
 

@@ -134,6 +134,43 @@ def main() -> int:
         check(len(covered) >= min(n, span * 3),
               f"4주 안에 {len(covered)}/{n}곳이 앞 {span}순위 안에 든다")
 
+        print("· OPS 오류 사유 노출 (401 이 왜 났는지 로그에 남는다)")
+        import io as _io
+        import urllib.error as _ue
+
+        class _Err(_ue.HTTPError):
+            def __init__(self, code, body):
+                super().__init__("u", code, "x", {}, _io.BytesIO(body.encode()))
+
+        # 이 파일은 앞에서 _get_token·_search 를 스텁으로 바꿔 놓았다 → 진짜 함수를
+        # 잠시 되돌려 놓고 검사한다(안 그러면 스텁을 시험하는 꼴이 된다).
+        _orig_open = ps.urllib.request.urlopen
+        _stub_search, _stub_token = ps._search, ps._get_token
+        ps._search, ps._get_token = orig[0], orig[1]
+        try:
+            ps.urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(
+                _Err(401, "<error><code>CLIENT.InvalidCredentials</code></error>"))
+            try:
+                ps._get_token()
+                msg = ""
+            except Exception as e:
+                msg = str(e)
+            check("CLIENT.InvalidCredentials" in msg,
+                  "토큰 실패 시 EPO 가 준 사유가 메시지에 담긴다")
+            ps.urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(
+                _Err(403, "<fault><code>SERVER.QuotaPerHour</code></fault>"))
+            try:
+                ps._search("t", "q", 1, 25)
+                msg2 = ""
+            except Exception as e:
+                msg2 = str(e)
+                # 사유를 붙이면서 '403' 을 잃으면 쿼터 판정이 깨져 계속 두드리게 된다.
+                check(ps._is_quota(e), "사유를 붙여도 쿼터(403) 판정이 유지된다")
+            check("QuotaPerHour" in msg2, "검색 실패 사유도 메시지에 담긴다")
+        finally:
+            ps.urllib.request.urlopen = _orig_open
+            ps._search, ps._get_token = _stub_search, _stub_token
+
         print("· 출원인 질의어 겹침 (총계 부풀림 방지)")
         # 목록은 공개번호 dedup 이 막아 주지만, 총계(stats)는 출원인별 독립 질의라
         # 막을 방법이 없다. 한 출원인의 검색 어구가 다른 출원인의 이름·어구에 통째로
