@@ -662,6 +662,26 @@ a{color:inherit}
 .catlead .cta{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;
   display:inline-flex;align-items:center;gap:5px;background:var(--bg)}
 .catlead .cta .ctn{color:var(--accent2);font-weight:700;font-variant-numeric:tabular-nums;font-size:10.5px}
+/* 분야별 집중도(상위 3곳 점유율). 막대 하나로 분야끼리 눈으로 비교되게 한다 */
+.catlead .clab{display:flex;align-items:center;gap:8px}
+.catlead .conc{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11px;font-weight:700}
+.catlead .cbar{width:74px;height:6px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
+.catlead .cbar i{display:block;height:100%;border-radius:999px;background:var(--muted)}
+.catlead .conc.hi .cbar i{background:#c2410c}
+.catlead .conc.mid .cbar i{background:#b45309}
+.catlead .conc.lo .cbar i{background:#15803d}
+.catlead .cpct{font-variant-numeric:tabular-nums;color:var(--ink)}
+.catlead .conc.hi .clv{color:#c2410c} .catlead .conc.mid .clv{color:#b45309}
+.catlead .conc.lo .clv{color:#15803d}
+.catlead .cn{color:var(--muted);font-weight:600}
+.catlead .conc.na{color:var(--muted)}
+/* 어두운 배경에서는 위 진한 색이 잘 안 보인다 → 밝은 쪽으로 바꾼다 */
+@media (prefers-color-scheme:dark){
+  .catlead .conc.hi .cbar i{background:#fb923c} .catlead .conc.hi .clv{color:#fb923c}
+  .catlead .conc.mid .cbar i{background:#fbbf24} .catlead .conc.mid .clv{color:#fbbf24}
+  .catlead .conc.lo .cbar i{background:#4ade80} .catlead .conc.lo .clv{color:#4ade80}
+}
+@media (max-width:560px){ .catlead .conc{margin-left:0;width:100%} .catlead .clab{flex-wrap:wrap} }
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
@@ -1424,6 +1444,27 @@ function krEntryHTML(list){
     + '<div class="krwrap">'+blocks+'</div></div>';
 }
 
+// 분야 집중도 = 상위 3곳이 그 분야 표본에서 차지하는 비율(CR3).
+// 이 값은 '시장 점유율'이 아니다 — 우리가 고른 주요 출원인 안에서의 편중이다.
+// 출원인이 3곳 이하면 정의상 100% 라 계산하지 않는다(수치가 뜻을 갖지 못한다).
+const CONC_MIN = 4;
+function concHTML(entries){
+  const n = entries.length;
+  if(n < CONC_MIN) return '<span class="conc na" title="이 분야에 등장한 출원인이 '
+    + n + '곳뿐이라 집중도를 계산하지 않습니다(3곳 이하면 상위 3곳 점유율이 항상 100%)">'
+    + '출원인 '+n+'곳</span>';
+  const tot = entries.reduce((s,e)=>s+e[1],0);
+  const top = entries.slice(0,3).reduce((s,e)=>s+e[1],0);
+  const pct = tot? Math.round(top/tot*100) : 0;
+  const lv = pct>=70 ? ['집중','hi'] : pct>=40 ? ['보통','mid'] : ['분산','lo'];
+  const tip = '상위 3곳이 이 분야 표본 '+tot+'건 중 '+top+'건('+pct+'%)을 차지합니다 · '
+    + '등장 출원인 '+n+'곳. 표본에 담긴 주요 출원인 안에서의 편중이며 시장 점유율이 아닙니다.';
+  return '<span class="conc '+lv[1]+'" title="'+esc(tip)+'">'
+    + '<span class="cbar"><i style="width:'+pct+'%"></i></span>'
+    + '<span class="cpct mono">'+pct+'%</span><span class="clv">'+lv[0]+'</span>'
+    + '<span class="cn">'+n+'곳</span></span>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const cats=FEED.patents.categories, regions=FEED.patents.countries;
@@ -1431,12 +1472,13 @@ function renderStats(list){
   const uniq=ranked.length, topA=ranked[0];
   const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
   const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ');
-  // 분야별 주요 출원인
+  // 분야별 주요 출원인 + 집중도
   const byCatA={}; list.forEach(it=>{const k=it.category,nm=it.aName||'(미상)'; (byCatA[k]||(byCatA[k]={}))[nm]=(byCatA[k][nm]||0)+1;});
   const catLeadRows=cats.filter(c=>byCatA[c.key]).map(c=>{
     const entries=Object.entries(byCatA[c.key]).filter(([n])=>n!=='(미상)').sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
     const chips=entries.slice(0,3).map(([n,v])=>'<span class="cta">'+esc(n)+(v>1?'<span class="ctn">'+v+'</span>':'')+'</span>').join('');
-    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+'</div><div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
+    return '<div class="crow"><div class="clab">'+c.emoji+' '+esc(c.name)+concHTML(entries)+'</div>'
+      + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
   }).join('');
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
@@ -1467,8 +1509,11 @@ function renderStats(list){
       + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.</p>'
       + regionMatrixHTML(list, {total:true}) + '</div>'
     + krEntryHTML(list)
-    + '<div class="panel"><h3>🏭 분야별 주요 출원인</h3>'
-      + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수).</p>'
+    + '<div class="panel"><h3>🏭 분야별 주요 출원인 · 집중도</h3>'
+      + '<p class="sub">각 분야에서 자주 등장한 출원인(표본 내 등장 횟수)과, <b>상위 3곳이 그 분야에서 차지하는 비율</b>입니다. '
+      + '비율이 높을수록 소수 기업이 분야를 쥐고 있어 회피설계·라이선스 검토가 먼저 필요하고, 낮을수록 여러 기업이 나눠 갖고 있습니다. '
+      + '<b>※ 시장 점유율이 아닙니다</b> — 우리가 추적하는 주요 출원인 '+(FEED.patents.applicants||0)+'곳 안에서의 편중이며, '
+      + '표본은 출원인마다 상한이 있어 큰 기업일수록 실제보다 작게 잡힙니다(집중도가 낮게 나오는 쪽으로 치우칩니다).</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹'
       + '<span class="rankseg">'
