@@ -143,7 +143,11 @@ def _canon_assignee(name: str) -> str:
     return disp or s
 
 SITE_TITLE = "IP-Power 플랫폼"
-SITE_TAGLINE = "전력 이슈 뉴스와 특허를 한자리에 — 매일 자동으로 모으고 살핍니다"
+# 태그라인은 사이트가 실제로 하는 일까지만 적는다. 뉴스·특허를 모으는 데서
+# 시작했지만 지금은 분야별 경쟁 구도와 거래 창구 안내까지 있어, '한자리에 모은다'
+# 만으로는 절반만 말하는 셈이다. '거래를 돕는다' 로 넘어가지는 않는다 — 우리는
+# 알선·중개를 하지 않고 판단 재료와 창구를 알려줄 뿐이다.
+SITE_TAGLINE = "전력 뉴스와 특허를 매일 모아 — 기술 동향부터 지식재산 거래 참고까지"
 SITE_ORG = "지식재산처 전기통신심사국 전기심사과"
 # 헤더에서는 CI 에 '지식재산처' 가 이미 들어 있으므로 소속 부서만 덧붙인다.
 SITE_DEPT = "전기통신심사국 전기심사과"
@@ -534,7 +538,15 @@ a{color:inherit}
   border:1px solid var(--line);border-left:3px solid var(--accent);
   font-size:11.5px;line-height:1.6;color:var(--muted);word-break:keep-all}
 .tkr b{color:var(--ink);font-weight:800}
+/* 절 바로가기 — 서브탭 대신. 내용을 숨기지 않고 이동만 빠르게 한다 */
+.jump{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px}
+.jump button{font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 13px}
+.jump button:hover{color:var(--accent2);border-color:var(--accent2)}
 /* 국유특허 목록 — 건수가 적어 표 대신 줄 목록으로 */
+.stmore{margin-top:6px;font:inherit;font-size:12px;font-weight:700;color:var(--accent2);
+  background:none;border:1px dashed var(--line);border-radius:9px;padding:8px;cursor:pointer;width:100%}
+.stmore:hover{border-color:var(--accent2)}
 .stlist{display:flex;flex-direction:column;gap:2px}
 .strow{border:1px solid var(--line);border-radius:9px;background:var(--card);padding:9px 12px}
 .strow .stt{display:flex;align-items:baseline;gap:7px;font-size:13.5px;font-weight:700;flex-wrap:wrap}
@@ -1466,6 +1478,8 @@ function quadChartHTML(rows){
 // 안 보인다 → 분야별 일자 비중을 작은 선으로 붙인다. 새 수집 없이 지금 피드
 // (기사마다 date·category)로 계산된다. 세로축은 그 분야의 최대치 기준이라
 // 분야끼리 높이를 비교하는 용도가 아니다 — 오르내림만 본다.
+const STAOWN_HEAD=6;        // 처음에 보일 국유특허 건수
+let staownAll=false;
 let _shareCache=null;
 function catShareSeries(key, days){
   if(!_shareCache){
@@ -1552,7 +1566,7 @@ function tradeSectionHTML(){
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
   }).join('');
-  return '<div class="sec">🧭 분야별 거래 판단 참고</div>'
+  return '<div class="sec" id="sec-analysis">🧭 분야별 거래 판단 참고</div>'
     + '<p class="gdesc">뉴스에서 차지하는 비중이 어느 쪽으로 움직였는지와, 그 분야 권리를 '
     + '몇 곳이 나눠 갖고 있는지를 겹쳐 봅니다. 원 크기는 그 분야의 추정 공개 규모입니다.'
     + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
@@ -1578,10 +1592,18 @@ function staownHTML(){
       + (it.no? ' <span class="mono">'+esc(it.no)+'</span>' : '')
       + '</div></div>';
   };
-  const rows = (S.free||[]).map(i=>row(i,true)).join('')
-             + (S.pay||[]).map(i=>row(i,false)).join('');
-  if(!rows) return '';
-  return '<div class="sec">🏛️ 국유특허 — 전력 관련</div>'
+  // 이 목록은 훑어보는 것보다 '있다는 걸 아는 것' 이 중요하다 → 기본은 몇 건만
+  // 보이고 나머지는 펼쳐 본다(16건을 다 깔면 화면의 4분의 1을 먹는다).
+  const all = (S.free||[]).map(i=>[i,true]).concat((S.pay||[]).map(i=>[i,false]));
+  if(!all.length) return '';
+  const shown = staownAll? all : all.slice(0, STAOWN_HEAD);
+  const rows = shown.map(x=>row(x[0], x[1])).join('')
+    + (all.length>shown.length
+        ? '<button type="button" class="stmore" data-more="staown">더 보기 ('
+          + (all.length-shown.length) + '건 남음)</button>'
+        : (staownAll && all.length>STAOWN_HEAD
+            ? '<button type="button" class="stmore" data-more="staown">접기</button>' : ''));
+  return '<div class="sec" id="sec-staown">🏛️ 국유특허 — 전력 관련</div>'
     + '<p class="gdesc">'+esc(FEED.staownNote||'')+'</p>'
     + '<div class="stlist">'+rows+'</div>'
     + '<p class="tcaveat">무상 '+(S.free||[]).length+'건 · 유상 '+(S.pay||[]).length
@@ -1592,10 +1614,17 @@ function staownHTML(){
 
 // 거래·지원: 수집 데이터와 무관한 안내 화면. 검색·필터가 필요 없어 홈과 같은
 // 'homemode'(컨트롤 숨김)로 그린다.
+// 이 탭은 셋이 순서를 이룬다: 분석(어디를 볼까) → 매물(뭘 받을 수 있나) →
+// 창구(어디로 가나). 서브탭으로 끊으면 그 흐름이 깨지고, 안 누른 절은 있는 줄도
+// 모르게 된다 → 내용은 한 화면에 두고 이동만 빠르게 하는 바로가기를 얹는다.
+// (길이 실측: 이 탭 4,618px < 특허 탭 8,138px — 나눠야 할 만큼 길지는 않다.)
 function renderGuide(){
   const G = FEED.guide||[];
-  $('#guide').innerHTML = tradeSectionHTML() + staownHTML() + G.map(g=>
-    '<div class="sec">'+esc(g.emoji||'')+' '+esc(g.name)+'</div>'
+  const trade = tradeSectionHTML();
+  const staown = staownHTML();
+  let desks = G.map((g,i)=>
+    '<div class="sec"'+(i===0? ' id="sec-desks"':'')+'>'
+    + esc(g.emoji||'')+' '+esc(g.name)+'</div>'
     + (g.desc? '<p class="gdesc">'+esc(g.desc)+'</p>' : '')
     + '<div class="glist">' + (g.items||[]).map(it=>
         '<a class="gcard" href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener">'
@@ -1603,8 +1632,16 @@ function renderGuide(){
         + (it.org? '<span class="gorg">'+esc(it.org)+'</span>' : '')
         + '<span class="garr" aria-hidden="true">↗</span></div>'
         + '<p class="gwhat">'+esc(it.what||'')+'</p></a>').join('')
-    + '</div>').join('')
-    + (FEED.guideNote? '<p class="gnote">'+esc(FEED.guideNote)+'</p>' : '');
+    + '</div>').join('');
+  if(desks && FEED.guideNote) desks += '<p class="gnote">'+esc(FEED.guideNote)+'</p>';
+  const jumps=[];
+  if(trade)  jumps.push(['sec-analysis','🧭 분석']);
+  if(staown) jumps.push(['sec-staown','🏛️ 매물']);
+  if(desks)  jumps.push(['sec-desks','🏢 창구']);
+  const nav = jumps.length>1
+    ? '<div class="jump">'+jumps.map(j=>'<button type="button" data-jump="'+j[0]+'">'
+      + esc(j[1])+'</button>').join('')+'</div>' : '';
+  $('#guide').innerHTML = nav + trade + staown + desks;
 }
 
 function render(){
@@ -2026,6 +2063,18 @@ function wire(){
     const p=b.dataset.period; state.period=(p===state.period && p!=='all')?'all':p; state.limit=PAGE; render(); };
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
+  $('#guide').onclick = e=>{
+    const j=e.target.closest('[data-jump]');
+    if(j){ const t=document.getElementById(j.getAttribute('data-jump'));
+      if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    // 국유특허 더 보기/접기 — 접을 때는 그 자리로 돌려놔야 화면이 튀지 않는다.
+    if(e.target.closest('[data-more="staown"]')){
+      const back=staownAll;
+      staownAll=!staownAll; renderGuide();
+      if(back){ const t=document.getElementById('sec-staown');
+        if(t) t.scrollIntoView({block:'start'}); }
+      return; }
+  };
   $('#home').onclick = e=>{
     // 브리핑 접기/펼치기
     if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
