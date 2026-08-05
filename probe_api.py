@@ -34,11 +34,17 @@ HEAD = 1400          # 응답 앞부분만 찍는다(로그가 길면 읽기 어
 # 검색형이다 — 권리자(pem_user) 나 발명의 명칭으로 찾는다. 값은 포털 문서의
 # 샘플데이터를 그대로 쓴다(구조만 보면 되므로 무엇으로 찾는지는 중요하지 않다).
 OP_PARAMS = {
-    "getPayPatentee": {"pem_user": "국립"},
-    "getFreePatentee": {"pem_user": "국립"},
+    "getFreeTL":       {"sel_title": "전력"},     # 무상 · 발명의 명칭
+    "getPayTL":        {"sel_title": "전력"},     # 유상 · 발명의 명칭
+    "getFreePatentee": {"pem_user": "국립"},      # 무상 · 권리자
+    "getPayPatentee":  {"pem_user": "국립"},      # 유상 · 권리자
+    "getDateList":     {"regi_date": "20230402", "del_date": "20230403"},
+    # 상세는 목록에서 얻은 일련번호로 부른다(샘플값은 포털 문서 것)
+    "getFreeTLDetail":       {"sel_seq": "228780"},
+    "getPayTLDetail":        {"sel_seq": "228780"},
+    "getFreePatenteeDetail": {"sel_seq": "228780"},
+    "getPayPatenteeDetail":  {"sel_seq": "228780"},
 }
-# 발명의 명칭으로 찾는 쪽(getFreeTL·getPayTL)의 파라미터 이름은 아직 모른다 →
-# 포털 '상세기능' 에서 확인되면 위 표에 한 줄 더 넣으면 된다.
 
 
 def _fetch(url: str) -> tuple[int, str, str]:
