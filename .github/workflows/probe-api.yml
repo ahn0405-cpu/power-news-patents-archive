@@ -34,19 +34,27 @@ jobs:
       # 채워져 있는지 본다. 값은 찍지 않는다(길이만).
       - name: 시크릿 이름 확인 (값은 찍지 않음)
         env:
+          CTRL: ${{ secrets.OPS_KEY }}          # 대조군 — 이미 잘 도는 시크릿
           A: ${{ secrets.DATA_GO_KR_KEY }}
           B: ${{ secrets.DATA_GO_KR }}
           C: ${{ secrets.DATAGOKR_KEY }}
           D: ${{ secrets.PUBLIC_DATA_KEY }}
           E: ${{ secrets.SERVICE_KEY }}
           F: ${{ secrets.DATA_API_KEY }}
+          # Variables 탭에 들어간 경우 secrets. 로는 안 잡히고 vars. 로 잡힌다.
+          VA: ${{ vars.DATA_GO_KR_KEY }}
+          VB: ${{ vars.DATA_GO_KR }}
+          VC: ${{ vars.SERVICE_KEY }}
         run: |
-          for n in A B C D E F; do
-            v=$(eval echo \$$n)
-            printf '%s: %s자\n' "$n" "${#v}"
-          done
-          echo "A=DATA_GO_KR_KEY B=DATA_GO_KR C=DATAGOKR_KEY D=PUBLIC_DATA_KEY E=SERVICE_KEY F=DATA_API_KEY"
-          echo "전부 0자면: 이름이 다르거나, 저장소 시크릿이 아니라 Environment/Dependabot 쪽에 등록된 경우입니다."
+          echo "[대조군] OPS_KEY: ${#CTRL}자  ← 0자면 시크릿 자체가 이 저장소에 안 붙은 것"
+          echo "[Secrets 탭]"
+          for n in A B C D E F; do v=$(eval echo \$$n); printf '  %s: %s자\n' "$n" "${#v}"; done
+          echo "  A=DATA_GO_KR_KEY B=DATA_GO_KR C=DATAGOKR_KEY D=PUBLIC_DATA_KEY E=SERVICE_KEY F=DATA_API_KEY"
+          echo "[Variables 탭]"
+          for n in VA VB VC; do v=$(eval echo \$$n); printf '  %s: %s자\n' "$n" "${#v}"; done
+          echo "  VA=DATA_GO_KR_KEY VB=DATA_GO_KR VC=SERVICE_KEY"
+          echo "판정: 대조군이 0이 아니고 나머지가 전부 0 → 이 키만 저장이 안 된 것."
+          echo "      Variables 쪽이 0이 아니면 → 탭을 잘못 고른 것(워크플로를 vars 로 바꾸면 됨)."
 
       - name: API 두드려 보기
         env:
