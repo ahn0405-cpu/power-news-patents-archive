@@ -538,6 +538,9 @@ a{color:inherit}
   border:1px solid var(--line);border-left:3px solid var(--accent);
   font-size:11.5px;line-height:1.6;color:var(--muted);word-break:keep-all}
 .tkr b{color:var(--ink);font-weight:800}
+.trow .nonews{color:var(--muted);opacity:.8}
+.golink{font:inherit;font-size:12px;font-weight:700;color:var(--accent2);background:none;
+  border:0;padding:0;cursor:pointer;text-decoration:underline}
 /* 절 바로가기 — 서브탭 대신. 내용을 숨기지 않고 이동만 빠르게 한다 */
 .jump{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px}
 .jump button{font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;
@@ -1106,23 +1109,6 @@ function insightsHTML(){
 // 이번 주 공개 특허 — 인사이트에 있던 것을 특허 섹션으로 옮겼다(질적 노출, 건수 아님).
 // 홈 특허 섹션의 출원인×분야 요약(지역별 상위 3곳). 특허 탭 통계 뷰에는 현재 필터가
 // 반영된 전체 매트릭스가 있고, 여기 것은 브리핑 서술을 수치로 받쳐 주는 용도다.
-// 홈의 특허 요약. 예전엔 출원인×분야 매트릭스를 줄여 놓았는데, 지역별 상위 3곳만
-// 남기면 표가 커서 자리는 많이 먹으면서 '그래서 뭐' 가 남지 않았다. 같은 데이터로
-// '이 분야를 몇 곳이 나눠 갖고 있나'를 답하는 쪽이 한 화면에서 더 쓸모 있다.
-// 전체 매트릭스는 특허 탭 통계 뷰에 그대로 있고, 아래 링크로 바로 간다.
-function concPanelHTML(){
-  const list=FEED.patents.items; if(!list.length) return '';
-  const rows=concentration(list); if(!rows.length) return '';
-  const r=FEED.patents.pubRange;
-  return '<div class="homepanel"><h3>🧭 분야별 경쟁 구도'
-    + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">각 기술분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 상위 3곳의 몫, '
-    + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수, 칩의 %는 분야 안에서의 지분입니다.'
-    + (r? '<br>공개일 <b>'+esc(r.from)+' ~ '+esc(r.to)+'</b> · 추적 중인 주요 출원인 '
-         +(FEED.patents.applicants||0)+'곳 기준 추정이며 시장 점유율이 아닙니다.' : '')
-    + '</p>'
-    + '<div class="catlead">'+concRowsHTML(rows)+'</div></div>';
-}
 
 function patentPickPanelHTML(){
   const picks = patentPicks(8);
@@ -1264,7 +1250,7 @@ function renderHome(){
 
   // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 분야별 경쟁 구도를
   // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=concPanelHTML();
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=tradeSectionHTML();
   if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
@@ -1400,12 +1386,17 @@ function tradeRows(){
   (FEED.patents.items||[]).forEach(it=>{ if(it.office!=='KR'||it.aCountry==='KR') return;
     const s=kr[it.category]||(kr[it.category]=new Set()); s.add((it.aFlag||'')+' '+it.aName); });
   const cmp=FEED.insights.comparable;
-  return conc.filter(r=>r.cat.key in MAP).map(r=>{
-    const c=ct[r.cat.key], ratio=(c&&c.ratio!=null)?c.ratio:null;
+  // 분야는 전부 싣는다. 뉴스 쪽에 짝이 없는 분야(계량·스마트그리드)는 뉴스 칸만
+  // 비우고 권리 구조는 그대로 보인다 — 한전·State Grid·LS일렉트릭이 있는 분야라
+  // '뉴스 분류가 없다' 는 이유로 통째로 빼면 화면이 사실보다 좁아진다.
+  return conc.map(r=>{
+    const paired = r.cat.key in MAP;
+    const c=paired? ct[r.cat.key] : null;
+    const ratio=(c&&c.ratio!=null)?c.ratio:null;
     const dir = (!cmp||ratio==null) ? 'flat'
       : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
     const lv = r.n<CONC_MIN ? null : (r.neff<5?'hi':r.neff<8?'mid':'lo');
-    return {r, news:c||null, ratio, dir, lv,
+    return {r, news:c||null, ratio, dir, lv, paired,
             kr:[...(kr[r.cat.key]||[])].sort(),
             note: MAP[r.cat.key]||''};
   });
@@ -1556,19 +1547,21 @@ function tradeSectionHTML(){
       .replace('{krn}', d.kr.length)
       .replace('{krs}', d.kr.map(k=>k.replace(/^\S+\s/,'')).join('·'))
       .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '');
+    const hasNews = d.paired && cmp && d.ratio!=null;
     const gen=[ d.lv? fill((T.gen||{})[d.lv]) : '',
                 d.kr.length? fill(T.genKr) : '',
-                cmp? fill((T.genNews||{})[d.dir]) : '' ].filter(Boolean).join(' ');
+                hasNews? fill((T.genNews||{})[d.dir]) : '' ].filter(Boolean).join(' ');
     const short=[(T.concShort||{})[d.lv]||'',
-                 cmp? (T.newsShort||{})[d.dir]||'' : '',
+                 hasNews? (T.newsShort||{})[d.dir]||'' : '',
                  d.kr.length? '국내 권리 '+d.kr.length+'곳' : ''].filter(Boolean)
                 .join(' · ');
     // 배지는 이미 이스케이프한 HTML 로 담는다 — 스파크라인(SVG)이 섞이기 때문.
     const badges=[];
     if(d.lv) badges.push(esc('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳'));
-    if(d.news && d.ratio!=null && cmp)
+    if(hasNews)
       badges.push(esc('뉴스 비중 '+Math.round(d.ratio*100)+'%')
         + sparkShare(catShareSeries(r.cat.key, 14)));
+    else if(d.paired===false) badges.push(esc('뉴스 짝 없음'));
     return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
       + r.cat.emoji+' '+esc(r.cat.name)
       + '<span class="thp mono">'+pct+'%</span>'
@@ -1578,14 +1571,18 @@ function tradeSectionHTML(){
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
   }).join('');
-  return '<div class="sec" id="sec-analysis">🧭 분야별 거래 판단 참고</div>'
-    + '<p class="gdesc">뉴스에서 차지하는 비중이 어느 쪽으로 움직였는지와, 그 분야 권리를 '
+  // 홈에 놓는다 — 거래 탭에도 같은 표를 두면 약한 판본이 하나 더 생긴다(전에
+  // 홈의 '분야별 경쟁 구도' 가 이 표의 축소판이었다). 이 표는 '거래' 이전에
+  // '지금 이 분야가 어떻게 생겼나' 를 말하므로 홈이 제자리다.
+  return '<div class="homepanel" id="sec-analysis"><h3>🧭 분야별 경쟁 구도'
+    + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
+    + '<p class="sub">뉴스에서 차지하는 비중이 어느 쪽으로 움직였는지와, 그 분야 권리를 '
     + '몇 곳이 나눠 갖고 있는지를 겹쳐 봅니다. 원 크기는 그 분야의 추정 공개 규모입니다.'
     + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
     + '</p>'
     + quadChartHTML(rows) + body
     + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
-    + '<p class="gnote">' + esc(T.note) + '</p>';
+    + '<p class="gnote">' + esc(T.note) + '</p></div>';
 }
 
 // 국유판매기술 — 권리자가 국가라 창구가 분명하고, 무상은 비용 없이 실시할 수 있다.
@@ -1632,7 +1629,14 @@ function staownHTML(){
 // (길이 실측: 이 탭 4,618px < 특허 탭 8,138px — 나눠야 할 만큼 길지는 않다.)
 function renderGuide(){
   const G = FEED.guide||[];
-  const trade = tradeSectionHTML();
+  // 분석 표는 홈에 있다. 여기서는 그리로 보내기만 한다(같은 표를 두 번 그리면
+  // 둘 중 하나는 반드시 뒤처진다).
+  const trade = (concentration(FEED.patents.items||[]).length)
+    ? '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
+      + '<p class="gdesc">어느 분야를 몇 곳이 나눠 갖고 있는지, 뉴스 관심은 어느 쪽으로 '
+      + '움직였는지는 <b>홈</b>에 있습니다. 거기서 분야를 고른 뒤 아래 창구로 오시면 됩니다. '
+      + '<button type="button" class="golink" data-gohome="1">홈에서 보기 →</button></p>'
+    : '';
   const staown = staownHTML();
   let desks = G.map((g,i)=>
     '<div class="sec"'+(i===0? ' id="sec-desks"':'')+'>'
@@ -2076,6 +2080,11 @@ function wire(){
   $('#overview').onclick = e=>{ const r=e.target.closest('rect[data-x]'); if(!r) return;
     const x=r.getAttribute('data-x'); state.period=(state.period===x?'all':x); state.limit=PAGE; render(); };
   $('#guide').onclick = e=>{
+    if(e.target.closest('[data-gohome]')){
+      setTab('home');
+      const t=document.getElementById('sec-analysis');
+      if(t) t.scrollIntoView({behavior:'smooth', block:'start'});
+      return; }
     const j=e.target.closest('[data-jump]');
     if(j){ const t=document.getElementById(j.getAttribute('data-jump'));
       if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); return; }
