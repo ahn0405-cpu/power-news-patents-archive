@@ -15,7 +15,7 @@ DNS 는 풀리는데 TCP 443·80 이 모두 타임아웃, 국내 회선에서는
 옵션(환경변수):
     STAOWN_KEYWORDS   검색어(공백 구분). 비우면 아래 기본 전력 키워드
     STAOWN_MAX_CALLS  요청 상한(기본 60). 포털 일일 트래픽이 오퍼레이션당 100회다.
-    STAOWN_OUT        저장 경로(기본 site/data/staown.json)
+    STAOWN_OUT        저장 경로(기본 staown.json — 저장소 루트)
 
 주의: 이 스크립트는 실제 응답을 아직 보지 못한 상태에서 작성했다. 그래서 응답
 필드 이름에 기대지 않고 XML 을 그대로 dict 로 옮긴다. 한 번 돌려 보고 실제 필드가
@@ -51,8 +51,18 @@ def _get(op: str, key: str, params: dict) -> str:
     q = "".join(f"&{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
     url = f"{ENDPOINT}/{op}?serviceKey={key}{q}"
     req = urllib.request.Request(url, headers={"Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-        return r.read().decode("utf-8", "replace")
+    # 5xx 는 서버가 잠깐 흔들린 것이라 한 번만 쉬고 다시 본다(실측으로 503 이
+    # 한 번 났고, 그 낱말만 통째로 빠졌다). 그 이상은 매달리지 않는다.
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            if attempt == 1 and 500 <= e.code < 600:
+                time.sleep(3)
+                continue
+            raise
+    return ""
 
 
 def _items(xml: str) -> list[dict]:
@@ -217,7 +227,9 @@ def main() -> int:
         return 1
     keywords = (os.getenv("STAOWN_KEYWORDS") or "").split() or DEFAULT_KEYWORDS
     max_calls = int(os.getenv("STAOWN_MAX_CALLS", "60"))
-    out = os.getenv("STAOWN_OUT") or os.path.join("site", "data", "staown.json")
+    # 저장소 루트에 둔다. site/ 는 빌드 산출물이라 .gitignore 에 있어 커밋되지 않는다
+    # (brief.json·patent_brief.json 과 같은 자리 — 사람이 만들어 커밋하는 파일들).
+    out = os.getenv("STAOWN_OUT") or "staown.json"
 
     print(f"검색어 {len(keywords)}개 · 요청 상한 {max_calls}회")
     data = collect(key, keywords, max_calls)
