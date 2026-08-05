@@ -1219,17 +1219,29 @@ function kpiHTML(){
 
 
 
+// 브리핑은 하루 한 건씩 쌓인다 → 다 깔면 옆 브리핑 카드를 계속 밀어낸다(실측:
+// 8건에 764px 로 이미 브리핑 카드 535px 보다 컸다. 한 달이면 2,500px).
+// 최근 것만 깔고 나머지는 펼쳐 본다. 특허 브리핑 쪽은 이미 <details> 로 접혀 있다.
+const TL_HEAD=5;
+let tlAll=false;
 function timelineHTML(){
   const past=(FEED.briefs||[]).slice(1);   // 최신은 위에 크게 노출, 나머지를 타임라인으로
-  const inner = past.length ? past.map(b=>{
+  const shown = tlAll? past : past.slice(0, TL_HEAD);
+  const item=b=>{
     const body=(b.body||[]).slice(0,2).map(p=>'<p>'+esc(p)+'</p>').join('');
     return '<div class="tl"><div class="tld">'+esc(b.date||'')+'</div>'
       + '<div class="tlh">'+esc(b.headline||'(제목 없음)')+'</div>'
       + '<div class="tlb">'+body+'</div></div>';
-  }).join('') : '<p class="homehint">지난 브리핑이 쌓이면 여기 타임라인으로 보여요(매주 갱신).</p>';
-  return '<div class="homepanel"><h3>🗓️ 지난 브리핑</h3>'
+  };
+  const more = past.length>TL_HEAD
+    ? '<button type="button" class="stmore" data-more="tl">'
+      + (tlAll? '접기' : '더 보기 ('+(past.length-TL_HEAD)+'건 남음)')+'</button>'
+    : '';
+  const inner = past.length ? shown.map(item).join('')
+    : '<p class="homehint">지난 브리핑이 쌓이면 여기 타임라인으로 보여요(매주 갱신).</p>';
+  return '<div class="homepanel" id="tlpanel"><h3>🗓️ 지난 브리핑</h3>'
     + '<p class="sub">제목을 누르면 요지가 펼쳐집니다.</p>'
-    + '<div class="timeline">'+inner+'</div></div>';
+    + '<div class="timeline">'+inner+'</div>'+more+'</div>';
 }
 
 // 홈 구성: 아카이브 현황(숫자) → 트렌드 인사이트(계산) → 뉴스 → 특허.
@@ -2084,6 +2096,24 @@ function wire(){
       if(cur){ const tmp=document.createElement('div'); tmp.innerHTML=briefHTML();
         const next=tmp.firstElementChild; if(next) cur.replaceWith(next); }
       else renderHome();
+      return; }
+    // 지난 브리핑 더 보기/접기 — 홈 전체가 아니라 그 패널만 갈아 끼운다(브리핑
+    // 카드나 특허 브리핑을 펼쳐 둔 상태가 날아가지 않게). 패널을 새로 그리면 그
+    // 안에서 펼쳐 둔 항목은 닫히므로, 날짜를 기억했다가 되살린다.
+    if(e.target.closest('[data-more="tl"]')){
+      tlAll=!tlAll;
+      const cur=document.getElementById('tlpanel');
+      if(cur){
+        const open=new Set([...cur.querySelectorAll('.tl.open .tld')].map(x=>x.textContent));
+        const tmp=document.createElement('div'); tmp.innerHTML=timelineHTML();
+        const next=tmp.firstElementChild;
+        if(next){
+          next.querySelectorAll('.tl').forEach(el=>{
+            const d=el.querySelector('.tld');
+            if(d && open.has(d.textContent)) el.classList.add('open'); });
+          cur.replaceWith(next);
+        }
+      } else renderHome();
       return; }
     // 지난 브리핑 타임라인 펼치기
     const tl=e.target.closest('.tl'); if(tl && !e.target.closest('[data-go]')){ tl.classList.toggle('open'); return; }
