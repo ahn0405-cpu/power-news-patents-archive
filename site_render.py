@@ -21,6 +21,7 @@ from pathlib import Path
 import news_config as ncfg
 import patent_config as pcfg
 import insights as _insights
+import ip_guide
 
 KST = timezone(timedelta(hours=9))
 
@@ -254,6 +255,9 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "krLimit": pcfg.KR_LIMIT,
         "perApplicantLimit": pcfg.PER_APPLICANT_LIMIT,   # 표본 상한(랭킹의 '이상' 표기용)
         "applicants": len(pcfg.APPLICANTS),
+        # 카드마다 붙는 조회 창구(Espacenet·Google Patents 등). 공개번호만 있으면
+        # 되므로 항목별로 URL 을 저장하지 않고 템플릿만 한 번 내려보낸다.
+        "links": ip_guide.links(),
         "items": items,
     }
 
@@ -279,6 +283,9 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "insights": _insights.build(news_days, patent_weeks),
         "news": _news_feed(news_days),
         "patents": _patent_feed(patent_weeks, stats),
+        # 거래·지원 탭(수집과 무관한 사람 관리 상수 → ip_guide.py 에서만 고친다)
+        "guide": ip_guide.GUIDE,
+        "guideNote": ip_guide.NOTE,
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
@@ -365,6 +372,9 @@ a{color:inherit}
   background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 .tabs button:hover{color:var(--ink)}
+/* 좁은 화면에서 탭이 넷이면 기본 여백으로는 글자가 두 줄로 접힌다 → 여백만 줄여
+   한 줄을 유지한다(줄바꿈 금지는 걸지 않는다. 글자가 커지면 접히는 게 낫다) */
+@media (max-width:560px){ .tabs{gap:2px} .tabs button{padding:11px 10px;font-size:13.5px} }
 /* 개요 */
 .overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) 1.6fr;gap:12px;margin:2px 0 18px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:11px 13px;box-shadow:var(--shadow)}
@@ -398,6 +408,25 @@ a{color:inherit}
 .brief .btoggle{margin-left:auto;background:none;border:0;color:var(--accent2);font:inherit;font-size:11px;cursor:pointer}
 .brief.collapsed .bbody,.brief.collapsed .bpoints{display:none}
 @media (max-width:820px){ .brief .bpoints{grid-template-columns:1fr} }
+/* 특허 카드 하단의 조회 창구 링크. 제목 링크보다 약하게 보여 시선을 뺏지 않게 한다 */
+.card .xlinks{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.card .xl{font-size:11px;font-weight:700;color:var(--muted);text-decoration:none;
+  border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:var(--bg);white-space:nowrap}
+.card .xl:hover{color:var(--accent2);border-color:var(--accent2)}
+/* 거래·지원 안내 */
+#guide .gdesc{color:var(--muted);font-size:12.5px;line-height:1.7;margin:0 2px 10px}
+#guide .glist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+/* 항목이 하나뿐인 묶음에서 카드가 화면 폭 전체로 늘어나지 않게 상한을 둔다
+   (2열일 때의 칸 너비와 비슷해 묶음끼리 크기가 들쭉날쭉해 보이지 않는다) */
+#guide .gcard{display:block;text-decoration:none;color:inherit;background:var(--card);
+  border:1px solid var(--line);border-radius:11px;padding:13px 15px;max-width:640px}
+#guide .gcard:hover{border-color:var(--accent2)}
+#guide .gname{font-size:14px;font-weight:800;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+#guide .gorg{font-size:11px;font-weight:700;color:var(--muted)}
+#guide .garr{margin-left:auto;color:var(--accent2);font-size:12px}
+#guide .gwhat{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted);word-break:keep-all}
+#guide .gnote{margin:22px 2px 0;padding-top:12px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:11.5px;line-height:1.7;word-break:keep-all}
 /* 홈(대시보드) */
 .homemode .controls,.homemode .resline,.homemode #overview,.homemode #results,.homemode #scope,
 .homemode #more,.homemode #viewToggle{display:none!important}
@@ -667,8 +696,10 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
     <button role="tab" id="tab-news" aria-selected="false" data-tab="news">📰 뉴스</button>
     <button role="tab" id="tab-patents" aria-selected="false" data-tab="patents">📄 특허</button>
+    <button role="tab" id="tab-guide" aria-selected="false" data-tab="guide">🤝 거래·지원</button>
   </nav>
   <section class="home" id="home" aria-label="대시보드" hidden></section>
+  <section class="home" id="guide" aria-label="지식재산 거래·지원 안내" hidden></section>
   <div class="viewseg" id="viewToggle" role="group" aria-label="특허 보기 방식">
     <button data-view="list" aria-pressed="true">목록</button>
     <button data-view="stats" aria-pressed="false">📊 통계</button>
@@ -811,7 +842,20 @@ function card(it, cm){
     + '<button class="star'+(isS?' on':'')+'" data-save="'+esc(it.url)+'" aria-label="저장" title="저장">'+(isS?'★':'☆')+'</button>'
     + '<a class="t" href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener" data-read="'+esc(it.url)+'">'+hl(it.title||'(제목 없음)')+'</a>'
     + '<div class="meta">'+meta+mock+'<span class="tag">'+(c.emoji||'')+' '+esc(c.name)+'</span></div>'
-    + sum + '</article>';
+    + sum + (state.tab==='patents' ? patLinks(it) : '') + '</article>';
+}
+
+// 특허 카드 → 조회 창구. 공개번호 하나로 여러 곳을 열 수 있어 URL 은 저장하지 않고
+// FEED.patents.links 의 템플릿({n})에 끼워 넣는다. office 가 지정된 링크는 그
+// 특허청 공보에만 붙는다(예: KIPRIS 는 KR 공보에만).
+function patLinks(it){
+  const L = (FEED.patents.links)||[];
+  if(!L.length || !it.number) return '';
+  const n = encodeURIComponent(it.number);
+  const out = L.filter(l=> !l.office || l.office===it.office).map(l=>
+    '<a class="xl" href="'+esc(safeUrl(String(l.url||'').replace('{n}', n)))+'"'
+    + ' target="_blank" rel="noopener" title="'+esc(l.tip||'')+'">'+esc(l.label)+' ↗</a>');
+  return out.length ? '<div class="xlinks">'+out.join('')+'</div>' : '';
 }
 
 function sparkline(series){
@@ -1112,7 +1156,7 @@ function tile(k,v,tip){
 }
 
 function renderChips(){
-  if(state.tab==='home'){ $('#catChips').innerHTML=''; const cc=$('#countryChips'); cc.hidden=true; cc.innerHTML=''; return; }
+  if(state.tab==='home'||state.tab==='guide'){ $('#catChips').innerHTML=''; const cc=$('#countryChips'); cc.hidden=true; cc.innerHTML=''; return; }
   const f = FEED[state.tab], cm = {};
   f.items.forEach(it=> cm[it.category]=(cm[it.category]||0)+1);
   $('#catChips').innerHTML = f.categories.filter(c=>cm[c.key]).map(c=>
@@ -1167,10 +1211,29 @@ function renderSource(){
   sel.value=state.source;
 }
 
+// 거래·지원: 수집 데이터와 무관한 안내 화면. 검색·필터가 필요 없어 홈과 같은
+// 'homemode'(컨트롤 숨김)로 그린다.
+function renderGuide(){
+  const G = FEED.guide||[];
+  $('#guide').innerHTML = G.map(g=>
+    '<div class="sec">'+esc(g.emoji||'')+' '+esc(g.name)+'</div>'
+    + (g.desc? '<p class="gdesc">'+esc(g.desc)+'</p>' : '')
+    + '<div class="glist">' + (g.items||[]).map(it=>
+        '<a class="gcard" href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener">'
+        + '<div class="gname">'+esc(it.name)
+        + (it.org? '<span class="gorg">'+esc(it.org)+'</span>' : '')
+        + '<span class="garr" aria-hidden="true">↗</span></div>'
+        + '<p class="gwhat">'+esc(it.what||'')+'</p></a>').join('')
+    + '</div>').join('')
+    + (FEED.guideNote? '<p class="gnote">'+esc(FEED.guideNote)+'</p>' : '');
+}
+
 function render(){
-  const home = state.tab==='home';
-  document.querySelector('.wrap').classList.toggle('homemode', home);
+  const home = state.tab==='home', guide = state.tab==='guide';
+  document.querySelector('.wrap').classList.toggle('homemode', home||guide);
   $('#home').hidden = !home;
+  $('#guide').hidden = !guide;
+  if(guide){ renderGuide(); updateViewToggle(); syncHash(); return; }
   if(home){ renderHome(); updateViewToggle(); syncHash(); return; }
   renderOverview();
   renderPeriodBar(); renderSource(); syncSearchPlaceholder();
@@ -1441,7 +1504,7 @@ function syncHash(){
 }
 function loadHash(){
   const p = new URLSearchParams(location.hash.replace(/^#/,''));
-  const t=p.get('tab'); if(t==='news'||t==='patents'||t==='home') state.tab=t;
+  const t=p.get('tab'); if(t==='news'||t==='patents'||t==='home'||t==='guide') state.tab=t;
   if(state.tab==='patents' && p.get('view')==='stats') state.view='stats';
   state.q = p.get('q')||'';
   state.sort = p.get('sort')==='old'?'old':'new';

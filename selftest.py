@@ -147,6 +147,23 @@ def main() -> int:
         check("const safeUrl" in sr._JS, "safeUrl 헬퍼가 있다")
         check(bool(hrefs) and not raw,
               f"모든 링크 href 가 safeUrl 을 거친다 ({len(hrefs)}곳)")
+
+        print("· 거래·지원 안내 데이터 (사람이 관리하는 상수)")
+        import ip_guide as ig
+        ln = ig.links()
+        check(bool(ln) and all(l.get("label") and l.get("url") for l in ln),
+              f"카드 링크에 이름·URL 이 다 있다 ({len(ln)}종)")
+        check(all("{n}" in l["url"] for l in ln),
+              "카드 링크 URL 에 공개번호 자리({n})가 있다")
+        items = [i for g in ig.GUIDE for i in g["items"]]
+        check(bool(ig.GUIDE) and bool(items),
+              f"안내 항목이 있다 ({len(ig.GUIDE)}묶음 {len(items)}곳)")
+        check(all(i.get("name") and i.get("what") and i.get("url") for i in items),
+              "안내 항목마다 이름·설명·링크가 있다")
+        urls = [l["url"] for l in ln] + [i["url"] for i in items]
+        check(all(u.startswith("https://") for u in urls),
+              f"모든 링크가 https 다 ({len(urls)}개)")
+        check(len({i["url"] for i in items}) == len(items), "안내 링크가 중복되지 않는다")
     finally:
         ps._search, ps._get_token = orig[0], orig[1]
         cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY = orig[2], orig[3], orig[4]
