@@ -360,7 +360,8 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                   "concShort": ip_guide.READ_SHORT,
                   "newsShort": ip_guide.NEWS_SHORT,
                   "gen": ip_guide.READ_GEN, "genKr": ip_guide.READ_GEN_KR,
-                  "genNews": ip_guide.READ_GEN_NEWS},
+                  "genNews": ip_guide.READ_GEN_NEWS,
+                  "genDom": ip_guide.READ_GEN_DOM},
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
@@ -1546,9 +1547,13 @@ function tradeSectionHTML(){
       .replace('{top3}', names3).replace('{top1}', (r.top[0]||{}).name||'')
       .replace('{krn}', d.kr.length)
       .replace('{krs}', d.kr.map(k=>k.replace(/^\S+\s/,'')).join('·'))
-      .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '');
+      .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '')
+      .replace('{krshare}', Math.round(r.krShare*100))
+      .replace('{domn}', r.krN).replace('{domtop}', r.krTop||'');
     const hasNews = d.paired && cmp && d.ratio!=null;
+    const dom = r.krShare<0.05 ? 'none' : (r.krShare<0.20 ? 'low' : '');
     const gen=[ d.lv? fill((T.gen||{})[d.lv]) : '',
+                dom? fill((T.genDom||{})[dom]) : '',
                 d.kr.length? fill(T.genKr) : '',
                 hasNews? fill((T.genNews||{})[d.dir]) : '' ].filter(Boolean).join(' ');
     const short=[(T.concShort||{})[d.lv]||'',
@@ -1562,6 +1567,8 @@ function tradeSectionHTML(){
       badges.push(esc('뉴스 비중 '+Math.round(d.ratio*100)+'%')
         + sparkShare(catShareSeries(r.cat.key, 14)));
     else if(d.paired===false) badges.push(esc('뉴스 짝 없음'));
+    // 국내 지분 — 이 분야에 국내 협상 상대가 있는지. 없으면 도입 말고는 길이 없다.
+    badges.push(esc('🇰🇷 국내 '+Math.round(r.krShare*100)+'%'));
     return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
       + r.cat.emoji+' '+esc(r.cat.name)
       + '<span class="thp mono">'+pct+'%</span>'
@@ -1878,7 +1885,8 @@ function concentration(list){
     const sh=[];
     ranked.forEach(r=>{ const g=r.grid[c.key]||0;
       if(!g || !r.cnt) return;
-      sh.push({name:r.name, flag:r.flag, v:r.total*g/r.cnt, raw:g}); });
+      sh.push({name:r.name, flag:r.flag, region:r.region,
+               v:r.total*g/r.cnt, raw:g}); });
     if(!sh.length) return null;
     sh.sort((a,b)=> b.v-a.v || a.name.localeCompare(b.name));
     const tot = sh.reduce((s,x)=>s+x.v,0);
@@ -1889,6 +1897,12 @@ function concentration(list){
       cr3: tot? sh.slice(0,3).reduce((s,x)=>s+x.v,0)/tot : 0,
       neff: tot? 1/sh.reduce((s,x)=>s+(x.v/tot)*(x.v/tot),0) : 0,
       rawCr3: rawTot? rawSorted.slice(0,3).reduce((s,v)=>s+v,0)/rawTot : 0,
+      // 분야 × 출원인 국적 — 매트릭스에만 있고 집중도로는 뭉개지는 축이다.
+      // 국내 지분이 낮은 분야는 국내에서 협상 상대를 찾기 어렵다는 뜻이라,
+      // 거래로 보면 '도입이냐 자체 개발이냐' 를 가르는 값이다.
+      krShare: tot? sh.filter(x=>x.region==='KR').reduce((s,x)=>s+x.v,0)/tot : 0,
+      krN: sh.filter(x=>x.region==='KR').length,
+      krTop: (sh.filter(x=>x.region==='KR')[0]||{}).name || '',
       top: sh.slice(0,3)};
   }).filter(Boolean).sort((a,b)=> b.cr3-a.cr3);
 }
@@ -1966,8 +1980,11 @@ function renderStats(list){
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.total+'건</span></div></div>'
       + '</div></div>'
     + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
-      + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다(표본 내 건수, 진할수록 많음). 칸을 누르면 해당 출원인·분야 특허로 이동. '
-      + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.</p>'
+      + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다. 칸을 누르면 해당 출원인·분야 특허로 이동. '
+      + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.<br>'
+      + '※ <b>칸의 수는 표본 건수</b>입니다 — 출원인마다 수집 상한이 있어 큰 기업일수록 실제보다 작게 잡힙니다. '
+      + '이 표는 <b>가로로</b>(이 기업이 어느 분야에 내나) 읽으세요. <b>세로로</b>(이 분야를 누가 나눠 갖나) 보려면 '
+      + '규모를 실제 총계로 되돌린 <b>홈의 분야별 경쟁 구도</b>가 정확합니다.</p>'
       + regionMatrixHTML(list, {total:true}) + '</div>'
     + krEntryHTML(list)
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
