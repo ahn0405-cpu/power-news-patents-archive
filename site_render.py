@@ -510,7 +510,11 @@ a{color:inherit}
 .trow .thp{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .trow .tb{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700}
 .trow .tb span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);
-  font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px}
+/* 최근 14일 비중 추이. 값은 배지 숫자가 지고, 선은 오르내림만 보인다 */
+.spk{width:64px;height:18px;flex:none;overflow:visible}
+.spk path{fill:none;stroke:var(--accent2);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.spk circle{fill:var(--accent2)}
 .trow .tr{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--muted);font-weight:700;
   word-break:keep-all;cursor:help}
 .trow .tcaveat{margin:7px 0 0;font-size:11px;line-height:1.6;color:var(--muted);opacity:.85}
@@ -1456,6 +1460,35 @@ function quadChartHTML(rows){
     + '<span class="s1"><i></i>경쟁 분산</span><span>원 크기 = 그 분야 추정 공개 규모</span></div>';
 }
 
+// ② 뉴스 비중 추이. '비중 98%' 는 한 시점의 값이라 늘고 있는지 줄고 있는지가
+// 안 보인다 → 분야별 일자 비중을 작은 선으로 붙인다. 새 수집 없이 지금 피드
+// (기사마다 date·category)로 계산된다. 세로축은 그 분야의 최대치 기준이라
+// 분야끼리 높이를 비교하는 용도가 아니다 — 오르내림만 본다.
+let _shareCache=null;
+function catShareSeries(key, days){
+  if(!_shareCache){
+    const byDay={}, tot={};
+    (FEED.news.items||[]).forEach(it=>{ const d=it.date; if(!d) return;
+      tot[d]=(tot[d]||0)+1;
+      (byDay[d]||(byDay[d]={}))[it.category]=((byDay[d]||{})[it.category]||0)+1; });
+    _shareCache={byDay, tot, days:Object.keys(tot).sort()};
+  }
+  const ds=_shareCache.days.slice(-days);
+  return ds.map(d=>{ const t=_shareCache.tot[d]||0;
+    return t? ((_shareCache.byDay[d]||{})[key]||0)/t : 0; });
+}
+function sparkShare(vals){
+  if(vals.length<3) return '';
+  const W=64, H=18, max=Math.max(...vals, 0.01);
+  const pt=(v,i)=>[ (i/(vals.length-1))*(W-3)+1.5, H-1.5-(v/max)*(H-3) ];
+  const pts=vals.map(pt);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const last=pts[pts.length-1];
+  return '<svg class="spk" viewBox="0 0 '+W+' '+H+'" aria-hidden="true">'
+    + '<path d="'+d+'"/><circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)
+    + '" r="2"/></svg>';
+}
+
 function tradeSectionHTML(){
   const T=FEED.trade; if(!T) return '';
   const rows=tradeRows(); if(!rows.length) return '';
@@ -1491,14 +1524,16 @@ function tradeSectionHTML(){
                  cmp? (T.newsShort||{})[d.dir]||'' : '',
                  d.kr.length? '국내 권리 '+d.kr.length+'곳' : ''].filter(Boolean)
                 .join(' <span aria-hidden="true">·</span> ');
+    // 배지는 이미 이스케이프한 HTML 로 담는다 — 스파크라인(SVG)이 섞이기 때문.
     const badges=[];
-    if(d.lv) badges.push('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳');
+    if(d.lv) badges.push(esc('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳'));
     if(d.news && d.ratio!=null && cmp)
-      badges.push('뉴스 비중 '+Math.round(d.ratio*100)+'%');
+      badges.push(esc('뉴스 비중 '+Math.round(d.ratio*100)+'%')
+        + sparkShare(catShareSeries(r.cat.key, 14)));
     return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
       + r.cat.emoji+' '+esc(r.cat.name)
       + '<span class="thp mono">'+pct+'%</span>'
-      + '<div class="tb">'+badges.map(b=>'<span>'+esc(b)+'</span>').join('')+'</div></div>'
+      + '<div class="tb">'+badges.map(b=>'<span>'+b+'</span>').join('')+'</div></div>'
       + bar + '<div class="shns">'+names+'</div>' + krc
       + '<p class="tr" title="'+esc(full)+'">'+short+'</p>'
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
