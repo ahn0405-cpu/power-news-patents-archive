@@ -95,6 +95,33 @@ def _akey(s: str) -> str:
     return re.sub(r"[\s.,()·\-_/]+", "", (s or "").lower())
 
 
+# 검색어가 넓으면 자회사 문서까지 딸려 온다. 실측(8/5): 'Siemens' 로 담긴 54건 중
+# 36건이 Siemens Energy·Gamesa 문서였다. OPS 총계는 출원인별 독립 질의라 손쓸 수
+# 없지만, **목록은 원문 출원인명이 정답을 갖고 있다** → 더 구체적인 출원인의 검색
+# 어구가 원문에 들어 있으면 그쪽으로 옮긴다(어구가 길수록 구체적이다). 수집을 다시
+# 하지 않아도 이미 쌓인 데이터가 이 경로에서 교정된다.
+_SPECIFIC = sorted(
+    ((t.lower(), a["name"], a["region"], a["flag"])
+     for a in pcfg.APPLICANTS
+     for t in ([a["q"]] if isinstance(a["q"], str) else a["q"])),
+    key=lambda x: -len(x[0]))
+
+
+def _reassign(raw: str, cur: str):
+    """원문 출원인명이 더 구체적인 출원인을 가리키면 (이름, 지역, 국기). 아니면 None.
+
+    어느 어구도 안 맞으면 손대지 않는다 — 한글 표기처럼 검색어와 형태가 다른
+    경우까지 억지로 옮기면 오히려 틀린다.
+    """
+    r = (raw or "").lower()
+    if not r:
+        return None
+    for t, name, region, flag in _SPECIFIC:
+        if t in r:
+            return None if name == cur else (name, region, flag)
+    return None
+
+
 def _canon_assignee(name: str) -> str:
     s = (name or "").strip().strip(",.")
     if not s:
@@ -185,9 +212,17 @@ def _news_feed(news_days: dict[str, dict]) -> dict:
     }
 
 
+TOTAL_FIX_MIN = 10      # 이보다 표본이 적으면 구성비가 튀어 총계를 손대지 않는다
+TOTAL_FIX_SHARE = 0.10  # 이 비율 이상 섞였을 때만 (몇 건은 표본 오차와 구분되지 않는다)
+
+
 def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> dict:
     items = []
     per_week: dict[str, int] = {}
+    # 넓은 검색어가 자회사까지 쓸어 온 정도를 센다: 그 이름으로 조회해 담긴 문서 수(q_all)
+    # 대비 실제로 그 회사 것이었던 수(q_own). OPS 총계는 이 비율만큼 부풀려져 있다.
+    q_all: dict[str, int] = {}
+    q_own: dict[str, int] = {}
     for wk in sorted(patent_weeks):
         pats = patent_weeks[wk].get("patents", [])
         per_week[wk] = len(pats)
@@ -203,6 +238,13 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
             # 페이로드 절약: 원문 assignee 는 정규화명(aName)과 다를 때만, snippet 은
             # 있을 때만 담는다. cpc 는 카드에 분류 근거로 보여주므로 상위 3개만.
             raw = p.get("assignee", "")
+            fix = _reassign(raw, aname)     # 자회사 문서를 모회사 밑에 두지 않는다
+            if ap:
+                q_all[ap] = q_all.get(ap, 0) + 1
+                if not fix:
+                    q_own[ap] = q_own.get(ap, 0) + 1
+            if fix:
+                aname, region, flag = fix
             it = {
                 "title": p.get("title", ""), "url": p.get("url", ""),
                 "number": p.get("number", ""),
@@ -237,6 +279,24 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
     for k, v in ((stats or {}).get("offices") or {}).items():
         offices[k] = v
 
+    # 총계 보정. 총계는 출원인별 독립 질의라 공개번호 dedup 이 듣지 않는다 →
+    # 넓은 검색어는 자회사 문서까지 세어 규모를 부풀린다. 검색어를 모회사 법인명으로
+    # 좁혀 봤지만 OPS 총계는 183 그대로였다(8/5 실측) — 이름으로는 갈라지지 않는다.
+    # 대신 표본이 알려 준 구성비로 총계를 깎는다. Siemens 표본 54건 중 제 것은
+    # 18건이었으므로 183 × 18/54 ≈ 61. (Energy 53 · Gamesa 75 를 뺀 55 와도 가깝다.)
+    # 표본이 너무 작으면 비율이 튀므로 일정 수 이상일 때만 손댄다.
+    adjusted: dict[str, dict] = {}
+    for name, n_all in q_all.items():
+        n_own = q_own.get(name, 0)
+        if n_all < TOTAL_FIX_MIN or name not in totals:
+            continue
+        # 몇 건 섞인 정도는 손대지 않는다 — 표본 오차와 구분이 안 된다.
+        if (n_all - n_own) / n_all < TOTAL_FIX_SHARE:
+            continue
+        raw_total = totals[name]
+        totals[name] = max(n_own, round(raw_total * n_own / n_all))
+        adjusted[name] = {"raw": raw_total, "kept": n_own, "of": n_all}
+
     # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
     pubs = sorted(p["pub_date"] for p in items if p.get("pub_date"))
@@ -248,6 +308,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "perWeek": [{"x": w, "y": per_week[w]} for w in sorted(per_week)],
         "pubRange": {"from": pubs[0], "to": pubs[-1]} if pubs else None,
         "totals": totals,
+        "totalsAdjusted": adjusted,   # 표본 구성비로 깎은 총계(화면에서 근거를 밝힌다)
         "officeCounts": offices,
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
@@ -1371,8 +1432,7 @@ function tradeSectionHTML(){
       badges.push('뉴스 비중 '+Math.round(d.ratio*100)+'%');
     const read=[T.conc[d.lv]||'', cmp? (T.news[d.dir]||'') : '',
                 d.kr.length? T.kr : ''].filter(Boolean).join(' ');
-    const holders=r.top.map(t=>'<span class="cta">'+(t.flag||'')+' '+esc(t.name)
-      + '<span class="ctn">'+Math.round(t.v/r.tot*100)+'%</span></span>').join('');
+    const holders=r.top.map(t=>concChip(t, r.tot)).join('');
     const krc=d.kr.length? '<div class="tk"><span class="cta">🇰🇷 국내 공개</span>'
       + d.kr.map(k=>'<span class="cta">'+esc(k)+'</span>').join('')+'</div>' : '';
     return '<div class="trow"><div class="th">'+r.cat.emoji+' '+esc(r.cat.name)
@@ -1642,6 +1702,19 @@ function concentration(list){
   }).filter(Boolean).sort((a,b)=> b.cr3-a.cr3);
 }
 
+// 상위 보유자 칩. 수치는 건수가 아니라 분야 내 지분(%)이다 — 추정치를 건수로 쓰면
+// 없는 정밀도를 있는 것처럼 보이게 한다. 총계를 깎아 쓴 출원인은 * 를 달고 툴팁에
+// 근거를 적는다(수치를 조용히 고쳐 두지 않는다).
+function concChip(t, tot){
+  const a=(FEED.patents.totalsAdjusted||{})[t.name];
+  const tip = a ? (t.name+' — 검색어가 넓어 자회사 문서까지 조회됐습니다. 표본 '+a.of
+    +'건 중 실제로 이 회사 것이었던 '+a.kept+'건의 비율로, 총계를 '+a.raw
+    +'건에서 깎아 썼습니다.') : '';
+  return '<span class="cta"'+(tip? ' title="'+esc(tip)+'"' : '')+'>'
+    + (t.flag||'') + ' ' + esc(t.name) + (a? '<span class="ctn">*</span>' : '')
+    + '<span class="ctn">'+Math.round(t.v/tot*100)+'%</span></span>';
+}
+
 function concRowsHTML(rows){
   return rows.map(r=>{
     let metric;
@@ -1663,8 +1736,7 @@ function concRowsHTML(rows){
     }
     // 칩의 수치는 건수가 아니라 분야 내 지분(%)이다 — 추정치라 건수로 쓰면
     // 없는 정밀도를 있는 것처럼 보이게 한다.
-    const chips = r.top.map(t=>'<span class="cta">'+(t.flag||'')+' '+esc(t.name)
-      + '<span class="ctn">'+Math.round(t.v/r.tot*100)+'%</span></span>').join('');
+    const chips = r.top.map(t=>concChip(t, r.tot)).join('');
     return '<div class="crow"><div class="clab">'+r.cat.emoji+' '+esc(r.cat.name)+metric+'</div>'
       + '<div class="ctops">'+(chips||'<span class="unknown">—</span>')+'</div></div>';
   }).join('');
