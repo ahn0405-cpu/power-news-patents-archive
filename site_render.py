@@ -286,6 +286,9 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         # 거래·지원 탭(수집과 무관한 사람 관리 상수 → ip_guide.py 에서만 고친다)
         "guide": ip_guide.GUIDE,
         "guideNote": ip_guide.NOTE,
+        "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
+                  "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
+                  "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE},
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
@@ -413,6 +416,33 @@ a{color:inherit}
 .card .xl{font-size:11px;font-weight:700;color:var(--muted);text-decoration:none;
   border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:var(--bg);white-space:nowrap}
 .card .xl:hover{color:var(--accent2);border-color:var(--accent2)}
+/* 분야 지도(뉴스 비중 변화 × 권리 집중도). 색은 집중도 3단계의 단일 색상 램프다 —
+   집중을 붉게, 분산을 푸르게 칠하면 기관이 분야에 좋고 나쁨을 매기는 것처럼 읽힌다.
+   같은 파랑의 밝기 차이로만 정도를 보이고, 뜻은 글자(집중/중간/분산)가 진다.
+   (밝은 화면은 진할수록 집중, 어두운 화면은 밝을수록 집중 — 표면 대비 기준.) */
+:root{ --q1:#8FB2D6; --q2:#3A6FB0; --q3:#1D4470; }
+@media (prefers-color-scheme:dark){ :root{ --q1:#33639C; --q2:#659ACF; --q3:#AFCFEE; } }
+.qwrap{overflow-x:auto}
+.qchart{display:block;width:100%;min-width:480px;height:auto}
+.qchart .ax{stroke:var(--line);stroke-width:1}
+.qchart .qz{fill:var(--muted);font-size:9.5px;font-weight:700;opacity:.65}
+.qchart .qa{fill:var(--muted);font-size:10px;font-weight:700}
+.qchart .ql{fill:var(--ink);font-size:10.5px;font-weight:700}
+.qchart .dot{stroke:var(--card);stroke-width:2}
+.qchart .hit{fill:transparent;cursor:default}
+.qlegend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 2px 0;
+  font-size:11px;font-weight:700;color:var(--muted)}
+.qlegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.qlegend .s1 i{background:var(--q1)} .qlegend .s2 i{background:var(--q2)} .qlegend .s3 i{background:var(--q3)}
+/* 분야별 상세 = 위 그림의 표 대응물(값을 그림에만 두지 않는다) */
+.trow{border:1px solid var(--line);border-radius:11px;background:var(--card);padding:12px 14px;margin-top:10px}
+.trow .th{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800}
+.trow .tb{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700}
+.trow .tb span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.trow .tr{margin:8px 0 0;font-size:12.5px;line-height:1.7;color:var(--muted);word-break:keep-all}
+.trow .tk{margin:8px 0 0;display:flex;gap:5px;flex-wrap:wrap}
+.trow .tcaveat{margin:7px 0 0;font-size:11px;line-height:1.6;color:var(--muted);opacity:.85}
 /* 거래·지원 안내 */
 #guide .gdesc{color:var(--muted);font-size:12.5px;line-height:1.7;margin:0 2px 10px}
 #guide .glist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
@@ -665,21 +695,17 @@ a{color:inherit}
 .catlead .clab{display:flex;align-items:center;gap:8px}
 .catlead .conc{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11px;font-weight:700}
 .catlead .cbar{width:96px;height:6px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
+/* 막대 색은 분야 지도(.qchart)와 같은 단일 색상 램프를 쓴다 — 같은 변수를 두 화면에서
+   다른 색 언어로 칠하면 읽는 사람이 둘을 다른 지표로 오해한다. 뜻은 글자가 지므로
+   글자는 색 램프가 아니라 본문 색을 입는다(연한 단계는 글자로 쓰기엔 대비가 모자란다). */
 .catlead .cbar i{display:block;height:100%;border-radius:999px;background:var(--muted)}
-.catlead .conc.hi .cbar i{background:#c2410c}
-.catlead .conc.mid .cbar i{background:#b45309}
-.catlead .conc.lo .cbar i{background:#15803d}
+.catlead .conc.hi .cbar i{background:var(--q3)}
+.catlead .conc.mid .cbar i{background:var(--q2)}
+.catlead .conc.lo .cbar i{background:var(--q1)}
 .catlead .cpct{font-variant-numeric:tabular-nums;color:var(--ink)}
-.catlead .conc.hi .clv{color:#c2410c} .catlead .conc.mid .clv{color:#b45309}
-.catlead .conc.lo .clv{color:#15803d}
+.catlead .clv{color:var(--ink)}
 .catlead .cn{color:var(--muted);font-weight:600}
 .catlead .conc.na{color:var(--muted)}
-/* 어두운 배경에서는 위 진한 색이 잘 안 보인다 → 밝은 쪽으로 바꾼다 */
-@media (prefers-color-scheme:dark){
-  .catlead .conc.hi .cbar i{background:#fb923c} .catlead .conc.hi .clv{color:#fb923c}
-  .catlead .conc.mid .cbar i{background:#fbbf24} .catlead .conc.mid .clv{color:#fbbf24}
-  .catlead .conc.lo .cbar i{background:#4ade80} .catlead .conc.lo .clv{color:#4ade80}
-}
 @media (max-width:560px){ .catlead .conc{margin-left:0;width:100%} .catlead .clab{flex-wrap:wrap} }
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
@@ -1234,11 +1260,143 @@ function renderSource(){
   sel.value=state.source;
 }
 
+// ── 거래 판단 참고: 뉴스 비중 변화 × 권리 집중도 ──────────────────────
+// 두 축을 겹쳐 봐야 답이 나온다. 관심이 느는데 권리가 소수에 몰렸으면 회피설계·
+// 라이선스가 먼저고, 관심이 느는데 권리가 흩어져 있으면 자체 출원 여지가 있다.
+// 예측은 하지 않는다 — 지금 어떤 모양인지까지만 보인다(FEED.trade.note).
+function tradeRows(){
+  const T=FEED.trade||{}, MAP=T.map||{};
+  const conc=concentration(FEED.patents.items||[]);
+  const ct={}; (FEED.insights.catTrend||[]).forEach(c=>ct[c.key]=c);
+  // 해외 출원인이 국내(KR)에 공개한 건 — 국내에서 실제로 부딪힐 수 있는 권리다.
+  const kr={};
+  (FEED.patents.items||[]).forEach(it=>{ if(it.office!=='KR'||it.aCountry==='KR') return;
+    const s=kr[it.category]||(kr[it.category]=new Set()); s.add((it.aFlag||'')+' '+it.aName); });
+  const cmp=FEED.insights.comparable;
+  return conc.filter(r=>r.cat.key in MAP).map(r=>{
+    const c=ct[r.cat.key], ratio=(c&&c.ratio!=null)?c.ratio:null;
+    const dir = (!cmp||ratio==null) ? 'flat'
+      : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
+    const lv = r.n<CONC_MIN ? null : (r.neff<5?'hi':r.neff<8?'mid':'lo');
+    return {r, news:c||null, ratio, dir, lv,
+            kr:[...(kr[r.cat.key]||[])].sort(),
+            note: MAP[r.cat.key]||''};
+  });
+}
+
+// 분야 지도. x=뉴스 비중 배율(log2, 가운데가 '변화 없음'), y=실질 경쟁자 수(위가 집중),
+// 원 크기=그 분야 추정 규모. 값은 전부 아래 표에도 있다(그림에만 두지 않는다).
+const QW=680, QH=340, QPAD={l:52,r:18,t:16,b:40}, QCLAMP=1.6;
+function quadChartHTML(rows){
+  const pts=rows.filter(d=>d.lv && d.ratio!=null);
+  if(pts.length<3) return '';
+  const x0=QPAD.l, x1=QW-QPAD.r, y0=QPAD.t, y1=QH-QPAD.b;
+  const lg=v=>Math.max(-QCLAMP, Math.min(QCLAMP, Math.log2(v)));
+  const px=v=>x0+(lg(v)+QCLAMP)/(QCLAMP*2)*(x1-x0);
+  const NEF=[2,12];                          // 실질 경쟁자 수 축(고정 → 주마다 비교 가능)
+  const py=v=>y0+(Math.max(NEF[0],Math.min(NEF[1],v))-NEF[0])/(NEF[1]-NEF[0])*(y1-y0);
+  const maxTot=Math.max(...pts.map(d=>d.r.tot));
+  const pr=t=>9+Math.sqrt(t/maxTot)*13;
+  const col=lv=>lv==='hi'?'var(--q3)':lv==='mid'?'var(--q2)':'var(--q1)';
+  const xm=px(1), ym=py(6);
+  let s='<svg class="qchart" viewBox="0 0 '+QW+' '+QH+'" role="img" '
+    + 'aria-label="분야별 뉴스 비중 변화와 권리 집중도 지도">';
+  // 사분면 안내(눈금선은 실선 헤어라인 하나씩만)
+  s+='<line class="ax" x1="'+xm+'" y1="'+y0+'" x2="'+xm+'" y2="'+y1+'"/>'
+   + '<line class="ax" x1="'+x0+'" y1="'+ym+'" x2="'+x1+'" y2="'+ym+'"/>'
+   + '<line class="ax" x1="'+x0+'" y1="'+y1+'" x2="'+x1+'" y2="'+y1+'"/>';
+  const zone=(tx,ty,t,anc)=>'<text class="qz" x="'+tx+'" y="'+ty+'" text-anchor="'+anc+'">'+t+'</text>';
+  s+=zone(x0+6,y0+13,'관심 ↓ · 권리 집중 — 성숙·고착','start')
+   + zone(x1-6,y0+13,'관심 ↑ · 권리 집중 — 회피설계·라이선스 먼저','end')
+   + zone(x0+6,y1-8,'관심 ↓ · 권리 분산 — 관망','start')
+   + zone(x1-6,y1-8,'관심 ↑ · 권리 분산 — 자체 출원 여지','end');
+  // 축 이름·눈금
+  s+='<text class="qa" x="'+((x0+x1)/2)+'" y="'+(QH-8)+'" text-anchor="middle">'
+   + '← 뉴스 비중 줄어듦   |   늘어남 →</text>'
+   + '<text class="qa" x="'+(x0-8)+'" y="'+(y0+10)+'" text-anchor="end">집중</text>'
+   + '<text class="qa" x="'+(x0-8)+'" y="'+(y1-2)+'" text-anchor="end">분산</text>'
+   + '<text class="qa" x="'+(x0-8)+'" y="'+(ym+4)+'" text-anchor="end">실질 6곳</text>';
+  // 라벨은 원마다 붙는다(값이 아니라 이름이므로 전부 붙어도 된다). 다만 점이 몰리면
+  // 라벨이 옆 원을 덮는다 → 오른쪽·왼쪽·위·아래 순으로 비어 있는 자리를 찾아 놓고,
+  // 넷 다 막히면 원 위쪽에 얹는다. 글자 폭은 한글 기준으로 어림한다(측정 API 없이 그린다).
+  const nodes=pts.map(d=>({d, cx:px(d.ratio), cy:py(d.r.neff), r:pr(d.r.tot),
+                           t:d.r.cat.name}));
+  const tw=t=>{ let w=0; for(const ch of t) w += ch.charCodeAt(0)>0x1100 ? 10.5 : 6; return w; };
+  const hitCircle=(bx,by,bw,bh,c)=>{
+    const nx=Math.max(bx,Math.min(c.cx,bx+bw)), ny=Math.max(by,Math.min(c.cy,by+bh));
+    return (nx-c.cx)**2 + (ny-c.cy)**2 < (c.r+2)**2; };
+  const hitBox=(a,b)=> a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h;
+  const placed=[];
+  nodes.forEach(n=>{
+    const w=tw(n.t), h=13;
+    const cand=[
+      {x:n.cx+n.r+6,      y:n.cy-h/2, anchor:'start'},
+      {x:n.cx-n.r-6-w,    y:n.cy-h/2, anchor:'end'},
+      {x:n.cx-w/2,        y:n.cy-n.r-6-h, anchor:'middle'},
+      {x:n.cx-w/2,        y:n.cy+n.r+6, anchor:'middle'},
+    ];
+    let pick=cand.find(c=> c.x>=x0-40 && c.x+w<=x1+16 && c.y>=y0 && c.y+h<=y1
+      && !nodes.some(o=> o!==n && hitCircle(c.x,c.y,w,h,o))
+      && !placed.some(p=> hitBox({x:c.x,y:c.y,w,h}, p))) || cand[2];
+    placed.push({x:pick.x, y:pick.y, w, h});
+    n.lx = pick.anchor==='start'? pick.x : pick.anchor==='end'? pick.x+w : pick.x+w/2;
+    n.ly = pick.y+h-3; n.anchor=pick.anchor;
+  });
+  nodes.forEach(n=>{
+    const d=n.d;
+    const tip=d.r.cat.name+' — 뉴스 비중 '+Math.round(d.ratio*100)+'%(이전=100), '
+      + '실질 경쟁자 '+d.r.neff.toFixed(1)+'곳, 상위 3곳 '+Math.round(d.r.cr3*100)+'%';
+    s+='<g><title>'+esc(tip)+'</title>'
+      + '<circle class="dot" cx="'+n.cx.toFixed(1)+'" cy="'+n.cy.toFixed(1)+'" r="'+n.r.toFixed(1)
+      + '" fill="'+col(d.lv)+'"/>'
+      + '<circle class="hit" cx="'+n.cx.toFixed(1)+'" cy="'+n.cy.toFixed(1)+'" r="'+Math.max(n.r,13)+'"/>'
+      + '<text class="ql" x="'+n.lx.toFixed(1)+'" y="'+n.ly.toFixed(1)+'" text-anchor="'
+      + n.anchor+'">'+esc(n.t)+'</text></g>';
+  });
+  return '<div class="qwrap">'+s+'</svg></div>'
+    + '<div class="qlegend"><span>권리 집중도</span>'
+    + '<span class="s3"><i></i>소수 집중</span><span class="s2"><i></i>중간</span>'
+    + '<span class="s1"><i></i>경쟁 분산</span><span>원 크기 = 그 분야 추정 공개 규모</span></div>';
+}
+
+function tradeSectionHTML(){
+  const T=FEED.trade; if(!T) return '';
+  const rows=tradeRows(); if(!rows.length) return '';
+  const cmp=FEED.insights.comparable;
+  const body=rows.map(d=>{
+    const r=d.r, pct=Math.round(r.cr3*100);
+    const badges=['상위 3곳 '+pct+'%'];
+    if(d.lv) badges.push('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳');
+    if(d.news && d.ratio!=null && cmp)
+      badges.push('뉴스 비중 '+Math.round(d.ratio*100)+'%');
+    const read=[T.conc[d.lv]||'', cmp? (T.news[d.dir]||'') : '',
+                d.kr.length? T.kr : ''].filter(Boolean).join(' ');
+    const holders=r.top.map(t=>'<span class="cta">'+(t.flag||'')+' '+esc(t.name)
+      + '<span class="ctn">'+Math.round(t.v/r.tot*100)+'%</span></span>').join('');
+    const krc=d.kr.length? '<div class="tk"><span class="cta">🇰🇷 국내 공개</span>'
+      + d.kr.map(k=>'<span class="cta">'+esc(k)+'</span>').join('')+'</div>' : '';
+    return '<div class="trow"><div class="th">'+r.cat.emoji+' '+esc(r.cat.name)
+      + '<div class="tb">'+badges.map(b=>'<span>'+esc(b)+'</span>').join('')+'</div></div>'
+      + '<div class="tk">'+holders+'</div>' + krc
+      + '<p class="tr">'+esc(read)+'</p>'
+      + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
+      + '</div>';
+  }).join('');
+  return '<div class="sec">🧭 분야별 거래 판단 참고</div>'
+    + '<p class="gdesc">뉴스에서 차지하는 비중이 어느 쪽으로 움직였는지와, 그 분야 권리를 '
+    + '몇 곳이 나눠 갖고 있는지를 겹쳐 봅니다. 원 크기는 그 분야의 추정 공개 규모입니다.'
+    + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
+    + '</p>'
+    + quadChartHTML(rows) + body
+    + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
+    + '<p class="gnote">' + esc(T.note) + '</p>';
+}
+
 // 거래·지원: 수집 데이터와 무관한 안내 화면. 검색·필터가 필요 없어 홈과 같은
 // 'homemode'(컨트롤 숨김)로 그린다.
 function renderGuide(){
   const G = FEED.guide||[];
-  $('#guide').innerHTML = G.map(g=>
+  $('#guide').innerHTML = tradeSectionHTML() + G.map(g=>
     '<div class="sec">'+esc(g.emoji||'')+' '+esc(g.name)+'</div>'
     + (g.desc? '<p class="gdesc">'+esc(g.desc)+'</p>' : '')
     + '<div class="glist">' + (g.items||[]).map(it=>

@@ -112,7 +112,29 @@ def _iter_articles(news_days: dict):
             yield d, a
 
 
-def _trending(news_days: dict, recent_from, prior_from):
+# 최근 창은 7일, 이전 창은 21일이다. 건수를 그대로 비교하면 3배 긴 창이 당연히 크게
+# 나와 무엇이든 '감소'로 보인다 → 창마다 **기사가 있는 날 수**로 나눠 하루 평균으로
+# 비교한다. 명목 일수(7·21)가 아니라 실제로 기사가 있는 날로 나누는 이유는, 아카이브를
+# 막 시작하면 이전 창이 부분적으로만 차 있기 때문이다(명목으로 나누면 이전 값이 실제보다
+# 작아져 이번엔 반대로 전부 '증가'가 된다).
+def _obs_days(news_days: dict, lo, hi) -> int:
+    """[lo, hi] 안에서 기사가 하나라도 있는 날 수."""
+    n = 0
+    for date, day in news_days.items():
+        d = _to_date(date)
+        if d and lo <= d <= hi and day.get("articles"):
+            n += 1
+    return n
+
+
+RISE_RATIO = 1.10        # 하루 평균이 이만큼 넘어야 '늘었다'(표본이 작아 ±10%는 잡음)
+
+
+def _rate(count: int, days: int) -> float:
+    return count / days if days else 0.0
+
+
+def _trending(news_days: dict, recent_from, prior_from, r_days, p_days):
     recent, prior = {}, {}
     for d, a in _iter_articles(news_days):
         if d is None:
@@ -129,13 +151,16 @@ def _trending(news_days: dict, recent_from, prior_from):
         if c < MIN_KW_COUNT:
             continue
         p = prior.get(t, 0)
-        rows.append({"term": t, "count": c, "prev": p, "rising": c > p})
-    # 최근 언급 많은 순, 동률이면 상승폭 큰 순
-    rows.sort(key=lambda r: (r["count"], r["count"] - r["prev"]), reverse=True)
+        rr, pr = _rate(c, r_days), _rate(p, p_days)
+        rows.append({"term": t, "count": c, "prev": p,
+                     "rate": round(rr, 3), "prevRate": round(pr, 3),
+                     "rising": rr > pr * RISE_RATIO})
+    # 최근 언급 많은 순, 동률이면 하루 평균 상승폭 큰 순
+    rows.sort(key=lambda r: (r["count"], r["rate"] - r["prevRate"]), reverse=True)
     return rows[:TOP_KEYWORDS]
 
 
-def _cat_trend(news_days: dict, recent_from, prior_from):
+def _cat_trend(news_days: dict, recent_from, prior_from, r_days, p_days):
     recent, prior = {}, {}
     for d, a in _iter_articles(news_days):
         if d is None:
@@ -145,14 +170,27 @@ def _cat_trend(news_days: dict, recent_from, prior_from):
             recent[k] = recent.get(k, 0) + 1
         elif d >= prior_from:
             prior[k] = prior.get(k, 0) + 1
+    # 방향 판정은 '하루 평균 건수'가 아니라 **그날 기사에서 차지한 비중**으로 한다.
+    # 수집은 아카이브 전체와 중복 제거를 하므로, 아카이브가 커질수록 '새 기사'로
+    # 잡히는 수가 구조적으로 줄어든다 — 실측(8/5)에서 전 분야가 예외 없이 감소로
+    # 나왔는데, 전체가 73건/일 → 56건/일 로 준 탓이었다. 비중으로 보면 이 흐름이
+    # 상쇄돼 분야끼리의 실제 이동(재생에너지·전력수급 ↑, 데이터센터·메가 ↓)이 드러난다.
+    r_tot, p_tot = sum(recent.values()), sum(prior.values())
     rows = []
     for c in ncfg.CATEGORIES:
         k = c["key"]
         r, p = recent.get(k, 0), prior.get(k, 0)
         if r == 0 and p == 0:
             continue
+        rr, pr = _rate(r, r_days), _rate(p, p_days)
+        rs = r / r_tot if r_tot else 0.0
+        ps = p / p_tot if p_tot else 0.0
         rows.append({"key": k, "name": c["name"], "emoji": c["emoji"],
-                     "recent": r, "prev": p, "delta": r - p})
+                     "recent": r, "prev": p, "delta": r - p,
+                     "rate": round(rr, 3), "prevRate": round(pr, 3),
+                     "share": round(rs, 4), "prevShare": round(ps, 4),
+                     # 비중 배율. 이전 비중이 0이면 정의되지 않아 None.
+                     "ratio": round(rs / ps, 3) if ps else None})
     rows.sort(key=lambda x: (x["recent"], x["delta"]), reverse=True)
     return rows
 
@@ -174,11 +212,16 @@ def build(news_days: dict, patent_weeks: dict) -> dict:
     # 함께 내보내고 화면에서 증감 표시를 감춘다.
     prior_n = sum(1 for d, _a in _iter_articles(news_days)
                   if d is not None and prior_from <= d < recent_from)
+    r_days = _obs_days(news_days, recent_from, latest)
+    p_days = _obs_days(news_days, prior_from, recent_from - timedelta(days=1))
     return {
         "asOf": latest.isoformat(),
-        "window": {"recentDays": RECENT_DAYS, "priorDays": PRIOR_DAYS},
+        # recentDays/priorDays 는 창의 명목 길이, obs 는 실제로 기사가 있던 날 수다.
+        # 화면에서 '하루 평균' 이라고 쓸 때 근거가 되는 건 obs 쪽이다.
+        "window": {"recentDays": RECENT_DAYS, "priorDays": PRIOR_DAYS,
+                   "recentObs": r_days, "priorObs": p_days},
         "priorArticles": prior_n,
-        "comparable": prior_n > 0,
-        "trending": _trending(news_days, recent_from, prior_from),
-        "catTrend": _cat_trend(news_days, recent_from, prior_from),
+        "comparable": prior_n > 0 and p_days > 0,
+        "trending": _trending(news_days, recent_from, prior_from, r_days, p_days),
+        "catTrend": _cat_trend(news_days, recent_from, prior_from, r_days, p_days),
     }
