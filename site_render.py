@@ -352,7 +352,9 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "staownNote": ip_guide.STAOWN_NOTE,
         "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
-                  "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE},
+                  "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE,
+                  "concShort": ip_guide.READ_SHORT,
+                  "newsShort": ip_guide.NEWS_SHORT},
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
@@ -498,15 +500,34 @@ a{color:inherit}
   font-size:11px;font-weight:700;color:var(--muted)}
 .qlegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .qlegend .s1 i{background:var(--q1)} .qlegend .s2 i{background:var(--q2)} .qlegend .s3 i{background:var(--q3)}
-/* 분야별 상세 = 위 그림의 표 대응물(값을 그림에만 두지 않는다) */
-.trow{border:1px solid var(--line);border-radius:11px;background:var(--card);padding:12px 14px;margin-top:10px}
+/* 분야별 상세 = 위 그림의 표 대응물(값을 그림에만 두지 않는다).
+   ④ 왼쪽 색 띠로 집중도 단계를 표시해 스크롤 스캔이 되게 한다 */
+.trow{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
+  background:var(--card);padding:12px 14px;margin-top:10px}
+.trow.lv-hi{border-left-color:var(--q3)} .trow.lv-mid{border-left-color:var(--q2)}
+.trow.lv-lo{border-left-color:var(--q1)}
 .trow .th{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800}
+.trow .thp{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .trow .tb{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700}
 .trow .tb span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);
   font-variant-numeric:tabular-nums}
-.trow .tr{margin:8px 0 0;font-size:12.5px;line-height:1.7;color:var(--muted);word-break:keep-all}
-.trow .tk{margin:8px 0 0;display:flex;gap:5px;flex-wrap:wrap}
+.trow .tr{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--muted);font-weight:700;
+  word-break:keep-all;cursor:help}
 .trow .tcaveat{margin:7px 0 0;font-size:11px;line-height:1.6;color:var(--muted);opacity:.85}
+/* ① 지분 막대 — 칸 사이는 테두리가 아니라 배경색 틈(2px)으로 가른다 */
+.shbar{display:flex;gap:2px;height:9px;margin:10px 0 6px;border-radius:999px;overflow:hidden}
+.shbar i{display:block;height:100%}
+.shbar i:first-child{border-radius:999px 0 0 999px}
+.shbar i:last-child{border-radius:0 999px 999px 0}
+.shbar .rest{background:var(--line)}
+.shns{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--ink)}
+.shns .shn b{color:var(--accent2);margin-left:4px;font-variant-numeric:tabular-nums}
+.shns .shn.rest{color:var(--muted)} .shns .shn.rest b{color:var(--muted)}
+/* ③ 국내 권리는 '누가 갖고 있나' 와 성격이 다른 신호 → 모양을 달리한다 */
+.tkr{margin:9px 0 0;padding:7px 10px;border-radius:8px;background:var(--bg);
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  font-size:11.5px;line-height:1.6;color:var(--muted);word-break:keep-all}
+.tkr b{color:var(--ink);font-weight:800}
 /* 국유특허 목록 — 건수가 적어 표 대신 줄 목록으로 */
 .stlist{display:flex;flex-direction:column;gap:2px}
 .strow{border:1px solid var(--line);border-radius:9px;background:var(--card);padding:9px 12px}
@@ -1439,21 +1460,47 @@ function tradeSectionHTML(){
   const T=FEED.trade; if(!T) return '';
   const rows=tradeRows(); if(!rows.length) return '';
   const cmp=FEED.insights.comparable;
+  const ADJ=FEED.patents.totalsAdjusted||{};
   const body=rows.map(d=>{
     const r=d.r, pct=Math.round(r.cr3*100);
-    const badges=['상위 3곳 '+pct+'%'];
+    // ① 지분 막대 — '상위 3곳 77%' 라고 쓰기보다 그 77% 를 보이게 한다. 위아래로
+    //   쌓이면 어느 분야가 몰려 있는지 스크롤만으로 잡힌다. 색은 그 분야의 집중도
+    //   단계(파랑 램프) 하나로 통일하고, 칸 사이는 2px 배경색 틈으로 나눈다.
+    const col=d.lv==='hi'?'var(--q3)':d.lv==='mid'?'var(--q2)':'var(--q1)';
+    const segs=r.top.map(t=>t.v/r.tot);
+    const rest=Math.max(0, 1-segs.reduce((a,b)=>a+b,0));
+    const bar='<div class="shbar" role="img" aria-label="상위 3곳이 '+pct+'%">'
+      + segs.map(s=>'<i style="width:'+(s*100).toFixed(1)+'%;background:'+col+'"></i>').join('')
+      + (rest>0.005? '<i class="rest" style="width:'+(rest*100).toFixed(1)+'%"></i>':'')
+      + '</div>';
+    const names=r.top.map(t=>{
+      const a=ADJ[t.name];
+      return '<span class="shn"'+(a?' title="총계 보정: '+esc(a.raw+'건 → 표본 '+a.of
+             +'건 중 제 것 '+a.kept+'건 비율')+'"':'')+'>'
+        + (t.flag||'')+' '+esc(t.name)+(a?'*':'')
+        + '<b>'+Math.round(t.v/r.tot*100)+'%</b></span>'; }).join('')
+      + (rest>0.005? '<span class="shn rest">나머지<b>'+Math.round(rest*100)+'%</b></span>':'');
+    // ③ 국내 공개는 '누가 갖고 있나' 와 성격이 다르다 — 한국에서 실제로 부딪히는
+    //   권리라는 경고다. 모양을 달리하고, 없는 분야에서는 아예 나오지 않게 한다.
+    const krc=d.kr.length? '<div class="tkr"><b>🇰🇷 국내 권리 '+d.kr.length+'곳</b> '
+      + d.kr.map(k=>esc(k)).join(' <span aria-hidden="true">·</span> ')+'</div>' : '';
+    // ④ 한 줄 판정. 같은 문단이 행마다 반복되면 읽히지 않으므로 전문은 툴팁으로.
+    const full=[T.conc[d.lv]||'', cmp? (T.news[d.dir]||'') : '',
+                d.kr.length? T.kr : ''].filter(Boolean).join(' ');
+    const short=[(T.concShort||{})[d.lv]||'',
+                 cmp? (T.newsShort||{})[d.dir]||'' : '',
+                 d.kr.length? '국내 권리 '+d.kr.length+'곳' : ''].filter(Boolean)
+                .join(' <span aria-hidden="true">·</span> ');
+    const badges=[];
     if(d.lv) badges.push('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳');
     if(d.news && d.ratio!=null && cmp)
       badges.push('뉴스 비중 '+Math.round(d.ratio*100)+'%');
-    const read=[T.conc[d.lv]||'', cmp? (T.news[d.dir]||'') : '',
-                d.kr.length? T.kr : ''].filter(Boolean).join(' ');
-    const holders=r.top.map(t=>concChip(t, r.tot)).join('');
-    const krc=d.kr.length? '<div class="tk"><span class="cta">🇰🇷 국내 공개</span>'
-      + d.kr.map(k=>'<span class="cta">'+esc(k)+'</span>').join('')+'</div>' : '';
-    return '<div class="trow"><div class="th">'+r.cat.emoji+' '+esc(r.cat.name)
+    return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
+      + r.cat.emoji+' '+esc(r.cat.name)
+      + '<span class="thp mono">'+pct+'%</span>'
       + '<div class="tb">'+badges.map(b=>'<span>'+esc(b)+'</span>').join('')+'</div></div>'
-      + '<div class="tk">'+holders+'</div>' + krc
-      + '<p class="tr">'+esc(read)+'</p>'
+      + bar + '<div class="shns">'+names+'</div>' + krc
+      + '<p class="tr" title="'+esc(full)+'">'+short+'</p>'
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
   }).join('');
