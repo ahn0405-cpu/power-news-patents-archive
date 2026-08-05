@@ -4,8 +4,8 @@
 필드를 확인할 수 없다. GitHub Actions 러너는 외부 인터넷이 열려 있으므로 거기서
 한 번 돌려 로그로 구조를 본 뒤 수집기를 짠다(추측으로 짜고 매주 기다리지 않는다).
 
-사용: DATA_GO_KR_KEY=... python probe_api.py [엔드포인트] [오퍼레이션 후보...]
-      (인자 없으면 아래 기본값 — 특허기술거래 국유판매기술정보)
+사용: DATA_GO_KR_KEY=... [PROBE_ENDPOINT=...] [PROBE_OPS="a b c"] python probe_api.py
+      (비우면 아래 기본값 — 특허기술거래 국유판매기술정보)
 
 키는 절대 파일에 적지 않는다. GitHub Secret → 환경변수로만 받는다.
 """
@@ -93,9 +93,10 @@ def main() -> int:
     if not key:
         print("DATA_GO_KR_KEY 가 비어 있습니다(GitHub Secret 확인).")
         return 1
-    argv = sys.argv[1:]
-    endpoint = argv[0] if argv else DEFAULT_ENDPOINT
-    ops = argv[1:] or DEFAULT_OPS
+    # 위치 인자는 쓰지 않는다 — 앞 인자를 비우면 뒤 인자가 앞자리로 밀려 들어간다
+    # (실측: endpoint 를 비우고 ops 만 넘겼더니 ops 가 엔드포인트로 해석됐다).
+    endpoint = (os.getenv("PROBE_ENDPOINT") or "").strip() or DEFAULT_ENDPOINT
+    ops = (os.getenv("PROBE_OPS") or "").split() or DEFAULT_OPS
     print(f"엔드포인트: {endpoint}")
     print(f"오퍼레이션 후보 {len(ops)}개: {', '.join(ops)}")
     print(f"키 길이 {len(key)}자 · '%' 포함: {'%' in key}")

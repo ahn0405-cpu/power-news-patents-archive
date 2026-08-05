@@ -56,7 +56,10 @@ jobs:
           echo "판정: 대조군이 0이 아니고 나머지가 전부 0 → 이 키만 저장이 안 된 것."
           echo "      Variables 쪽이 0이 아니면 → 탭을 잘못 고른 것(워크플로를 vars 로 바꾸면 됨)."
 
+      # 위치 인자로 넘기면 앞 입력이 비었을 때 뒤 입력이 앞자리로 밀린다 → 환경변수로.
       - name: API 두드려 보기
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
-        run: python probe_api.py ${{ inputs.endpoint }} ${{ inputs.ops }}
+          PROBE_ENDPOINT: ${{ inputs.endpoint }}
+          PROBE_OPS: ${{ inputs.ops }}
+        run: python probe_api.py
