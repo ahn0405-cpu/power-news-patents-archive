@@ -1,0 +1,31 @@
+# 국내 공급자 탐색 (수동 실행 전용).
+#
+# 지금 수집은 큐레이션한 출원인 65곳뿐이라 대학·출연연·중소기업이 표본에 없다.
+# 목록을 늘리는 대신 '분야 + 국내 공개' 로 찾아 누가 나오는지 본다. 설계 전
+# 확인용이라 정기 실행은 걸지 않는다(OPS 쿼터는 주간 수집이 먼저다).
+name: 국내 공급자 탐색 (수동)
+
+on:
+  workflow_dispatch:
+    inputs:
+      per_cat:
+        description: "분야당 훑을 문서 수 (기본 50)"
+        required: false
+        default: ""
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: 국내 공급자 훑기
+        env:
+          OPS_KEY: ${{ secrets.OPS_KEY }}
+          OPS_SECRET: ${{ secrets.OPS_SECRET }}
+          SUPPLY_PER_CAT: ${{ inputs.per_cat }}
+        run: python probe_supply.py
