@@ -30,6 +30,15 @@ DEFAULT_OPS = [   # 연결이 막히면 앞의 한두 개만 봐도 판정된다
 ]
 TIMEOUT = 25
 HEAD = 1400          # 응답 앞부분만 찍는다(로그가 길면 읽기 어렵다)
+# 오퍼레이션마다 필수 검색어가 다르다. 이 서비스는 '전체 목록 내려받기'가 아니라
+# 검색형이다 — 권리자(pem_user) 나 발명의 명칭으로 찾는다. 값은 포털 문서의
+# 샘플데이터를 그대로 쓴다(구조만 보면 되므로 무엇으로 찾는지는 중요하지 않다).
+OP_PARAMS = {
+    "getPayPatentee": {"pem_user": "국립"},
+    "getFreePatentee": {"pem_user": "국립"},
+}
+# 발명의 명칭으로 찾는 쪽(getFreeTL·getPayTL)의 파라미터 이름은 아직 모른다 →
+# 포털 '상세기능' 에서 확인되면 위 표에 한 줄 더 넣으면 된다.
 
 
 def _fetch(url: str) -> tuple[int, str, str]:
@@ -49,8 +58,10 @@ def _fetch(url: str) -> tuple[int, str, str]:
 def _try(endpoint: str, op: str, key: str, label: str) -> bool:
     # serviceKey 는 이미 URL 인코딩된 형태로 발급되기도 한다 → 다시 인코딩하면
     # 깨진다. 그래서 쿼리를 손으로 붙이고, 인코딩·디코딩 두 형태를 다 시도한다.
+    extra = "".join(f"&{k}={urllib.parse.quote(v)}"
+                    for k, v in OP_PARAMS.get(op, {}).items())
     url = (f"{endpoint}/{op}?serviceKey={key}"
-           f"&pageNo=1&numOfRows=3&type=xml&_type=xml")
+           f"&pageNo=1&numOfRows=3&type=xml&_type=xml{extra}")
     status, ctype, body = _fetch(url)
     ok = "<resultCode>00</resultCode>" in body or '"resultCode":"00"' in body
     print(f"\n── {op}  [{label} 키]  HTTP {status}  {ctype}")
@@ -102,10 +113,16 @@ def main() -> int:
     print(f"키 길이 {len(key)}자 · '%' 포함: {'%' in key}")
     _connectivity(endpoint)
 
+    # 포털은 인증키를 Encoding/Decoding 두 형태로 주고 어느 쪽이 먹는지는 서비스마다
+    # 다르다("구동되는 키를 사용하라"고만 안내한다) → 두 형태를 다 보낸다.
+    #   인코딩: 받은 그대로(%2F·%3D 포함)
+    #   디코딩: %2F→'/', %3D→'=' 로 푼 원문을 **다시 인코딩하지 않고** 그대로
+    # 이전 판은 푼 뒤 다시 quote() 해서 넣었는데, 그러면 원본과 글자까지 똑같아져
+    # 사실상 같은 키를 두 번 보내고 있었다(실측 확인). 디코딩 형태는 시험된 적이 없다.
     variants = [("인코딩", key)]
     dec = urllib.parse.unquote(key)
     if dec != key:
-        variants.append(("디코딩", urllib.parse.quote(dec, safe="")))
+        variants.append(("디코딩", dec))
     # https 가 막혀도 http 는 열려 있는 서비스가 있다(공공 API 에 드물지 않다).
     schemes = [endpoint]
     if endpoint.startswith("https://"):
