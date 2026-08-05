@@ -1,0 +1,35 @@
+# 공공데이터포털 오픈API 응답 구조 확인 (수동 실행 전용).
+#
+# 개발 환경에서는 data.go.kr 접속이 막혀 있어 오퍼레이션·응답 필드를 볼 수 없다.
+# 러너는 외부 인터넷이 열려 있으므로 여기서 한 번 돌려 로그로 구조를 확인한 뒤
+# 수집기를 짠다. 정기 실행이 아니라 필요할 때만 손으로 돌린다(일일 트래픽 100회).
+name: 오픈API 응답 구조 확인 (수동)
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: "엔드포인트 URL (비우면 국유판매기술정보)"
+        required: false
+        default: ""
+      ops:
+        description: "오퍼레이션 이름(공백으로 구분, 비우면 기본 후보)"
+        required: false
+        default: ""
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: API 두드려 보기
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: python probe_api.py ${{ inputs.endpoint }} ${{ inputs.ops }}
