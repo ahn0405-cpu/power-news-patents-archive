@@ -10,7 +10,7 @@ NameError 를 못 잡으므로, OPS 응답을 흉내 내는 스텁을 끼워 두
 from __future__ import annotations
 
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import patent_config as cfg
 import patent_source as ps
@@ -104,6 +104,35 @@ def main() -> int:
             per_ap[i["applicant"]] = per_ap.get(i["applicant"], 0) + 1
         check(max(per_ap.values()) <= cfg.KR_LIMIT,
               f"출원인당 상한({cfg.KR_LIMIT})을 넘지 않는다")
+
+        print("· 주간 수집 시작점 회전 (뒤쪽 출원인이 영구히 굶지 않는다)")
+        n = len(cfg.APPLICANTS)
+        starts, weeks = set(), [datetime(2026, 1, 5) + timedelta(weeks=w)
+                                for w in range(12)]
+        ok_seq = True
+        for d in weeks:
+            o = ps._collect_order(d)
+            check_len = len(o) == n and {a["name"] for a in o} == \
+                {a["name"] for a in cfg.APPLICANTS}
+            if not check_len:
+                ok_seq = False
+                break
+            starts.add(o[0]["name"])
+            # seq 로 묶인 항목은 앞 항목보다 뒤에 있어야 한다
+            pos = {a["name"]: i for i, a in enumerate(o)}
+            for i, a in enumerate(cfg.APPLICANTS):
+                if a.get("seq") and i > 0:
+                    if pos[a["name"]] < pos[cfg.APPLICANTS[i - 1]["name"]]:
+                        ok_seq = False
+        check(check_len, "회전해도 출원인이 빠지거나 늘지 않는다")
+        check(len(starts) >= 3, f"주마다 시작점이 바뀐다 (12주에 {len(starts)}가지)")
+        check(ok_seq, "dedup 우선순위 묶음(seq)이 회전에 끊기지 않는다")
+        # 한 실행이 소화하는 만큼(COLLECT_ROTATE) 씩 밀리면 몇 주 안에 전원이 선두권에 든다
+        covered, span = set(), max(1, cfg.COLLECT_ROTATE)
+        for d in weeks[:4]:
+            covered |= {a["name"] for a in ps._collect_order(d)[:span]}
+        check(len(covered) >= min(n, span * 3),
+              f"4주 안에 {len(covered)}/{n}곳이 앞 {span}순위 안에 든다")
 
         print("· collect_offices (매일 공개국 집계 경로)")
         ps._search = Stub(total=5, per_call=1)

@@ -55,6 +55,11 @@ LOOKBACK_DAYS = int(os.getenv("PATENT_LOOKBACK_DAYS", "90"))        # 최근 N�
 REQUEST_TIMEOUT = int(os.getenv("PATENT_TIMEOUT", "40"))
 REQUEST_DELAY = float(os.getenv("PATENT_REQ_DELAY", "0.4"))         # OPS 쿼터 배려
 MOCK_MODE = os.getenv("PATENT_MOCK", ncfg.MOCK_MODE)                # auto | on | off
+# 주간 수집의 시작점 회전 폭(출원인 수). 목록을 늘 같은 순서로 돌면 쿼터(403)가
+# 나는 지점이 매주 같아 뒤쪽이 영구히 굶는다 — 실측: 8/3 실행은 39번(중국 끝)에서
+# 끊겨 일본·유럽 25곳이 통째로 빠졌고, 세 주 내내 같은 자리에서 끊겼다. 한 실행이
+# 소화하는 양(24~28곳)만큼 매주 시작점을 옮기면 3주에 한 바퀴가 돈다.
+COLLECT_ROTATE = int(os.getenv("PATENT_COLLECT_ROTATE", "24"))
 # 출원인×특허청 정확 집계(공개국별 랭킹). 전 출원인을 한 번에 돌리면 OPS 무료 쿼터를
 # 넘어 403 이 나고 본 수집까지 망친다(실측) → **매일 뉴스 실행에 얹어** 일부만 돌리고
 # data/patents/stats.json 에 병합해 누적한다. 8곳/일이면 31곳을 4일에 한 바퀴 돈다
@@ -156,7 +161,9 @@ APPLICANTS = [
     #  로그에서 실제 건수를 보고 필요하면 q 를 "Siemens Aktiengesellschaft" 로 좁힌다.)
     {"name": "Siemens Energy", "region": "EU", "flag": "🇩🇪", "q": "Siemens Energy"},
     {"name": "Siemens Gamesa", "region": "EU", "flag": "🇪🇸", "q": "Siemens Gamesa"},
-    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens"},                        # ✔
+    # seq: '앞 항목보다 뒤에 와야 한다'는 표시. 주간 수집이 시작점을 회전시키므로
+    # (_collect_order) 회전이 이 사이를 끊고 들어오지 못하게 막는다.
+    {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "q": "Siemens", "seq": True},           # ✔
     {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
     {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
     {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},

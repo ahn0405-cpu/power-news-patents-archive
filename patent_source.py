@@ -268,6 +268,29 @@ def _office_batch(today) -> list[dict]:
     return order[:cfg.OFFICE_BATCH]
 
 
+def _collect_order(today) -> list[dict]:
+    """이번 주 목록 수집 순서(**주 단위 회전**).
+
+    늘 같은 순서로 돌면 쿼터(403)가 나는 지점이 매주 같은 자리라 뒤쪽이 영구히
+    굶는다. 실측(7/20·7/27·8/3 세 주) — 매번 24~28곳만 채워지고 나머지는 통째로
+    빠졌으며, 8/3 은 39번(중국 끝)에서 끊겨 일본·유럽 25곳이 전부 0건이었다.
+    그래서 Siemens Energy·Nordex·Prysmian 등은 총계만 있고 목록이 한 번도
+    채워지지 않았다. 시작점을 매주 옮겨 굶는 구간이 돌게 한다(3주면 한 바퀴).
+
+    단, 회전이 dedup 우선순위 묶음을 끊으면 안 된다. q="Siemens" 는 Siemens
+    Energy·Gamesa 문서까지 걸리므로 반드시 그 둘보다 뒤여야 한다("seq" 표시) →
+    시작점이 묶음 안에 떨어지면 묶음 맨 앞으로 물린다.
+    """
+    n = len(cfg.APPLICANTS)
+    if n <= 1 or cfg.COLLECT_ROTATE <= 0:
+        return list(cfg.APPLICANTS)
+    wk = (today or datetime.now()).isocalendar()[1]
+    start = (wk * cfg.COLLECT_ROTATE) % n
+    while start > 0 and cfg.APPLICANTS[start].get("seq"):
+        start -= 1
+    return cfg.APPLICANTS[start:] + cfg.APPLICANTS[:start]
+
+
 def collect_offices(today: datetime) -> dict:
     """오늘 배치 출원인의 정확 집계만 가볍게 수집 → {"totals":…, "offices":…}.
 
@@ -333,7 +356,11 @@ def _live_collect(today: datetime | None = None) -> tuple[list[dict], dict]:
     # (collect_offices). 본 수집은 목록 + 출원인 총계까지만 담당.
     seen: set[str] = set()
     errors = 0
-    for ap in cfg.APPLICANTS:
+    order = _collect_order(today)
+    if order and order[0] is not cfg.APPLICANTS[0]:
+        print(f"  (이번 주 시작: {order[0]['name']} — 주마다 시작점을 옮겨 "
+              f"쿼터에 걸리는 구간이 돌게 한다)")
+    for ap in order:
         added = 0
         cql = _cql(ap["q"], cfg.LOOKBACK_DAYS, today)
         start = 1
