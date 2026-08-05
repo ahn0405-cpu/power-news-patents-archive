@@ -354,7 +354,9 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
                   "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE,
                   "concShort": ip_guide.READ_SHORT,
-                  "newsShort": ip_guide.NEWS_SHORT},
+                  "newsShort": ip_guide.NEWS_SHORT,
+                  "gen": ip_guide.READ_GEN, "genKr": ip_guide.READ_GEN_KR,
+                  "genNews": ip_guide.READ_GEN_NEWS},
     }
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
@@ -1517,13 +1519,24 @@ function tradeSectionHTML(){
     //   권리라는 경고다. 모양을 달리하고, 없는 분야에서는 아예 나오지 않게 한다.
     const krc=d.kr.length? '<div class="tkr"><b>🇰🇷 국내 권리 '+d.kr.length+'곳</b> '
       + d.kr.map(k=>esc(k)).join(' <span aria-hidden="true">·</span> ')+'</div>' : '';
-    // ④ 한 줄 판정. 같은 문단이 행마다 반복되면 읽히지 않으므로 전문은 툴팁으로.
-    const full=[T.conc[d.lv]||'', cmp? (T.news[d.dir]||'') : '',
-                d.kr.length? T.kr : ''].filter(Boolean).join(' ');
+    // ④ 판정 문장. 어느 분야에나 붙는 일반론("권리가 소수에 몰려 있습니다")은
+    //   일곱 번 반복되면 배경이 된다 → 그 분야의 실제 수치와 회사 이름을 넣어
+    //   만든다. 이름은 손으로 적지 않고 이 행의 데이터에서 뽑는다(순위가 바뀌면
+    //   문장도 같이 바뀐다). 짧은 꼬리표는 툴팁으로 돌려 위계를 준다.
+    const names3=r.top.map(t=>t.name).join('·');
+    const fill=s=>String(s||'')
+      .replace('{neff}', r.neff.toFixed(1)).replace('{n}', r.n)
+      .replace('{top3}', names3).replace('{top1}', (r.top[0]||{}).name||'')
+      .replace('{krn}', d.kr.length)
+      .replace('{krs}', d.kr.map(k=>k.replace(/^\S+\s/,'')).join('·'))
+      .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '');
+    const gen=[ d.lv? fill((T.gen||{})[d.lv]) : '',
+                d.kr.length? fill(T.genKr) : '',
+                cmp? fill((T.genNews||{})[d.dir]) : '' ].filter(Boolean).join(' ');
     const short=[(T.concShort||{})[d.lv]||'',
                  cmp? (T.newsShort||{})[d.dir]||'' : '',
                  d.kr.length? '국내 권리 '+d.kr.length+'곳' : ''].filter(Boolean)
-                .join(' <span aria-hidden="true">·</span> ');
+                .join(' · ');
     // 배지는 이미 이스케이프한 HTML 로 담는다 — 스파크라인(SVG)이 섞이기 때문.
     const badges=[];
     if(d.lv) badges.push(esc('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳'));
@@ -1535,7 +1548,7 @@ function tradeSectionHTML(){
       + '<span class="thp mono">'+pct+'%</span>'
       + '<div class="tb">'+badges.map(b=>'<span>'+b+'</span>').join('')+'</div></div>'
       + bar + '<div class="shns">'+names+'</div>' + krc
-      + '<p class="tr" title="'+esc(full)+'">'+short+'</p>'
+      + '<p class="tr" title="'+esc(short)+'">'+esc(gen)+'</p>'
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
   }).join('');
