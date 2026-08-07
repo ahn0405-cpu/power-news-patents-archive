@@ -1,0 +1,234 @@
+{
+  "generated": "2026-08-08 08:36 KST",
+  "days": [
+    {
+      "date": "2026-08-08",
+      "count": 47,
+      "by_category": {
+        "supply": 11,
+        "grid": 3,
+        "nuclear": 10,
+        "renew": 11,
+        "datacenter": 4,
+        "policy": 8
+      }
+    },
+    {
+      "date": "2026-08-07",
+      "count": 91,
+      "by_category": {
+        "supply": 20,
+        "grid": 9,
+        "nuclear": 18,
+        "renew": 24,
+        "datacenter": 5,
+        "policy": 11,
+        "industry": 4
+      }
+    },
+    {
+      "date": "2026-08-06",
+      "count": 34,
+      "by_category": {
+        "supply": 5,
+        "grid": 4,
+        "nuclear": 12,
+        "renew": 4,
+        "policy": 4,
+        "industry": 4,
+        "datacenter": 1
+      }
+    },
+    {
+      "date": "2026-08-05",
+      "count": 180,
+      "by_category": {
+        "supply": 36,
+        "grid": 25,
+        "nuclear": 42,
+        "renew": 23,
+        "datacenter": 10,
+        "mega": 4,
+        "policy": 24,
+        "industry": 16
+      }
+    },
+    {
+      "date": "2026-08-04",
+      "count": 60,
+      "by_category": {
+        "supply": 9,
+        "grid": 4,
+        "nuclear": 17,
+        "renew": 13,
+        "datacenter": 6,
+        "policy": 6,
+        "industry": 5
+      }
+    },
+    {
+      "date": "2026-08-03",
+      "count": 54,
+      "by_category": {
+        "supply": 9,
+        "grid": 10,
+        "nuclear": 15,
+        "renew": 11,
+        "datacenter": 1,
+        "mega": 2,
+        "policy": 2,
+        "industry": 4
+      }
+    },
+    {
+      "date": "2026-08-02",
+      "count": 23,
+      "by_category": {
+        "supply": 2,
+        "grid": 4,
+        "nuclear": 7,
+        "renew": 3,
+        "datacenter": 4,
+        "mega": 1,
+        "policy": 1,
+        "industry": 1
+      }
+    },
+    {
+      "date": "2026-08-01",
+      "count": 51,
+      "by_category": {
+        "supply": 2,
+        "grid": 9,
+        "nuclear": 9,
+        "renew": 9,
+        "datacenter": 3,
+        "policy": 6,
+        "industry": 13
+      }
+    },
+    {
+      "date": "2026-07-31",
+      "count": 51,
+      "by_category": {
+        "supply": 4,
+        "grid": 14,
+        "nuclear": 10,
+        "renew": 9,
+        "datacenter": 5,
+        "mega": 1,
+        "policy": 7,
+        "industry": 1
+      }
+    },
+    {
+      "date": "2026-07-30",
+      "count": 50,
+      "by_category": {
+        "supply": 4,
+        "grid": 6,
+        "nuclear": 16,
+        "renew": 9,
+        "datacenter": 8,
+        "policy": 6,
+        "industry": 1
+      }
+    },
+    {
+      "date": "2026-07-29",
+      "count": 122,
+      "by_category": {
+        "supply": 10,
+        "grid": 21,
+        "nuclear": 38,
+        "renew": 11,
+        "datacenter": 17,
+        "mega": 3,
+        "policy": 17,
+        "industry": 5
+      }
+    },
+    {
+      "date": "2026-07-28",
+      "count": 124,
+      "by_category": {
+        "supply": 18,
+        "grid": 22,
+        "nuclear": 30,
+        "renew": 21,
+        "datacenter": 9,
+        "policy": 7,
+        "industry": 17
+      }
+    },
+    {
+      "date": "2026-07-27",
+      "count": 40,
+      "by_category": {
+        "supply": 6,
+        "grid": 4,
+        "nuclear": 12,
+        "renew": 3,
+        "datacenter": 4,
+        "mega": 2,
+        "policy": 3,
+        "industry": 6
+      }
+    },
+    {
+      "date": "2026-07-26",
+      "count": 20,
+      "by_category": {
+        "supply": 2,
+        "grid": 3,
+        "nuclear": 6,
+        "renew": 3,
+        "datacenter": 3,
+        "policy": 2,
+        "industry": 1
+      }
+    },
+    {
+      "date": "2026-07-25",
+      "count": 51,
+      "by_category": {
+        "supply": 2,
+        "grid": 8,
+        "nuclear": 15,
+        "renew": 11,
+        "datacenter": 5,
+        "policy": 8,
+        "mega": 1,
+        "industry": 1
+      }
+    },
+    {
+      "date": "2026-07-24",
+      "count": 39,
+      "by_category": {
+        "renew": 6,
+        "datacenter": 6,
+        "policy": 5,
+        "industry": 3,
+        "supply": 3,
+        "grid": 5,
+        "nuclear": 10,
+        "mega": 1
+      }
+    },
+    {
+      "date": "2026-07-23",
+      "count": 117,
+      "by_category": {
+        "supply": 14,
+        "grid": 15,
+        "nuclear": 16,
+        "renew": 15,
+        "datacenter": 14,
+        "mega": 15,
+        "policy": 14,
+        "industry": 14
+      }
+    }
+  ]
+}

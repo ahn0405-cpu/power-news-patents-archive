@@ -1,0 +1,66 @@
+{
+  "generated": "2026-08-08 08:36 KST",
+  "weeks": [
+    {
+      "week": "2026-08-03",
+      "count": 326,
+      "by_category": {
+        "renew": 179,
+        "nuclear": 60,
+        "supply": 30,
+        "grid": 10,
+        "datacenter": 11,
+        "mega": 18,
+        "industry": 14,
+        "meter": 4
+      },
+      "by_country": {
+        "US": 64,
+        "KR": 169,
+        "CN": 93
+      }
+    },
+    {
+      "week": "2026-07-27",
+      "count": 248,
+      "by_category": {
+        "renew": 184,
+        "supply": 7,
+        "industry": 9,
+        "mega": 12,
+        "meter": 2,
+        "nuclear": 26,
+        "datacenter": 2,
+        "grid": 6
+      },
+      "by_country": {
+        "US": 25,
+        "KR": 111,
+        "CN": 54,
+        "JP": 22,
+        "EU": 36
+      }
+    },
+    {
+      "week": "2026-07-20",
+      "count": 905,
+      "by_category": {
+        "renew": 321,
+        "supply": 125,
+        "mega": 153,
+        "industry": 111,
+        "nuclear": 8,
+        "meter": 39,
+        "grid": 127,
+        "datacenter": 21
+      },
+      "by_country": {
+        "US": 141,
+        "KR": 153,
+        "CN": 150,
+        "JP": 275,
+        "EU": 186
+      }
+    }
+  ]
+}

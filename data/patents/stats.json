@@ -1,0 +1,415 @@
+{
+  "totals": {
+    "General Electric": 37,
+    "GE Vernova": 40,
+    "Eaton": 39,
+    "Caterpillar": 27,
+    "한국전력공사": 107,
+    "한국전력기술": 4,
+    "삼성전자": 88,
+    "일진전기": 2,
+    "그리드위즈": 3,
+    "State Grid": 96,
+    "Mitsubishi Electric": 81,
+    "Kyocera": 9,
+    "HD현대일렉트릭": 9,
+    "효성중공업": 3,
+    "LS일렉트릭": 28,
+    "대한전선": 5,
+    "Huawei": 156,
+    "CATL": 888,
+    "Hitachi Energy": 53,
+    "Toshiba": 14,
+    "Panasonic": 256,
+    "Toyota": 294,
+    "Furukawa Electric": 3,
+    "Siemens": 183,
+    "ABB": 53,
+    "Schneider Electric": 34,
+    "Bosch": 86,
+    "두산에너빌리티": 5,
+    "LG에너지솔루션": 2264,
+    "삼성SDI": 641,
+    "Sumitomo Electric": 55,
+    "Westinghouse": 18,
+    "Vestas": 121,
+    "Fuji Electric": 16,
+    "Meidensha": 2,
+    "Siemens Energy": 53,
+    "Siemens Gamesa": 75,
+    "Nordex": 50,
+    "Prysmian": 2,
+    "Nexans": 4,
+    "NKT": 2,
+    "Framatome": 12,
+    "Legrand": 5,
+    "NuScale": 5,
+    "TerraPower": 9,
+    "Vertiv": 30,
+    "한국수력원자력": 45,
+    "SK온": 300,
+    "CGN": 2,
+    "Sungrow": 63,
+    "LS전선": 5,
+    "한화솔루션": 44,
+    "Goldwind": 38,
+    "Ming Yang": 2,
+    "Envision": 22,
+    "BYD": 93,
+    "Hitachi": 34
+  },
+  "offices": {
+    "General Electric": {
+      "US": 10,
+      "EP": 1,
+      "WO": 2
+    },
+    "GE Vernova": {
+      "US": 10,
+      "KR": 2,
+      "CN": 1,
+      "EP": 10,
+      "WO": 10
+    },
+    "Eaton": {
+      "US": 14,
+      "CN": 1,
+      "EP": 5,
+      "WO": 7
+    },
+    "Caterpillar": {
+      "US": 14,
+      "CN": 5,
+      "EP": 3,
+      "WO": 3
+    },
+    "한국전력공사": {
+      "US": 1,
+      "KR": 106
+    },
+    "한국전력기술": {
+      "KR": 4,
+      "US": 1,
+      "EP": 1
+    },
+    "삼성전자": {
+      "EP": 22,
+      "US": 46,
+      "KR": 26,
+      "CN": 4,
+      "WO": 18
+    },
+    "그리드위즈": {
+      "KR": 3,
+      "WO": 2
+    },
+    "State Grid": {
+      "WO": 6,
+      "CN": 90
+    },
+    "Mitsubishi Electric": {
+      "CN": 4,
+      "WO": 25,
+      "US": 32,
+      "KR": 3,
+      "EP": 9
+    },
+    "Furukawa Electric": {
+      "US": 2,
+      "EP": 3
+    },
+    "HD현대일렉트릭": {
+      "US": 3,
+      "KR": 6,
+      "EP": 2,
+      "WO": 2
+    },
+    "효성중공업": {
+      "US": 1,
+      "EP": 1
+    },
+    "LS일렉트릭": {
+      "US": 7,
+      "KR": 17,
+      "WO": 12
+    },
+    "일진전기": {
+      "KR": 1,
+      "WO": 1
+    },
+    "대한전선": {
+      "KR": 5,
+      "WO": 1
+    },
+    "Huawei": {
+      "US": 51,
+      "CN": 26,
+      "EP": 75,
+      "WO": 43
+    },
+    "CATL": {
+      "US": 189,
+      "KR": 56,
+      "CN": 197,
+      "EP": 199,
+      "WO": 352
+    },
+    "Hitachi Energy": {
+      "US": 15,
+      "KR": 1,
+      "CN": 5,
+      "EP": 28,
+      "WO": 20
+    },
+    "Toshiba": {
+      "US": 12,
+      "CN": 1,
+      "WO": 2
+    },
+    "Panasonic": {
+      "US": 95,
+      "CN": 20,
+      "EP": 63,
+      "WO": 93
+    },
+    "Kyocera": {
+      "US": 4
+    },
+    "Schneider Electric": {
+      "US": 18,
+      "CN": 2,
+      "EP": 18
+    },
+    "Bosch": {
+      "US": 13,
+      "CN": 9,
+      "EP": 8,
+      "WO": 24
+    },
+    "Westinghouse": {
+      "US": 6,
+      "KR": 2,
+      "EP": 5,
+      "WO": 2
+    },
+    "Toyota": {
+      "US": 204,
+      "KR": 103,
+      "CN": 116,
+      "EP": 74,
+      "WO": 16
+    },
+    "Sumitomo Electric": {
+      "US": 21,
+      "CN": 2,
+      "EP": 2,
+      "WO": 29
+    },
+    "Fuji Electric": {
+      "US": 8,
+      "CN": 6,
+      "WO": 3
+    },
+    "Meidensha": {
+      "US": 1,
+      "WO": 1
+    },
+    "Siemens Energy": {
+      "US": 5,
+      "KR": 6,
+      "CN": 1,
+      "EP": 31,
+      "WO": 7
+    },
+    "Siemens Gamesa": {
+      "US": 15,
+      "KR": 1,
+      "CN": 6,
+      "EP": 32,
+      "WO": 16
+    },
+    "Siemens": {
+      "US": 32,
+      "KR": 7,
+      "CN": 9,
+      "EP": 82,
+      "WO": 37
+    },
+    "ABB": {
+      "US": 24,
+      "KR": 1,
+      "CN": 17,
+      "EP": 26,
+      "WO": 8
+    },
+    "Vestas": {
+      "US": 26,
+      "KR": 4,
+      "CN": 2,
+      "EP": 18,
+      "WO": 34
+    },
+    "Nordex": {
+      "US": 13,
+      "EP": 26,
+      "WO": 9
+    },
+    "Prysmian": {
+      "EP": 1
+    },
+    "Nexans": {
+      "US": 3,
+      "KR": 1,
+      "EP": 3
+    },
+    "Framatome": {
+      "US": 1,
+      "KR": 1,
+      "CN": 2,
+      "EP": 5,
+      "WO": 5
+    },
+    "Legrand": {
+      "KR": 1
+    },
+    "NuScale": {
+      "US": 3,
+      "KR": 2,
+      "EP": 1,
+      "WO": 2
+    },
+    "TerraPower": {
+      "US": 3,
+      "KR": 2
+    },
+    "Vertiv": {
+      "US": 20,
+      "CN": 7,
+      "EP": 20,
+      "WO": 2
+    },
+    "한국수력원자력": {
+      "US": 2,
+      "KR": 36,
+      "CN": 1,
+      "EP": 5,
+      "WO": 11
+    },
+    "두산에너빌리티": {
+      "US": 2,
+      "KR": 5,
+      "EP": 3,
+      "WO": 1
+    },
+    "LG에너지솔루션": {
+      "US": 291,
+      "KR": 735,
+      "CN": 95,
+      "EP": 696,
+      "WO": 429
+    },
+    "삼성SDI": {
+      "US": 370,
+      "KR": 473,
+      "CN": 138,
+      "EP": 252,
+      "WO": 110
+    },
+    "SK온": {
+      "US": 175,
+      "KR": 190,
+      "EP": 88,
+      "WO": 3
+    },
+    "CGN": {
+      "EP": 2
+    },
+    "Goldwind": {
+      "US": 1,
+      "KR": 2,
+      "CN": 5,
+      "EP": 6,
+      "WO": 17
+    },
+    "Ming Yang": {
+      "US": 1,
+      "WO": 1
+    },
+    "Envision": {
+      "US": 4,
+      "CN": 10,
+      "EP": 4,
+      "WO": 4
+    },
+    "BYD": {
+      "US": 10,
+      "KR": 10,
+      "CN": 22,
+      "EP": 21,
+      "WO": 42
+    },
+    "Hitachi": {
+      "US": 9,
+      "EP": 4
+    }
+  },
+  "updated": {
+    "한국전력공사": "2026-08-03",
+    "한국전력기술": "2026-08-03",
+    "HD현대일렉트릭": "2026-08-03",
+    "효성중공업": "2026-08-03",
+    "LS일렉트릭": "2026-08-03",
+    "삼성전자": "2026-08-03",
+    "일진전기": "2026-08-03",
+    "대한전선": "2026-08-03",
+    "그리드위즈": "2026-08-03",
+    "State Grid": "2026-08-03",
+    "Huawei": "2026-08-03",
+    "CATL": "2026-08-03",
+    "Hitachi Energy": "2026-08-04",
+    "Mitsubishi Electric": "2026-07-29",
+    "Toshiba": "2026-07-29",
+    "Panasonic": "2026-07-29",
+    "Kyocera": "2026-07-29",
+    "General Electric": "2026-08-03",
+    "GE Vernova": "2026-08-03",
+    "Eaton": "2026-08-03",
+    "Caterpillar": "2026-08-03",
+    "Schneider Electric": "2026-08-05",
+    "Bosch": "2026-08-05",
+    "두산에너빌리티": "2026-08-03",
+    "LG에너지솔루션": "2026-08-03",
+    "삼성SDI": "2026-08-03",
+    "Toyota": "2026-07-30",
+    "Sumitomo Electric": "2026-08-05",
+    "Furukawa Electric": "2026-08-05",
+    "Siemens": "2026-08-05",
+    "ABB": "2026-08-05",
+    "Westinghouse": "2026-08-03",
+    "Vestas": "2026-08-05",
+    "Fuji Electric": "2026-08-05",
+    "Meidensha": "2026-08-05",
+    "Siemens Energy": "2026-08-05",
+    "Siemens Gamesa": "2026-08-05",
+    "Nordex": "2026-07-31",
+    "Prysmian": "2026-07-31",
+    "Nexans": "2026-07-31",
+    "NKT": "2026-07-31",
+    "Framatome": "2026-07-31",
+    "Legrand": "2026-07-31",
+    "NuScale": "2026-08-03",
+    "TerraPower": "2026-08-03",
+    "Vertiv": "2026-08-03",
+    "한국수력원자력": "2026-08-03",
+    "SK온": "2026-08-03",
+    "CGN": "2026-08-03",
+    "Sungrow": "2026-08-03",
+    "LS전선": "2026-08-03",
+    "한화솔루션": "2026-08-03",
+    "Goldwind": "2026-08-04",
+    "Ming Yang": "2026-08-04",
+    "Envision": "2026-08-04",
+    "BYD": "2026-08-04",
+    "Hitachi": "2026-08-04"
+  }
+}
