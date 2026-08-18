@@ -163,8 +163,14 @@ SITE_ORG_URL = ("https://www.moip.go.kr/club/front/main/index/"
 # 하나의 문서로 본다(gh-pages 는 / 와 /index.html 두 주소로 같은 내용을 준다).
 SITE_URL = os.getenv("NEWS_SITE_URL",
                      "https://ahn0405-cpu.github.io/power-news-patents-archive/")
-# Google Search Console 소유 확인 토큰. 비워 두면 메타 태그를 넣지 않는다.
+# Google Search Console 소유 확인. 방식이 둘이고 콘솔에서 고른 쪽과 맞아야 한다.
+#   HTML 태그  → head 의 meta(아래 토큰)
+#   HTML 파일  → google<토큰>.html 파일을 사이트 루트에 두고, 그 안에
+#                "google-site-verification: <파일명>" 한 줄만 적는다.
+# 태그 쪽만 넣어 두고 콘솔에서 파일 방식을 고르면 '확인 파일을 찾을 수 없습니다' 가
+# 난다(실측) → 파일명을 넣어 두면 둘 다 만족한다.
 GSV_TOKEN = os.getenv("NEWS_GSV", "fgZguZl7oY-esN40KhbQKh6Os7yuky7QoGN-fQZLuIc")
+GSV_FILE = os.getenv("NEWS_GSV_FILE", "")   # 예: google1a2b3c4d5e6f.html
 
 # 운영 기관 CI. assets/ci.svg|png|jpg 중 먼저 발견되는 파일을 빌드 시점에 data URI 로
 # 인라인한다(사이트가 index.html 한 장으로 자족하는 구조라 외부 파일을 두지 않는다).
@@ -391,6 +397,12 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
 
     # 검색엔진용 최소 파일 두 개. 사이트가 index.html 한 장이라 sitemap 도 한 줄이다.
     # robots.txt 가 없으면 크롤러가 사이트맵 위치를 알 방법이 없다.
+    # HTML 파일 방식 소유 확인. 파일명이 곧 내용이라 형식이 단순하다.
+    if GSV_FILE:
+        name = GSV_FILE if GSV_FILE.endswith(".html") else GSV_FILE + ".html"
+        (site_dir / name).write_text(
+            f"google-site-verification: {name}\n", encoding="utf-8")
+
     (site_dir / "robots.txt").write_text(
         "User-agent: *\nAllow: /\nSitemap: " + SITE_URL.rstrip("/") + "/sitemap.xml\n",
         encoding="utf-8")
