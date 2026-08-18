@@ -14,6 +14,7 @@ fetch/CORS 불필요). 라이트/다크 자동, 필터 상태는 URL 해시에 �
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import timezone, timedelta
 from pathlib import Path
@@ -157,6 +158,13 @@ SITE_DEPT = "전기통신심사국 전기심사과"
 SITE_CLUB = "스마트전력 연구회"
 SITE_ORG_URL = ("https://www.moip.go.kr/club/front/main/index/"
                 "mainIndex.do?clubId=display")
+
+# 사이트 자기 주소. canonical·og:url·사이트맵이 같은 값을 가리켜야 검색엔진이
+# 하나의 문서로 본다(gh-pages 는 / 와 /index.html 두 주소로 같은 내용을 준다).
+SITE_URL = os.getenv("NEWS_SITE_URL",
+                     "https://ahn0405-cpu.github.io/power-news-patents-archive/")
+# Google Search Console 소유 확인 토큰. 비워 두면 메타 태그를 넣지 않는다.
+GSV_TOKEN = os.getenv("NEWS_GSV", "fgZguZl7oY-esN40KhbQKh6Os7yuky7QoGN-fQZLuIc")
 
 # 운영 기관 CI. assets/ci.svg|png|jpg 중 먼저 발견되는 파일을 빌드 시점에 data URI 로
 # 인라인한다(사이트가 index.html 한 장으로 자족하는 구조라 외부 파일을 두지 않는다).
@@ -372,10 +380,27 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                .replace("__ORGURL__", _esc(SITE_ORG_URL)) \
                .replace("__CLUB__", _esc(SITE_CLUB)) \
                .replace("__CI__", _ci_markup()) \
+               .replace("__GSV__", _esc(GSV_TOKEN)) \
+               .replace("__SITEURL__", _esc(SITE_URL)) \
                .replace("__CSS__", _CSS) \
                .replace("__JS__", _JS) \
                .replace("__FEED__", payload)
+    if not GSV_TOKEN:
+        html = re.sub(r'\n<meta name="google-site-verification"[^>]*>', "", html)
     (site_dir / "index.html").write_text(html, encoding="utf-8")
+
+    # 검색엔진용 최소 파일 두 개. 사이트가 index.html 한 장이라 sitemap 도 한 줄이다.
+    # robots.txt 가 없으면 크롤러가 사이트맵 위치를 알 방법이 없다.
+    (site_dir / "robots.txt").write_text(
+        "User-agent: *\nAllow: /\nSitemap: " + SITE_URL.rstrip("/") + "/sitemap.xml\n",
+        encoding="utf-8")
+    (site_dir / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{_esc(SITE_URL)}</loc>"
+        f"<lastmod>{generated[:10]}</lastmod>"
+        "<changefreq>daily</changefreq></url>\n"
+        "</urlset>\n", encoding="utf-8")
 
     # 이전 구조(patents.html)로 들어오는 링크 호환 → 앱의 특허 탭으로 이동
     (site_dir / "patents.html").write_text(_REDIRECT, encoding="utf-8")
@@ -844,6 +869,16 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
 <meta name="description" content="__TAGLINE__">
+<!-- Google Search Console 소유 확인. 검색 노출 자체를 만들어 주지는 않고,
+     '이 사이트가 내 것' 임을 확인해 색인 상태를 볼 수 있게 하는 표식이다. -->
+<meta name="google-site-verification" content="__GSV__">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="__SITEURL__">
+<meta property="og:type" content="website">
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__TAGLINE__">
+<meta property="og:url" content="__SITEURL__">
+<meta property="og:locale" content="ko_KR">
 <style>__CSS__</style></head>
 <body>
 <div class="wrap">
