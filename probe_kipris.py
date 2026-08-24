@@ -59,7 +59,18 @@ SERVICES = [
 ]
 # 키 질의 이름이 서비스 세대마다 다르다(accessKey / ServiceKey / serviceKey).
 # 이름이 틀리면 '인증 실패'로 돌아와 승인 안 된 서비스와 구분되지 않는다 → 전부 시험.
-KEY_PARAMS = ["accessKey", "ServiceKey", "serviceKey"]
+# 3차 실측: 같은 요청에 이름만 바꿔 보니 ServiceKey 만 파라미터 검사를 통과했다
+# (나머지는 '필수값 없음' 취급). 그래서 이 이름을 먼저 시험한다.
+KEY_PARAMS = ["ServiceKey", "accessKey", "serviceKey"]
+
+# resultCode 를 사람 말로. 코드만 남기면 로그를 봐도 다음 수가 안 정해진다.
+CODE_MEANS = {
+    "10": "요청 파라미터 오류 — 필수값이 없거나 이름이 틀렸다",
+    "31": "활용기간 만료 — 키는 인식됐고, 쓸 수 있는 기간이 아니다",
+    "20": "서비스 미신청 — 이 서비스가 승인 목록에 없다",
+    "22": "요청 한도 초과",
+    "30": "등록되지 않은 키",
+}
 
 # 경로 탐색에 쓸 대표 질의. 어느 세대에나 있는 오퍼레이션이라 기준으로 삼기 좋다.
 DISCOVERY = ("getBibliographyDetailInfoSearch", {"applicationNumber": "1020200000001"})
@@ -150,11 +161,18 @@ def _verdict(code: int, body: str, err: str) -> tuple[str, str]:
     # 파라미터 오류는 승인 문제가 아니다 — 서버가 우리 요청을 받아 해석까지 했다는
     # 뜻이라 오히려 '경로가 살아 있다'는 증거다. 2차 실행에서 이 둘을 뭉뚱그려
     # 열 개 전부 '미승인'으로 찍혔는데, 실제로는 질의 이름이 틀린 것이었다.
+    means = CODE_MEANS.get(rc, "")
+    detail = f"HTTP {code} · resultCode={rc or '-'} {msg or _squash(body, 100)}" \
+             + (f"  ({means})" if means else "")
     if "INVALID_REQUEST_PARAMETER" in up or rc == "10":
-        return "요청오류", f"HTTP {code} · resultCode={rc or '-'} {msg or _squash(body, 100)}"
+        return "요청오류", detail
+    # 기간 만료는 '키를 못 읽었다'가 아니라 '키를 읽었고 지금은 못 쓴다'는 뜻이다.
+    # 미승인과 섞으면 고칠 곳(코드냐, 포털 신청이냐)이 정반대로 잡힌다.
+    if "DEADLINE_HAS_EXPIRED" in up or rc == "31":
+        return "기간만료", detail
     if code in (401, 403) or "SERVICE_KEY" in up or "SERVICE ACCESS DENIED" in up \
        or "미신청" in body or "권한" in body or (rc and rc not in ("00", "0")):
-        return "미승인/키오류", f"HTTP {code} · resultCode={rc or '-'} {msg or _squash(body, 100)}"
+        return "미승인/키오류", detail
     if code != 200:
         return "기타오류", f"HTTP {code} · {_squash(body, 100)}"
     return "열림", f"resultCode={rc or '-'} {msg or ''}".strip()
@@ -202,7 +220,9 @@ def _discover() -> tuple[str, str, str] | None:
                     return base, svc, kp
                 # 서버가 우리 요청을 해석했다는 응답이면 '경로는 맞다'는 증거다.
                 # 요청오류가 인증오류보다 더 앞선 신호다(파라미터만 고치면 된다).
-                rank = {"요청오류": 2, "미승인/키오류": 1}.get(verdict, 0)
+                # 기간만료·미승인은 서버가 **키를 읽었다**는 뜻이라 가장 앞선 신호다.
+                # 요청오류는 키를 읽기도 전에 걸린 것일 수 있다(3차 실측이 그랬다).
+                rank = {"기간만료": 3, "미승인/키오류": 2, "요청오류": 1}.get(verdict, 0)
                 if rank and (fallback is None or rank > fallback[0]):
                     fallback = (rank, base, svc, kp)
     return fallback[1:] if fallback else None
@@ -262,8 +282,9 @@ def main() -> int:
         if keyless and verdict == "미승인/키오류":
             verdict = "경로확인"
         extra = _count(body) if verdict == "열림" else ""
-        mark = {"열림": "✅", "경로확인": "🔎", "요청오류": "🛠️", "미승인/키오류": "🔒",
-                "경로없음": "❓", "연결안됨": "⛔", "기타오류": "⚠️"}.get(verdict, "·")
+        mark = {"열림": "✅", "경로확인": "🔎", "요청오류": "🛠️", "기간만료": "⏳",
+                "미승인/키오류": "🔒", "경로없음": "❓", "연결안됨": "⛔",
+                "기타오류": "⚠️"}.get(verdict, "·")
         print(f"\n {mark} [{verdict}] {label}")
         print(f"    {path}")
         print(f"    {why}" + (f" · {extra}" if extra else ""))
@@ -282,8 +303,8 @@ def main() -> int:
     print(f"\n열린 서비스 {len(ok)}개 / 시험 {len(rows)}개 · "
           f"기준 {base}/{svc} (키질의={kp})")
     print("판정 읽는 법:  ✅ 쓸 수 있다 · 🔎 경로는 맞다(키 없이 확인) · "
-          "🛠️ 경로는 살아 있고 우리 요청이 틀렸다(파라미터 교정) · "
-          "🔒 경로는 맞고 승인이 없다(추가 신청) · ❓ 그 경로가 없다 · "
+          "🛠️ 우리 요청이 틀렸다(파라미터 교정) · ⏳ 키는 인식됐고 활용기간이 아니다"
+          "(포털에서 기간 확인) · 🔒 승인이 없다(추가 신청) · ❓ 그 경로가 없다 · "
           "⛔ 연결 자체가 안 된다")
     return 0
 
