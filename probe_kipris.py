@@ -173,10 +173,15 @@ def _live_base() -> str | None:
 
 def main() -> int:
     print("KIPRISplus 프로브 — 무엇이 열리는지 실측\n" + "=" * 66)
-    print(f"키 길이: {len(KEY)}자" + ("  ← 0자면 시크릿이 전달되지 않은 것" if not KEY else ""))
-    if not KEY:
-        print("KIPRIS_KEY 가 비어 있습니다. Secrets 탭에 KIPRIS_KEY 로 등록했는지 확인하세요.")
-        return 1
+    keyless = not KEY
+    print(f"키 길이: {len(KEY)}자" + ("  ← 0자면 시크릿이 전달되지 않은 것" if keyless else ""))
+    if keyless:
+        # 키가 없어도 ①연결 과 ②이름 은 답할 수 있다 — 오히려 그게 값싸다.
+        # 이름이 맞는 엔드포인트는 키가 틀리면 '인증키 오류'를 돌려주는데, 그 응답
+        # 자체가 "이 이름은 존재한다"는 증거다(없는 이름은 404/SERVICE ERROR).
+        # 그래서 시크릿 등록 전에 미리 돌려 후보 목록을 정리해 둘 수 있다.
+        print("KIPRIS_KEY 가 비어 있습니다 → ③승인여부는 판정하지 않고, "
+              "①연결·②이름까지만 확인합니다.")
 
     print("\n① 연결 확인 — 러너에서 KIPRIS 서버에 닿는가")
     base = _live_base()
@@ -191,18 +196,23 @@ def main() -> int:
     good_param = ""
     rows: list[tuple[str, str, str, str]] = []
 
-    print("\n②③ 서비스별 — 이름이 맞는가 / 이 키로 승인돼 있는가")
+    print("\n②③ 서비스별 — 이름이 맞는가"
+          + ("" if keyless else " / 이 키로 승인돼 있는가"))
     for label, path, params in _paths():
         # 키 질의 이름이 정해지면 그 뒤로는 그것만 쓴다(요청 수를 아낀다).
         tries = [good_param] if good_param else key_params
         best = None
         for kp in tries:
             q = dict(params)
-            q[kp] = KEY
+            q[kp] = KEY or "NO-KEY-PROBE"
             url = f"{base}/{path}?" + urllib.parse.urlencode(q)
             code, body, err = _fetch(url)
             verdict, why = _verdict(code, body, err)
-            if best is None or verdict == "열림":
+            # 키가 없을 때의 '인증 오류'는 실패가 아니라 **이름이 맞다는 증거**다.
+            # 그대로 🔒 로 찍으면 '승인이 없다'로 읽혀 정반대 결론이 난다.
+            if keyless and verdict == "미승인/키오류":
+                verdict = "이름확인"
+            if best is None or verdict in ("열림", "이름확인"):
                 best = (verdict, why, body, kp)
             if verdict == "열림":
                 good_param = good_param or kp
@@ -211,8 +221,8 @@ def main() -> int:
                 break            # 이름이 틀린 건 키 이름을 바꿔도 그대로다
         verdict, why, body, kp = best
         extra = _count(body) if verdict == "열림" else ""
-        mark = {"열림": "✅", "미승인/키오류": "🔒", "이름틀림": "❓",
-                "연결안됨": "⛔", "기타오류": "⚠️"}.get(verdict, "·")
+        mark = {"열림": "✅", "이름확인": "🔎", "미승인/키오류": "🔒",
+                "이름틀림": "❓", "연결안됨": "⛔", "기타오류": "⚠️"}.get(verdict, "·")
         print(f"\n {mark} [{verdict}] {label}")
         print(f"    {path}   (키질의={kp})")
         print(f"    {why}" + (f" · {extra}" if extra else ""))
@@ -226,10 +236,16 @@ def main() -> int:
     for mark, verdict, label, path in rows:
         print(f"  {mark} {verdict:12s} {label}  [{path}]")
     ok = [r for r in rows if r[1] == "열림"]
-    print(f"\n열린 서비스 {len(ok)}개 / 시험 {len(rows)}개"
-          + (f" · 키 질의 이름 = {good_param}" if good_param else ""))
-    print("판정 읽는 법:  ✅ 쓸 수 있다 · 🔒 이름은 맞고 승인이 없다(추가 신청) · "
-          "❓ 이름이 틀렸다(후보 교체) · ⛔ 연결 자체가 안 된다")
+    named = [r for r in rows if r[1] == "이름확인"]
+    if keyless:
+        print(f"\n이름이 확인된 서비스 {len(named)}개 / 시험 {len(rows)}개"
+              " — 승인 여부는 키를 넣고 다시 돌려야 갈립니다.")
+    else:
+        print(f"\n열린 서비스 {len(ok)}개 / 시험 {len(rows)}개"
+              + (f" · 키 질의 이름 = {good_param}" if good_param else ""))
+    print("판정 읽는 법:  ✅ 쓸 수 있다 · 🔎 이름은 있다(키 없이 확인) · "
+          "🔒 이름은 맞고 승인이 없다(추가 신청) · ❓ 이름이 틀렸다(후보 교체) · "
+          "⛔ 연결 자체가 안 된다")
     return 0
 
 
