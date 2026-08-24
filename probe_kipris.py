@@ -147,6 +147,11 @@ def _verdict(code: int, body: str, err: str) -> tuple[str, str]:
     up = body.upper()
     if code == 404 or "SERVICE ERROR" in up or "NO_OPENAPI_SERVICE" in up:
         return "경로없음", f"HTTP {code} · {msg or _squash(body, 100)}"
+    # 파라미터 오류는 승인 문제가 아니다 — 서버가 우리 요청을 받아 해석까지 했다는
+    # 뜻이라 오히려 '경로가 살아 있다'는 증거다. 2차 실행에서 이 둘을 뭉뚱그려
+    # 열 개 전부 '미승인'으로 찍혔는데, 실제로는 질의 이름이 틀린 것이었다.
+    if "INVALID_REQUEST_PARAMETER" in up or rc == "10":
+        return "요청오류", f"HTTP {code} · resultCode={rc or '-'} {msg or _squash(body, 100)}"
     if code in (401, 403) or "SERVICE_KEY" in up or "SERVICE ACCESS DENIED" in up \
        or "미신청" in body or "권한" in body or (rc and rc not in ("00", "0")):
         return "미승인/키오류", f"HTTP {code} · resultCode={rc or '-'} {msg or _squash(body, 100)}"
@@ -195,10 +200,12 @@ def _discover() -> tuple[str, str, str] | None:
                     print(f"      {why}")
                 if verdict == "열림":
                     return base, svc, kp
-                # 인증 오류는 '경로는 맞다'는 증거다 — 키 질의 이름만 더 시험하면 된다.
-                if verdict == "미승인/키오류" and fallback is None:
-                    fallback = (base, svc, kp)
-    return fallback
+                # 서버가 우리 요청을 해석했다는 응답이면 '경로는 맞다'는 증거다.
+                # 요청오류가 인증오류보다 더 앞선 신호다(파라미터만 고치면 된다).
+                rank = {"요청오류": 2, "미승인/키오류": 1}.get(verdict, 0)
+                if rank and (fallback is None or rank > fallback[0]):
+                    fallback = (rank, base, svc, kp)
+    return fallback[1:] if fallback else None
 
 
 def _paths(svc: str) -> list[tuple[str, str, dict]]:
@@ -230,6 +237,22 @@ def main() -> int:
     base, svc, kp = found
     print(f"\n  → 기준: {base}/{svc}  (키질의={kp})")
 
+    # 키 질의 이름이 틀리면 서버는 '필수 파라미터 없음'으로 답한다 — 파라미터가
+    # 틀린 것과 응답이 똑같아 구분되지 않는다. 같은 요청에 이름만 바꿔 나란히
+    # 찍어 두면 어느 쪽이 원인인지 눈으로 갈린다(응답 XML 이 짧아 값싸다).
+    op, dparams = DISCOVERY
+    print("\n   키 질의 이름 비교 — 같은 요청, 이름만 바꿔서")
+    for cand in KEY_PARAMS:
+        code, body, err = _fetch(_url(base, f"{svc}/{op}", dparams, cand))
+        v, why = _verdict(code, body, err)
+        print(f"     · {cand:11s} [{v}] {why}")
+    # 키를 아예 빼면 '키가 없을 때의 오류'가 무엇인지 알 수 있다 → 위 셋과 비교해
+    # 우리가 보낸 키가 인식은 되고 있는지 판단할 근거가 된다.
+    nokey = f"{base}/{svc}/{op}?" + urllib.parse.urlencode(dparams)
+    code, body, err = _fetch(nokey)
+    v, why = _verdict(code, body, err)
+    print(f"     · (키 없음)   [{v}] {why}")
+
     rows: list[tuple[str, str, str, str]] = []
     print("\n③ 서비스별 — 이 키로 승인돼 있는가")
     for label, path, params in _paths(svc):
@@ -239,12 +262,14 @@ def main() -> int:
         if keyless and verdict == "미승인/키오류":
             verdict = "경로확인"
         extra = _count(body) if verdict == "열림" else ""
-        mark = {"열림": "✅", "경로확인": "🔎", "미승인/키오류": "🔒",
+        mark = {"열림": "✅", "경로확인": "🔎", "요청오류": "🛠️", "미승인/키오류": "🔒",
                 "경로없음": "❓", "연결안됨": "⛔", "기타오류": "⚠️"}.get(verdict, "·")
         print(f"\n {mark} [{verdict}] {label}")
         print(f"    {path}")
         print(f"    {why}" + (f" · {extra}" if extra else ""))
-        if verdict == "열림":
+        # 응답 본문은 판정과 무관하게 찍는다. 오류 XML 도 짧고, 거기에 '어느
+        # 파라미터가 문제인지'가 적혀 오는 경우가 있어 다음 수를 정하는 근거가 된다.
+        if verdict != "경로없음":
             print("    ── 응답 앞부분 " + "-" * 40)
             print("    " + _squash(body, HEAD))
         rows.append((mark, verdict, label, path))
@@ -257,6 +282,7 @@ def main() -> int:
     print(f"\n열린 서비스 {len(ok)}개 / 시험 {len(rows)}개 · "
           f"기준 {base}/{svc} (키질의={kp})")
     print("판정 읽는 법:  ✅ 쓸 수 있다 · 🔎 경로는 맞다(키 없이 확인) · "
+          "🛠️ 경로는 살아 있고 우리 요청이 틀렸다(파라미터 교정) · "
           "🔒 경로는 맞고 승인이 없다(추가 신청) · ❓ 그 경로가 없다 · "
           "⛔ 연결 자체가 안 된다")
     return 0
