@@ -1,0 +1,56 @@
+# KIPRISplus 로 무엇이 열리는지 확인 (수동 실행 전용).
+#
+# KIPRISplus 는 서비스 단위로 승인된다 — 키 하나가 전부를 열지 않는다. 어느 것이
+# 열렸는지 모르는 채 수집기를 짜면 매주 실패를 기다리게 된다(OPS 에서 이미 겪었다).
+# 개발 환경은 plus.kipris.or.kr 이 막혀 있어(세션 프록시 허용목록) 여기서 돌린다.
+#
+# OPS 는 건드리지 않는다 — 이 워크플로는 KIPRIS 만 두드린다.
+name: KIPRISplus 확인 (수동)
+
+on:
+  workflow_dispatch:
+    inputs:
+      paths:
+        description: "서비스/오퍼레이션[?추가질의] 공백 구분 (비우면 기본 후보 전부)"
+        required: false
+        default: ""
+      keyparam:
+        description: "키 질의 이름 고정 (accessKey / ServiceKey, 비우면 자동 탐색)"
+        required: false
+        default: ""
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # 시크릿이 비어 오면 이름이 다른 건지 탭을 잘못 고른 건지 로그로는 알 수 없다
+      # → 흔한 이름의 '길이'만 찍는다(값은 찍지 않는다).
+      - name: 시크릿 이름 확인 (값은 찍지 않음)
+        env:
+          CTRL: ${{ secrets.OPS_KEY }}          # 대조군 — 이미 잘 도는 시크릿
+          A: ${{ secrets.KIPRIS_KEY }}
+          B: ${{ secrets.KIPRISPLUS_KEY }}
+          C: ${{ secrets.KIPRIS_API_KEY }}
+          D: ${{ secrets.KIPRIS_ACCESS_KEY }}
+          VA: ${{ vars.KIPRIS_KEY }}
+        run: |
+          echo "[대조군] OPS_KEY: ${#CTRL}자  ← 0자면 시크릿 자체가 이 저장소에 안 붙은 것"
+          echo "[Secrets 탭]"
+          for n in A B C D; do v=$(eval echo \$$n); printf '  %s: %s자\n' "$n" "${#v}"; done
+          echo "  A=KIPRIS_KEY B=KIPRISPLUS_KEY C=KIPRIS_API_KEY D=KIPRIS_ACCESS_KEY"
+          echo "[Variables 탭] KIPRIS_KEY: ${#VA}자  ← 여기만 0이 아니면 탭을 잘못 고른 것"
+
+      - name: KIPRIS 두드려 보기
+        env:
+          KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}
+          KIPRIS_PATHS: ${{ inputs.paths }}
+          KIPRIS_KEYPARAM: ${{ inputs.keyparam }}
+        run: python probe_kipris.py
