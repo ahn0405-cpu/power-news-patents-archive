@@ -91,6 +91,10 @@ KR_BUDGET = float(os.getenv("PATENT_KR_BUDGET", "240"))     # 초, 넘으면 접
 # ※ 2026-07-27 프로브로 전 출원인 검색어를 실측 확인했다. Dynapower·산일전기·제룡전기는
 #   '검색어가 틀린 것이 아니라'(각각 45·56·56건이 색인에 있음) 최근 90일 전력 CPC 공개가
 #   0건이라 안 잡힌다 → 그대로 두고, 공개가 생기면 자동으로 들어온다.
+# KIPRIS 는 한글 법인명을 준다('주식회사 엘지에너지솔루션', '도요타 지도샤(주)').
+# 영문 별칭과 음절이 달라(엘지 ≠ LG) 정규화로는 못 붙는다 — 첫 실전 수집에서
+# 같은 회사가 둘로 갈렸다(LG에너지솔루션 2264 + 주식회사 엘지에너지솔루션 502).
+# 그래서 q 에 한글 표기를 함께 적는다(한국수력원자력·산일전기에 이미 쓰던 방식).
 APPLICANTS = [
     # 🇺🇸 미국
     {"name": "General Electric", "region": "US", "flag": "🇺🇸", "q": "General Electric"},      # ✔
@@ -116,9 +120,12 @@ APPLICANTS = [
     {"name": "두산에너빌리티", "region": "KR", "flag": "🇰🇷",
      "q": ["Doosan Enerbility", "Doosan Heavy Industries"]},
     {"name": "LS일렉트릭", "region": "KR", "flag": "🇰🇷", "q": "LS Electric"},                    # ✔
-    {"name": "삼성전자", "region": "KR", "flag": "🇰🇷", "q": "Samsung Electronics"},              # ✔
-    {"name": "LG에너지솔루션", "region": "KR", "flag": "🇰🇷", "q": "LG Energy Solution"},
-    {"name": "삼성SDI", "region": "KR", "flag": "🇰🇷", "q": "Samsung SDI"},
+    {"name": "삼성전자", "region": "KR", "flag": "🇰🇷",
+     "q": ["Samsung Electronics", "삼성전자"]},              # ✔
+    {"name": "LG에너지솔루션", "region": "KR", "flag": "🇰🇷",
+     "q": ["LG Energy Solution", "엘지에너지솔루션", "LG에너지솔루션"]},
+    {"name": "삼성SDI", "region": "KR", "flag": "🇰🇷",
+     "q": ["Samsung SDI", "삼성에스디아이", "삼성SDI"]},
     {"name": "SK온", "region": "KR", "flag": "🇰🇷", "q": ["SK On", "에스케이온"]},
     {"name": "일진전기", "region": "KR", "flag": "🇰🇷", "q": "Iljin Electric"},
     {"name": "대한전선", "region": "KR", "flag": "🇰🇷", "q": "Taihan"},
@@ -133,8 +140,9 @@ APPLICANTS = [
     {"name": "그리드위즈", "region": "KR", "flag": "🇰🇷", "q": "Gridwiz"},
     # 🇨🇳 중국
     {"name": "State Grid", "region": "CN", "flag": "🇨🇳", "q": "State Grid Corporation of China"},  # ✔
-    {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": "Huawei"},                          # ✔
-    {"name": "CATL", "region": "CN", "flag": "🇨🇳", "q": "Contemporary Amperex Technology"},   # ✔
+    {"name": "Huawei", "region": "CN", "flag": "🇨🇳", "q": ["Huawei", "화웨이"]},                          # ✔
+    {"name": "CATL", "region": "CN", "flag": "🇨🇳",
+     "q": ["Contemporary Amperex Technology", "엠퍼렉스"]},   # ✔
     {"name": "CNNC", "region": "CN", "flag": "🇨🇳", "q": "China National Nuclear"},   # 중국핵공업집단
     {"name": "CGN", "region": "CN", "flag": "🇨🇳", "q": "China General Nuclear"},     # 중국광핵집단
     {"name": "Sungrow", "region": "CN", "flag": "🇨🇳", "q": "Sungrow"},               # 인버터·ESS PCS
@@ -142,19 +150,21 @@ APPLICANTS = [
     {"name": "Goldwind", "region": "CN", "flag": "🇨🇳", "q": "Goldwind"},
     {"name": "Ming Yang", "region": "CN", "flag": "🇨🇳", "q": "Mingyang"},
     {"name": "Envision", "region": "CN", "flag": "🇨🇳", "q": "Envision Energy"},
-    {"name": "BYD", "region": "CN", "flag": "🇨🇳", "q": "BYD"},
+    {"name": "BYD", "region": "CN", "flag": "🇨🇳", "q": ["BYD", "비와이디"]},
     # 🇯🇵 일본
     {"name": "Hitachi Energy", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Energy"},          # ✔
     # 히타치제작소(Hitachi, Ltd.). 그냥 "Hitachi" 로 두면 위 Hitachi Energy 까지 걸려
     # 총계가 부풀려지므로 어구로 묶어 분리한다(목록 중복은 공개번호 dedup 이 막지만
     # stats 의 총계는 출원인별 독립 질의라 겹치면 그대로 부푼다).
     {"name": "Hitachi", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Ltd"},
-    {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵", "q": "Mitsubishi Electric"},# ✔
-    {"name": "Toshiba", "region": "JP", "flag": "🇯🇵", "q": "Toshiba"},                        # ✔
-    {"name": "Panasonic", "region": "JP", "flag": "🇯🇵", "q": "Panasonic"},                    # ✔
+    {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵",
+     "q": ["Mitsubishi Electric", "미쓰비시덴키", "미쓰비시 전기"]},# ✔
+    {"name": "Toshiba", "region": "JP", "flag": "🇯🇵", "q": ["Toshiba", "도시바"]},                        # ✔
+    {"name": "Panasonic", "region": "JP", "flag": "🇯🇵", "q": ["Panasonic", "파나소닉"]},                    # ✔
     {"name": "Kyocera", "region": "JP", "flag": "🇯🇵", "q": "Kyocera"},
-    {"name": "Toyota", "region": "JP", "flag": "🇯🇵", "q": "Toyota"},
-    {"name": "Sumitomo Electric", "region": "JP", "flag": "🇯🇵", "q": "Sumitomo Electric"},    # ✔
+    {"name": "Toyota", "region": "JP", "flag": "🇯🇵", "q": ["Toyota", "도요타"]},
+    {"name": "Sumitomo Electric", "region": "JP", "flag": "🇯🇵",
+     "q": ["Sumitomo Electric", "스미토모"]},    # ✔
     {"name": "Furukawa Electric", "region": "JP", "flag": "🇯🇵", "q": "Furukawa Electric"},
     {"name": "Fuji Electric", "region": "JP", "flag": "🇯🇵", "q": "Fuji Electric"},   # 전력반도체·인버터
     {"name": "Meidensha", "region": "JP", "flag": "🇯🇵", "q": "Meidensha"},
@@ -171,10 +181,12 @@ APPLICANTS = [
     # (_collect_order) 회전이 이 사이를 끊고 들어오지 못하게 막는다.
     {"name": "Siemens", "region": "EU", "flag": "🇩🇪", "seq": True,
      "q": ["Siemens Aktiengesellschaft", "Siemens AG"]},                                      # ✔
-    {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": "ABB"},                                # ✔
-    {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷", "q": "Schneider Electric"},  # ✔
-    {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": "Robert Bosch"},
-    {"name": "Vestas", "region": "EU", "flag": "🇩🇰", "q": "Vestas Wind Systems"},
+    {"name": "ABB", "region": "EU", "flag": "🇨🇭", "q": ["ABB", "에이비비"]},                                # ✔
+    {"name": "Schneider Electric", "region": "EU", "flag": "🇫🇷",
+     "q": ["Schneider Electric", "슈나이더"]},  # ✔
+    {"name": "Bosch", "region": "EU", "flag": "🇩🇪", "q": ["Robert Bosch", "보쉬"]},
+    {"name": "Vestas", "region": "EU", "flag": "🇩🇰",
+     "q": ["Vestas Wind Systems", "베스타스"]},
     {"name": "Nordex", "region": "EU", "flag": "🇩🇪", "q": "Nordex"},
     {"name": "Prysmian", "region": "EU", "flag": "🇮🇹", "q": "Prysmian"},     # 해저·초고압 케이블
     {"name": "Nexans", "region": "EU", "flag": "🇫🇷", "q": "Nexans"},

@@ -133,9 +133,24 @@ def seed_stats(store: dict, weeks: dict[str, dict]) -> int:
 
 
 def merge_stats(store: dict, fresh: dict | None, today: str = "") -> int:
-    """새로 받은 집계를 병합. 반환: 갱신된 출원인 수."""
+    """새로 받은 집계를 병합. 반환: 갱신된 출원인 수.
+
+    병합인 이유: OPS 는 쿼터 때문에 한 실행이 출원인 일부만 가져왔다. 통째로
+    대입하면 지난 실행의 정상 값이 지워진다(실측으로 한 번 겪었다).
+
+    그런데 수집기가 **전수**를 가져오면 병합이 오히려 해가 된다. 성격이 다른 옛
+    값이 남아 새 값과 한 표에 섞이기 때문이다. 실제로 KIPRIS 첫 실행 뒤 stats 에
+    OPS 시절 값(전 세계·CPC 기준)과 KIPRIS 값(국내·IPC 기준)이 뒤섞여 Siemens
+    183 같은 옛 수치가 그대로 남았다. 두 값은 단위가 달라 나란히 두면 랭킹과
+    경쟁 구도가 거짓이 된다.
+    → 수집기가 replaceTotals 를 세우면 그 실행의 값으로 갈아 끼운다.
+    """
     if not fresh:
         return 0
+    if fresh.get("replaceTotals"):
+        had = len(store.get("totals") or {})
+        store["totals"], store["updated"] = {}, {}
+        print(f"  집계 초기화: 옛 출원인 {had}곳을 버리고 이번 전수 결과로 대체")
     n = 0
     for name, v in (fresh.get("totals") or {}).items():
         store["totals"][name] = v

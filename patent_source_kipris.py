@@ -33,6 +33,7 @@ CPC 와 IPC 가 같은 코드라 영향이 없다.
 """
 from __future__ import annotations
 
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -137,13 +138,45 @@ for _ap in cfg.APPLICANTS:
 _ALIAS.sort(key=lambda x: -len(x[0]))       # 긴 표기를 먼저 본다
 
 
+# 법인 형태 표기. 같은 회사가 '주식회사 엘지에너지솔루션' 과 'LG에너지솔루션' 으로
+# 따로 세어지면 랭킹이 갈라진다(첫 실행에서 실제로 그랬다: 2264 + 502).
+_LEGAL = re.compile(
+    r"(주식회사|㈜|\(주\)|유한회사|합자회사|재단법인|사단법인|학교법인"
+    r"|CO\.,?\s*LTD\.?|CO\.|LTD\.?|INC\.?|CORP(ORATION)?\.?|GMBH|A\.?G\.?"
+    r"|S\.?A\.?|B\.?V\.?|LLC|PLC|리미티드|씨오\.?,?)", re.I)
+
+
+def _canon(name: str) -> str:
+    """비교용 정규화 — 법인 형태·괄호·공백·구두점을 걷어낸다."""
+    s = _LEGAL.sub(" ", name or "")
+    s = re.sub(r"[()\[\]{}·,.\-_'\"]+", " ", s)
+    return re.sub(r"\s+", "", s).lower()
+
+
+def _split_applicants(raw: str) -> list[str]:
+    """KIPRIS 는 공동출원인을 '|' 로 이어 준다(실측: '현대자동차주식회사|기아 주식회사').
+
+    통째로 두면 그 조합이 하나의 '출원인'이 되어 랭킹에도 매트릭스에도 잘못 들어간다.
+    """
+    parts = [p.strip() for p in (raw or "").split("|")]
+    return [p for p in parts if p]
+
+
 def _identify(name: str) -> tuple[str, str, str]:
-    """(표시명, 지역, 국기). 큐레이션에 없으면 이름 그대로 · KR."""
-    low = (name or "").lower()
+    """(표시명, 지역, 국기). 큐레이션에 없으면 이름 그대로 · KR.
+
+    KIPRIS 는 한글 법인명을 준다 — '주식회사 엘지에너지솔루션', '도요타 지도샤(주)',
+    '컨템포러리 엠퍼렉스 테크놀로지 씨오., 리미티드'. 별칭표가 영문 위주라 그대로는
+    안 붙어 같은 회사가 둘로 갈렸다. 법인 형태를 걷어내고 다시 맞춰 본다.
+    """
+    raw = (name or "").strip()
+    low, canon = raw.lower(), _canon(raw)
     for token, ap in _ALIAS:
-        if token and token in low:
+        if not token:
+            continue
+        if token in low or _canon(token) and _canon(token) in canon:
             return ap["name"], ap["region"], ap["flag"]
-    return (name or "미상"), "KR", "🇰🇷"
+    return (raw or "미상"), "KR", "🇰🇷"
 
 
 def _normalize(item: ET.Element, cat_key: str) -> dict | None:
@@ -153,7 +186,10 @@ def _normalize(item: ET.Element, cat_key: str) -> dict | None:
         return None
     ipcs = _ipcs(_text(item, "ipcNumber"))
     raw_name = _text(item, "applicantName")
-    name, region, flag = _identify(raw_name)
+    # 공동출원은 '|' 로 이어져 온다 → 대표(첫) 출원인을 그 특허의 출원인으로 본다.
+    # 전부를 항목으로 쪼개면 한 특허가 여러 번 세어져 총계가 부푼다.
+    firsts = _split_applicants(raw_name)
+    name, region, flag = _identify(firsts[0] if firsts else raw_name)
     # 초록은 카드 미리보기용으로만 쓴다 — 길면 화면이 무너진다.
     snippet = _text(item, "astrtCont")
     return {
@@ -345,8 +381,10 @@ def _live_collect(today: datetime) -> tuple[list[dict], dict]:
               " — 이 분야의 출원인 총계는 전수가 아니다(KIPRIS_PER_CAT 를 올릴 것)")
 
     print(f"  합계 {len(collected)}건 · 출원인 {len(totals)}곳")
+    # 이 수집기는 기간 안의 모집단을 전수로 가져온다 → 집계는 병합이 아니라 대체다.
+    # 병합하면 OPS 시절 값(전 세계·CPC 기준)이 남아 단위가 다른 수치와 한 표에 섞인다.
     return collected, {"totals": totals, "categoryTotals": cat_totals,
-                       "truncated": short}
+                       "truncated": short, "replaceTotals": True}
 
 
 # ── 계약 맞추기 ──────────────────────────────────────────────────

@@ -144,6 +144,28 @@ def _kipris_checks() -> None:
         # 총계는 따로 조회하지 않고 모은 것을 센다 — 그 약속이 지켜지는지 본다.
         check(sum(stats["totals"].values()) == len(items),
               "출원인 총계의 합 = 수집 건수 (표본과 전수가 어긋나지 않는다)")
+        # 전수를 가져오므로 집계는 병합이 아니라 대체여야 한다. 병합하면 OPS 시절
+        # 값(전 세계·CPC 기준)이 남아 단위가 다른 수치와 한 표에 섞인다(첫 실전
+        # 실행에서 실제로 그랬다 — Siemens 183 같은 옛 수치가 그대로 남았다).
+        check(stats.get("replaceTotals") is True,
+              "집계를 대체로 표시한다 (옛 OPS 수치가 섞이지 않는다)")
+        import patent_archive as pa
+        store = {"totals": {"Siemens": 183}, "updated": {"Siemens": "2026-08-03"},
+                 "offices": {}}
+        pa.merge_stats(store, stats, "2026-08-25")
+        check("Siemens" not in store["totals"] or store["totals"]["Siemens"] != 183,
+              "merge_stats 가 옛 값을 실제로 버린다")
+
+        # 공동출원('|')과 한글 법인명이 같은 회사를 둘로 가르면 랭킹이 거짓이 된다.
+        check(ks._split_applicants("현대자동차주식회사|기아 주식회사")
+              == ["현대자동차주식회사", "기아 주식회사"],
+              "공동출원인을 '|' 로 나눈다")
+        for raw, want in (("주식회사 엘지에너지솔루션", "LG에너지솔루션"),
+                          ("삼성에스디아이 주식회사", "삼성SDI"),
+                          ("도요타 지도샤(주)", "Toyota"),
+                          ("컨템포러리 엠퍼렉스 테크놀로지 씨오., 리미티드", "CATL")):
+            check(ks._identify(raw)[0] == want,
+                  f"한글 법인명이 붙는다: {raw} → {want}")
         check(all(p.get("openDate") for p in calls),
               "모든 질의에 공개일 범위가 들어간다 (기간 없이 전수를 긁지 않는다)")
         check(all("~" in p["openDate"] for p in calls),
