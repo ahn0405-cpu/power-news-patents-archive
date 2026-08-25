@@ -89,7 +89,8 @@ DISCOVERY_PARAMS = {"word": "센서", "year": "0"}
 # [문서] = 명세서에서 그대로 옮긴 것 · [추측] = 아직 근거 없는 것.
 # 섞어 두면 실패했을 때 '없는 이름이라 그런지, 승인이 없어 그런지'를 또 헷갈린다.
 _KR = "patUtiModInfoSearchSevice"          # 국내 공보 (kipo-api/kipi)
-_FG = "ForeignPatentGeneralSearchService"  # 해외특허 (openapi/rest)
+_FG = "ForeignPatentGeneralSearchService"   # 해외 일반검색 (openapi/rest)
+_FGA = "ForeignPatentAdvancedSearchService" # 해외 항목별검색 — 분류·출원인·기간
 # 항목은 (설명, 경로, 질의) 또는 (설명, 경로, 질의, 키질의이름).
 # 키 질의 이름이 계열마다 다르다 — kipo-api 는 ServiceKey 로 열렸고, openapi/rest
 # 는 같은 키를 ServiceKey 로 보내자 'Invalid AccessKey Error'(30) 를 돌려줬다.
@@ -123,26 +124,30 @@ PROBES = [
      {"searchWord": "power converter", "searchWordRange": "10",
       "currentPage": "1", "collectionValues": "US"}, "accessKey"),
 
-    # ── 해외 '항목별검색' 오퍼레이션 이름 찾기 ──────────────────────
-    # 단어검색은 검색어 하나만 받는다. 8대 분야 매트릭스를 세계 축으로 되살리려면
-    # 분류(IPC/CPC)로 조회해야 하는데, 그건 명세의 '항목별검색' 탭에 있다
-    # (목록에서 '30. CPC 검색'을 봤지만 오퍼레이션 이름·파라미터는 못 봤다).
-    # 없는 이름이면 포털 HTML 이 와서 '경로없음'으로 갈리므로, 후보를 훑어도
-    # 판정이 오염되지 않는다.
-    *[(f"[탐색] 해외 항목별검색 후보 — {op}",
-       f"http://plus.kipris.or.kr/openapi/rest/{_FG}/{op}",
-       {"ipcNumber": "H02M", "currentPage": "1", "collectionValues": "US"},
-       "accessKey")
-      for op in ("advancedSearch", "itemSearch", "freeSearch", "allSearch",
-                 "ipcSearch", "cpcSearch", "getAdvancedSearch")],
-    # 서비스 이름 자체가 다를 수도 있다(일반검색만 General 인 구조).
-    *[(f"[탐색] 해외 항목별검색 서비스 후보 — {svc}",
-       f"http://plus.kipris.or.kr/openapi/rest/{svc}/ipcSearch",
-       {"ipcNumber": "H02M", "currentPage": "1", "collectionValues": "US"},
-       "accessKey")
-      for svc in ("ForeignPatentItemSearchService",
-                  "ForeignPatentAdvancedSearchService",
-                  "ForeignPatentDetailSearchService")],
+    # ── 해외 항목별검색 — 명세서에서 확인 (추측 아님) ───────────────
+    # 단어검색은 검색어 하나만 받아 분야 매트릭스를 못 세운다. 분류로 조회하는
+    # 것은 별도 **서비스**다(오퍼레이션이 아니라):
+    #   http://plus.kipris.or.kr/openapi/rest/ForeignPatentAdvancedSearchService/
+    #   오퍼레이션 advancedSearch · 입력 ipc · applicant · openDate ·
+    #   collectionValues(US·EP·PCT…) · free · inventionName · abstracts …
+    # 국내는 ipcNumber, 해외는 ipc 로 이름이 다르다 — 섞으면 조용히 빈 결과가 된다.
+    ("[문서] 해외 항목별검색 — IPC (H02M · 미국)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    ("[문서] 해외 항목별검색 — IPC × 기간 (공개일 2026)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260101~20260825",
+      "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    ("[문서] 해외 항목별검색 — 출원인 (Siemens · 유럽)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"applicant": "Siemens", "collectionValues": "EP", "currentPage": "1"},
+     "accessKey"),
+    # 해외 서지정보: 문헌번호+국가코드로 CPC·패밀리·청구항·인용까지 받는다.
+    # 국내 CPC 보강(patentCpcInfo)에 대응하는 자리다.
+    ("[문서] 해외 서지상세 (문헌번호+국가코드)",
+     "http://plus.kipris.or.kr/openapi/rest/"
+     "ForeignPatentBibliographicService/bibliographicInfo",
+     {"literatureNumber": "10539396", "countryCode": "US"}, "accessKey"),
 ]
 
 
