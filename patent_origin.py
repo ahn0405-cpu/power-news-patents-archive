@@ -88,6 +88,15 @@ def _fetch(lit: str, office: str) -> tuple[str | None, str]:
     return None, "국적칸없음" if has_name else "빈응답"
 
 
+# 출원인 국적이 실려 오는 공개국. 실측(2026-08-25, 800곳 조회):
+#   실패 738곳 전부가 '국적칸없음' 이고, 실패한 공개국은 CN 620 · JP 118 뿐이었다.
+#   US·EP 는 한 건도 실패하지 않았다.
+# 즉 미국·유럽 공보에는 applicantCountry 가 있고 중국·일본 공보에는 그 칸이 비어
+# 있다. 재시도로 풀리는 문제가 아니다 → 같은 출원인의 문서가 여럿이면 US·EP 것을
+# 골라 두드리고, 그런 문서가 아예 없는 곳은 처음부터 부르지 않는다(요청이 곧 비용).
+ORIGIN_OFFICES = ("US", "EP")
+
+
 def targets(weeks: dict[str, dict], store: dict) -> list[tuple[str, str, str, int]]:
     """채울 대상 (출원인, 문헌번호, 공개국, 건수). 건수 많은 곳부터.
 
@@ -110,11 +119,19 @@ def targets(weeks: dict[str, dict], store: dict) -> list[tuple[str, str, str, in
             row = seen.get(name)
             if row is None:
                 seen[name] = [lit, office, 1]
-            else:
-                row[2] += 1
-    out = [(n, v[0], v[1], v[2]) for n, v in seen.items()]
+                continue
+            row[2] += 1
+            # 국적이 실려 오는 공보를 만나면 그것으로 갈아 끼운다. 같은 출원인이
+            # 중국에도 미국에도 냈다면 미국 문서를 봐야 국적을 얻는다.
+            if row[1] not in ORIGIN_OFFICES and office in ORIGIN_OFFICES:
+                row[0], row[1] = lit, office
+    out = [(n, v[0], v[1], v[2]) for n, v in seen.items()
+           if v[1] in ORIGIN_OFFICES]
     out.sort(key=lambda t: (-t[3], t[0]))
-    return out
+    # 이 경로로는 국적을 얻을 수 없는 곳(중국·일본 공보에만 나오는 출원인)의 수도
+    # 같이 돌려준다. 조용히 빼 두면 '언젠가 다 찬다'고 잘못 알게 된다.
+    skipped = sum(1 for v in seen.values() if v[1] not in ORIGIN_OFFICES)
+    return out, skipped
 
 
 def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
@@ -130,11 +147,12 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
         print("  출원인 국적 보강: 키가 없어 건너뜁니다")
         return {}, {}
 
-    todo = targets(weeks, store)
+    todo, skipped = targets(weeks, store)
     rest = max(0, len(todo) - cfg.ORIGIN_PER_RUN)
     todo = todo[:cfg.ORIGIN_PER_RUN]
     if not todo:
-        print("  출원인 국적 보강: 채울 곳이 없습니다")
+        print(f"  출원인 국적 보강: 채울 곳이 없습니다"
+              f"{f' (이 경로로 닿지 않는 곳 {skipped:,})' if skipped else ''}")
         return {}, {}
 
     def one(t):
@@ -154,7 +172,10 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
         if cc:
             got[name] = cc
         else:
-            fail[name] = prev.get(name, 0) + 1
+            # '국적칸없음' 은 그 문헌에 원래 없는 것이라 다시 두드려도 소용없다
+            # → 재시도 한도를 바로 채워 다음 실행이 상한을 여기에 쓰지 않게 한다.
+            fail[name] = (cfg.ORIGIN_MAX_TRY if why == "국적칸없음"
+                          else prev.get(name, 0) + 1)
             why_cnt[why] = why_cnt.get(why, 0) + 1
             fail_off[office] = fail_off.get(office, 0) + 1
     by_cc: dict[str, int] = {}
@@ -165,7 +186,8 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
     _tally = lambda d: " ".join(  # noqa: E731 — 로그 한 줄용
         f"{k} {v}" for k, v in sorted(d.items(), key=lambda x: -x[1])[:6])
     print(f"  출원인 국적 보강: {len(todo)}곳 조회 → {len(got)}곳 확인"
-          f" · 실패 {len(fail)}곳 · 남은 곳 {rest:,}")
+          f" · 실패 {len(fail)}곳 · 남은 곳 {rest:,}"
+          + (f" · 이 경로로 닿지 않는 곳 {skipped:,}" if skipped else ""))
     if top:
         print(f"    확인된 국적: {top}")
     if why_cnt:

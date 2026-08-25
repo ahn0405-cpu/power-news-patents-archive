@@ -395,6 +395,19 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         totals[name] = max(n_own, round(raw_total * n_own / n_all))
         adjusted[name] = {"raw": raw_total, "kept": n_own, "of": n_all}
 
+    # 국적을 '아직 못 채운 곳' 과 '원본에 없어 못 채우는 곳' 을 나눠 센다.
+    # 실측(2026-08-25): 출원인 국적은 **미국·유럽 공보에만** 실려 있다. 중국 공보
+    # 응답 전문을 받아 보니 태그는 있는데 값이 빈칸이었다(주소도 발명자 국적도
+    # 마찬가지). 이 수를 세어 두지 않으면 화면이 '매일 채우는 중, N곳 남음' 이라고
+    # 말하게 되는데, 그중 상당수는 영영 채워지지 않는다 — 거짓말이 된다.
+    per_applicant: dict[str, set] = {}
+    for it in items:
+        if it.get("aCountry") or not it.get("aName"):
+            continue
+        per_applicant.setdefault(it["aName"], set()).add(it.get("office") or "")
+    origins_blocked = sum(1 for o in per_applicant.values()
+                          if not (o & {"US", "EP"}))
+
     # 실제 '공개일' 범위 — 아카이브에 담긴 특허가 어느 기간 공개분인지 알려준다.
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
     pubs = sorted(p["pub_date"] for p in items if p.get("pub_date"))
@@ -411,6 +424,8 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         # 서지상세로 국적을 채운 출원인 수. 화면에서 '몇 곳까지 확인됐는지'를
         # 밝히는 데 쓴다 — 며칠에 걸쳐 채우는 동안 진행 상황이 보여야 한다.
         "originsFilled": len(origins),
+        # 중국·일본 공보에만 나오는 출원인 — 원본에 국적 칸이 비어 있어 못 채운다.
+        "originsBlocked": origins_blocked,
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
         "lookbackDays": pcfg.LOOKBACK_DAYS,
@@ -2173,15 +2188,26 @@ function regionSplit(ranked){
   return {unknown:unknown, other:other};
 }
 // 국적을 어떻게 알아내고 있는지 — 두 자리(홈 타일·통계 탭)에서 같은 말을 해야 한다.
+// 두 부류를 반드시 갈라 말한다. 하나는 아직 안 채운 것이고, 하나는 원본에 값이
+// 없어 채울 수 없는 것이다. 뭉뚱그려 '채우는 중' 이라고 하면 영영 안 오는 것을
+// 기다리게 만든다.
 function originNote(unknown){
   const done = (FEED.patents.originsFilled||0);
-  return '해외 공보 목록에는 출원인 국적 칸이 없습니다. 그래서 문헌마다 있는 '
-    + '서지상세를 출원인당 한 번씩 조회해 채우고 있습니다'
-    + (done? ' — 지금까지 '+done.toLocaleString()+'곳을 확인했고 '
-             + unknown.toLocaleString()+'곳이 남았습니다(매일 조금씩 채웁니다).'
-           : ' (아직 시작 단계라 '+unknown.toLocaleString()+'곳이 미상입니다).')
-    + ' 공개국으로 대신 채우지는 않습니다 — 미국에 공개한 일본 기업이 미국 기업으로 '
-    + '둔갑합니다(실측: US 공개 문헌의 출원인이 파나소닉(JP)·칭화대(CN)였습니다).';
+  const blocked = (FEED.patents.originsBlocked||0);
+  const left = Math.max(0, unknown - blocked);
+  let s = '해외 공보 목록에는 출원인 국적 칸이 없어, 문헌마다 있는 서지상세를 '
+    + '출원인당 한 번씩 조회해 채웁니다';
+  s += done? ' — 지금까지 '+done.toLocaleString()+'곳을 확인했습니다.'
+           : ' (아직 시작 단계입니다).';
+  if(blocked)
+    s += ' 다만 출원인 국적이 실려 있는 것은 미국·유럽 공보뿐입니다. 중국·일본 '
+      + '공보에는 그 칸이 원본부터 비어 있어(응답 전문을 받아 확인했습니다) '
+      + blocked.toLocaleString()+'곳은 이 방법으로 채울 수 없습니다'
+      + (left? ' (나머지 '+left.toLocaleString()+'곳은 채우는 중입니다).' : '.');
+  s += ' 공개국으로 대신 채우지는 않습니다 — 미국에만 공개한 출원인 99곳을 실제로 '
+    + '대조해 보니 미국 기업은 34%뿐이었고, 유럽은 57%였습니다. 셋 중 둘이 틀리는 '
+    + '추정이라 쓰지 않습니다.';
+  return s;
 }
 
 // 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순

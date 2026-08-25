@@ -265,8 +265,14 @@ def _lazy_checks(sr) -> None:
     check("국적미상 " in js, "KPI 에 '국적미상 N' 을 함께 보인다")
     check("국적을 아직 확인하지 못한" in js,
           "국적별 랭킹이 '빠진 곳이 있다'고 밝힌다")
-    check("서지상세를 출원인당 한 번씩" in js,
+    check("서지상세를\\n    + '출원인당 한 번씩" in js
+          or "출원인당 한 번씩 조회해 채웁니다" in js.replace("'\n    + '", ""),
           "국적을 어떻게 채우는지 화면에서 밝힌다")
+    # 두 부류를 갈라 말해야 한다. 중국·일본 공보에는 국적 칸이 원본부터 비어 있어
+    # (실측) 그 출원인들은 영영 안 채워진다 — '채우는 중' 으로만 말하면 오지 않을
+    # 것을 기다리게 만든다.
+    check("원본부터 비어 있어" in js and "originsBlocked" in js,
+          "채울 수 없는 몫을 따로 밝힌다")
     check("uniq.toLocaleString()" in js,
           "출원인 수도 천 단위로 끊는다 (옆의 미상 수와 표기가 어긋나지 않게)")
 
@@ -547,21 +553,32 @@ def _origin_checks() -> None:
                 "country": country, "number": lit}
 
     weeks = {"2026-08-24": {"week": "2026-08-24", "patents": [
-        pat("CN University", "L1", "CN"),
-        pat("CN University", "L2", "CN"),          # 같은 곳 — 한 번만
-        pat("CN University", "L3", "CN"),
-        pat("JP Corp", "L4", "JP"),
+        pat("US Maker", "L1", "US"),
+        pat("US Maker", "L2", "US"),               # 같은 곳 — 한 번만
+        pat("US Maker", "L3", "US"),
+        pat("CN University", "L4", "CN"),          # 중국 공보뿐 — 국적 칸이 없다
+        pat("CN University", "L5", "CN"),
+        pat("JP Corp", "L6", "JP"),                # 일본 공보뿐 — 마찬가지
+        pat("Mixed Filer", "L8", "CN"),            # 중국에도 미국에도 냈다
+        pat("Mixed Filer", "L9", "US"),            #   → 미국 문서를 골라야 한다
         pat("Siemens", "L5", "EP", "EU"),          # 이미 안다 — 건너뛴다
         pat("No Key Co", "", "US"),                # ltrtno 가 없다(OPS 시절)
         pat("Tried Out", "L6", "US"),              # 실패가 쌓였다
     ]}}
     store = {"origins": {}, "originTry": {"Tried Out": pcfg.ORIGIN_MAX_TRY}}
-    got = po.targets(weeks, store)
+    got, skipped = po.targets(weeks, store)
     names = [t[0] for t in got]
-    check(names == ["CN University", "JP Corp"],
+    check(names == ["US Maker", "Mixed Filer"],
           f"두드릴 곳을 제대로 고른다 (받은 목록 {names})")
     check(got and got[0][3] == 3 and got[0][1] == "L1",
           "출원인당 한 번만 두드리고 건수 많은 곳을 앞에 둔다")
+    # 국적이 실려 오는 공보는 미국·유럽뿐이다(실측). 같은 출원인이 중국에도
+    # 미국에도 냈다면 미국 문서를 봐야 국적을 얻는다.
+    mixed = [t for t in got if t[0] == "Mixed Filer"][0]
+    check(mixed[2] == "US" and mixed[1] == "L9",
+          f"국적이 실려 오는 공보(US·EP) 쪽 문헌을 고른다 (받은 값 {mixed[1:3]})")
+    check(skipped == 2,
+          f"이 경로로 닿지 않는 곳(중국·일본 공보만 있는 출원인)을 센다 (받은 값 {skipped})")
     check("Siemens" not in names, "이미 아는 국적은 다시 두드리지 않는다")
     check("No Key Co" not in names, "문헌번호가 없는 옛 항목은 건너뛴다")
     check("Tried Out" not in names, "실패가 쌓인 곳은 그만 두드린다")
