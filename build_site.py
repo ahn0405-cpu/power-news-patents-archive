@@ -175,8 +175,12 @@ def _report_payload(index_path) -> None:
     gz = len(gzip.compress(raw, 6))
     print(f"       페이지 {len(raw)/1024:,.0f} KB · 압축 전송 약 {gz/1024:,.0f} KB")
     if gz / 1024 > PAYLOAD_WARN_KB:
+        # 분리 로딩은 이미 들어가 있다(site_render.INLINE_*). 그런데도 넘었다면
+        # 남은 원인은 둘 중 하나다 → 아무거나 줄이라고 하면 엉뚱한 데를 깎는다.
         print(f"       ⚠️ 압축 전송량이 기준({PAYLOAD_WARN_KB} KB)을 넘었습니다 — "
-              "최근 구간만 인라인하고 과거 아카이브는 분리 로딩하는 방안을 검토하세요.")
+              "분리 로딩은 이미 켜져 있으니 (1) NEWS_INLINE_ALL 로 빌드했는지, "
+              "(2) 인라인 분량(NEWS_INLINE_NEWS·NEWS_INLINE_PATENTS)이 커졌는지 "
+              "보세요.")
 
 
 if __name__ == "__main__":

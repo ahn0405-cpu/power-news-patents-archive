@@ -1,15 +1,32 @@
 """정적 사이트 렌더링 — 인터랙티브 단일 페이지 리더(SPA).
 
-전체 아카이브(뉴스·특허)를 index.html 한 장에 인라인 JSON으로 담고, 브라우저에서
-통합검색·다중필터·정렬·가벼운 개요(스탯 타일 + 스파크라인)를 수행한다.
-백엔드 없음. GitHub Pages(HTTP)와 file:// 로컬 열람 모두 동작(데이터가 인라인이라
-fetch/CORS 불필요). 라이트/다크 자동, 필터 상태는 URL 해시에 반영(공유 가능).
+아카이브(뉴스·특허)를 index.html 한 장에 담고, 브라우저에서 통합검색·다중필터·
+정렬·가벼운 개요(스탯 타일 + 스파크라인)를 수행한다. 백엔드 없음.
+라이트/다크 자동, 필터 상태는 URL 해시에 반영(공유 가능).
 
 원자료(data/*.json, data/patents/*.json)는 build_site 가 계속 저장한다(아카이브 누적용).
 이 모듈은 그 데이터를 하나로 합쳐 SPA 로 렌더한다.
 
-주의(성장): 아카이브가 아주 커지면 index.html 인라인 데이터가 커진다. 지금 규모엔
-충분하며, 필요 시 data/feed.json fetch + 월별 분할/지연로딩으로 확장하면 된다.
+── 지연 로딩 ────────────────────────────────────────────────────
+예전에는 아카이브 전체를 인라인했다. 실측 5,164건에서 전송량이 986 KB(gzip)가
+됐고, 그중 데이터가 4,631 KB·코드가 147 KB였다 — 즉 무게는 전부 목록이다.
+그리고 이건 기준선 문제가 아니라 **증가** 문제다. 아카이브는 매주 쌓이므로
+자르기로는 언젠가 반드시 진다.
+
+그래서 목록(items)만 둘로 나눈다:
+  · 최근 INLINE_* 건 → index.html 에 그대로 (첫 화면은 여기서 다 그려진다)
+  · 나머지          → data/feed/{news,patents}-rest.json, 그린 뒤 받아서 붙인다
+집계(총계·주별 추이·공개일 범위 등)는 **나누기 전 전체**로 서버에서 계산해
+인라인한다. 그래야 덜 받은 상태에서도 숫자가 틀리지 않는다.
+
+그래도 항목을 직접 세는 화면(거래·지원의 경쟁 구도·공급자 표, 목록 건수)은
+다 받기 전까지 잠깐 작은 값을 보게 된다. 그 화면들은 로딩이 끝날 때까지
+'불러오는 중'으로 두고 숫자를 내보내지 않는다 — 틀린 수를 잠깐 보여주는 것이
+늦게 보여주는 것보다 나쁘다.
+
+file:// 로 열면 fetch 가 CORS 에 막힌다. 그때는 받은 만큼만 쓰고 그 사실을
+화면에 밝힌다. 통째로 인라인해 예전처럼 쓰려면 NEWS_INLINE_ALL=1 로 빌드한다
+(로컬 검증·오프라인 배포용 탈출구).
 """
 from __future__ import annotations
 
@@ -25,6 +42,16 @@ import insights as _insights
 import ip_guide
 
 KST = timezone(timedelta(hours=9))
+
+# ── 인라인 분량 ──────────────────────────────────────────────────
+# 시간(최근 N일)이 아니라 **건수**로 자른다. 시간 기준은 전송량을 묶어 주지 못한다
+# — 뉴스가 몰린 주 하나가 그대로 페이로드가 된다. 건수로 자르면 아카이브가
+# 아무리 자라도 첫 화면 전송량이 고정된다. 그게 이 작업의 목적이다.
+# 실측(5,164건 기준): 뉴스 400 + 특허 1,200 → 986 KB → 265 KB.
+INLINE_NEWS = int(os.getenv("NEWS_INLINE_NEWS", "400"))
+INLINE_PATENTS = int(os.getenv("NEWS_INLINE_PATENTS", "1200"))
+INLINE_ALL = os.getenv("NEWS_INLINE_ALL", "").lower() in ("1", "true", "yes", "on")
+FEED_SUBDIR = "data/feed"
 
 # ── 출원인(assignee) 정규화 ───────────────────────────────────────
 # 목적: "삼성전자"/"삼성전자주식회사"/"Samsung Electronics Co., Ltd." 를 한 항목으로.
@@ -343,6 +370,36 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
     }
 
 
+def _split_items(sec: dict, keep: int, name: str, site_dir: Path) -> int:
+    """items 를 '최근 keep 건'(인라인)과 나머지(별도 파일)로 가른다. 반환: 뒷부분 건수.
+
+    최신순으로 갈라야 첫 화면이 최근 것으로 채워진다. 정렬 키는 항목마다 다르므로
+    (뉴스=published/date, 특허=pub_date/week) 있는 것을 순서대로 쓴다.
+
+    집계는 이미 **가르기 전 전체**로 계산돼 sec 안에 들어 있다 → 여기서 손대지
+    않는다. 여기서 나누는 것은 목록뿐이다.
+    """
+    items = sec.get("items") or []
+    sec["total"] = len(items)          # 화면이 '전체 몇 건인지'는 늘 알아야 한다
+    if INLINE_ALL or len(items) <= keep:
+        return 0
+
+    def when(it):
+        return (it.get("published") or it.get("pub_date")
+                or it.get("date") or it.get("week") or "")
+
+    ordered = sorted(items, key=when, reverse=True)
+    head, tail = ordered[:keep], ordered[keep:]
+    sec["items"] = head
+    d = site_dir / FEED_SUBDIR
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}-rest.json").write_text(
+        json.dumps(tail, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8")
+    sec["rest"] = {"url": f"{FEED_SUBDIR}/{name}-rest.json", "count": len(tail)}
+    return len(tail)
+
+
 def render_all(site_dir: Path, news_days: dict[str, dict],
                patent_weeks: dict[str, dict], generated: str,
                briefs: list[dict] | None = None,
@@ -379,6 +436,15 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                   "genNews": ip_guide.READ_GEN_NEWS,
                   "genDom": ip_guide.READ_GEN_DOM},
     }
+    # 집계가 다 들어간 뒤에 목록만 가른다 — 순서가 바뀌면 집계가 부분집합으로
+    # 계산돼 화면의 모든 수가 조용히 작아진다.
+    rest_n = (_split_items(feed["news"], INLINE_NEWS, "news", site_dir)
+              + _split_items(feed["patents"], INLINE_PATENTS, "patents", site_dir))
+    if rest_n:
+        print(f"       지연 로딩: 최근 {len(feed['news']['items'])}+"
+              f"{len(feed['patents']['items'])}건 인라인 · 나머지 {rest_n:,}건은 "
+              f"{FEED_SUBDIR}/ 에서 받아 붙임")
+
     payload = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
 
     html = _PAGE.replace("__TITLE__", _esc(SITE_TITLE)) \
@@ -872,6 +938,8 @@ a{color:inherit}
 .catlead.sup .cta.sup:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .catlead.sup .cta.supmore{color:var(--muted);border-style:dashed}
 .catlead.sup .cbar i{background:var(--q2)}
+/* 지연 로딩 표시. 눈에 띄되 숫자를 가리지 않는 크기 — 이건 경고가 아니라 상태다. */
+.hyd{font-size:11px;font-weight:600;color:var(--muted);margin-left:6px}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
@@ -963,6 +1031,80 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 _JS = r"""
 const FEED = JSON.parse(document.getElementById('feed').textContent);
 const PAGE = 60;
+
+// ── 지연 로딩 ───────────────────────────────────────────────────
+// 첫 화면은 인라인된 최근분으로 바로 그리고, 나머지 목록은 받아서 붙인 뒤 다시
+// 그린다. 집계는 서버에서 전체로 계산돼 인라인이라 처음부터 정확하다 — 여기서
+// 채워지는 것은 '목록'뿐이다.
+//
+// FULL 이 false 인 동안에는 항목을 직접 세는 화면을 내보내지 않는다. 틀린 수를
+// 잠깐 보여주는 것이 늦게 보여주는 것보다 나쁘다(공급자 87곳이 20곳으로 보였다가
+// 채워지면, 먼저 본 사람은 20곳으로 기억한다).
+let FULL = !(FEED.news.rest || FEED.patents.rest);
+let HYDFAIL = '';
+const count = t => (FEED[t] && FEED[t].total != null)
+  ? FEED[t].total : ((FEED[t] && FEED[t].items || []).length);
+
+// 한 번 실패하면 화면이 계속 반쪽으로 남는다. 잠깐 끊긴 것과 못 받는 것은
+// 다르므로 한 번은 다시 시도한다(file:// 처럼 구조적으로 막힌 경우는 두 번 다
+// 같은 이유로 실패하니 손해가 없다).
+function _grab(url, retry){
+  return fetch(url, {cache:'no-cache'})
+    .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .catch(e => { if(!retry) throw e;
+      return new Promise(ok=>setTimeout(ok, 1500)).then(()=>_grab(url, 0)); });
+}
+
+function hydrate(){
+  if(FULL) return;
+  const jobs = ['news','patents'].filter(t=>FEED[t].rest).map(t =>
+    _grab(FEED[t].rest.url, 1)
+      .then(rows => { FEED[t].items = FEED[t].items.concat(rows); }));
+  Promise.all(jobs).then(()=>{
+    FULL = true; HYDFAIL = '';
+    ['news','patents'].forEach(t=>{ delete FEED[t].rest; });
+    // 항목에서 만든 캐시는 전부 버린다. 지연 로딩 전에는 items 가 바뀌는 일이
+    // 없어서 한 번 만들고 끝이었지만, 이제는 남겨 두면 화면이 '다 받았다'고
+    // 하면서 최근분으로만 계산한 값을 계속 보여준다.
+    _shareCache = null;
+    renderChips(); render();
+  }).catch(e => {
+    // file:// 로 열면 fetch 가 CORS 에 막힌다. 그때도 화면은 살아 있어야 하되,
+    // 최근분만 보고 있다는 사실을 숨기면 안 된다.
+    HYDFAIL = String(e && e.message || e);
+    FULL = false; render();
+  });
+}
+
+// 받침 유무로 조사를 고른다. 한글 음절은 0xAC00 부터 28개씩 한 묶음이고 그 안에서
+// 종성이 0이면 받침이 없다. '기관 목록을 / 집중도를' 처럼 문구가 자연스러워야
+// 안내가 기계가 뱉은 것처럼 읽히지 않는다.
+function _josa(w, withBatchim, without){
+  const c = (w||'').charCodeAt((w||'').length-1);
+  const has = c>=0xAC00 && c<=0xD7A3 ? ((c-0xAC00)%28)!==0 : false;
+  return w + (has? withBatchim : without);
+}
+
+// 못 받은 이유를 짐작해서 쓰면 안 된다. file:// 은 브라우저가 구조적으로 막는
+// 것이라 새로 고쳐도 소용없고, 네트워크 실패는 새로 고치면 된다 — 안내가 반대면
+// 읽는 사람이 헛수고를 한다. 프로토콜로 갈라 말한다.
+function hydWhy(){
+  return location.protocol === 'file:'
+    ? '이 페이지를 file:// 로 열면 브라우저가 데이터 요청을 막습니다 — '
+      + '주소로 접속하면 정상 표시됩니다.'
+    : '잠시 뒤 새로 고치면 다시 시도합니다.';
+}
+
+// 다 받기 전에는 '이 화면은 아직 전체가 아니다'를 항상 같은 문구로 알린다.
+function loadingNote(what){
+  if(FULL) return '';
+  // .gnote 가 아니라 .gdesc 를 쓴다 — gnote 는 절 끝에 붙는 각주라 border-top 이
+  // 있어서, 머리글 바로 밑에 놓으면 정체 모를 구분선과 빈 칸이 생긴다(실측).
+  if(HYDFAIL) return '<p class="gdesc">아카이브 전체를 불러오지 못해 '
+    + _josa(what,'을','를') + ' 표시하지 않습니다. ' + hydWhy() + '</p>';
+  return '<p class="gdesc">아카이브를 불러오는 중입니다 — '
+    + _josa(what,'은','는') + ' 전체를 받은 뒤 표시됩니다.</p>';
+}
 const $ = s => document.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 // 링크 주소는 http(s) 만 허용한다. 제목·요약은 esc 로 막히지만 href 는 esc 를 통과해도
@@ -1567,6 +1709,11 @@ function sparkShare(vals){
 
 function tradeSectionHTML(){
   const T=FEED.trade; if(!T) return '';
+  // 이 표는 분야별 권리 집중도(CR3)를 항목에서 직접 센다 → 다 받기 전에는
+  // 내보내지 않는다. 부분집합으로 세면 집중도가 실제보다 높게 나온다
+  // (적게 볼수록 소수가 다 가진 것처럼 보인다) — 방향이 정해진 오차라 특히 나쁘다.
+  if(!FULL) return '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
+    + loadingNote('집중도');
   const rows=tradeRows(); if(!rows.length) return '';
   const cmp=FEED.insights.comparable;
   const ADJ=FEED.patents.totalsAdjusted||{};
@@ -1694,7 +1841,7 @@ function renderGuide(){
   const G = FEED.guide||[];
   // 분석 표는 홈에 있다. 여기서는 그리로 보내기만 한다(같은 표를 두 번 그리면
   // 둘 중 하나는 반드시 뒤처진다).
-  const trade = (concentration(FEED.patents.items||[]).length)
+  const trade = (FULL && concentration(FEED.patents.items||[]).length)
     ? '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
       + '<p class="gdesc">어느 분야를 몇 곳이 나눠 갖고 있는지, 뉴스 관심은 어느 쪽으로 '
       + '움직였는지는 <b>홈</b>에 있습니다. 거기서 분야를 고른 뒤 아래 창구로 오시면 됩니다. '
@@ -1702,7 +1849,12 @@ function renderGuide(){
     : '';
   // 분석 다음에 '누구한테 가면 되나'가 온다. 매물(국유판매기술)·창구보다 앞이다 —
   // 상대를 정하고 나서야 매물과 창구가 뜻을 갖는다.
-  const supply = supplierHTML(FEED.patents.items||[]);
+  // 공급자 표는 항목을 직접 센다 → 다 받기 전에는 숫자를 내보내지 않는다.
+  // 자리는 남겨 둔다(섹션이 통째로 사라졌다 나타나면 화면이 튀고, 바로가기도
+  // 가리킬 데가 없어진다).
+  const supply = FULL ? supplierHTML(FEED.patents.items||[])
+    : '<div class="sec" id="sec-supply">🎓 분야별 국내 공급자</div>'
+      + loadingNote('기관 목록');
   const staown = staownHTML();
   let desks = G.map((g,i)=>
     '<div class="sec"'+(i===0? ' id="sec-desks"':'')+'>'
@@ -1739,8 +1891,11 @@ function render(){
   const list = filtered();
   const active = state.q || state.cats.size || state.countries.size || state.newonly
     || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
+  // '전체'는 FEED.*.total 을 쓴다(지연 로딩 중에도 정확). 왼쪽의 걸린 건수는
+  // 아직 받는 중이면 최근분에서만 센 값이라, 세는 중임을 옆에 밝힌다.
   $('#resCount').innerHTML = '<b>'+list.length.toLocaleString()+'</b>건'
-    + (active? ' <span style="opacity:.7">/ 전체 '+FEED[state.tab].items.length.toLocaleString()+'</span>' : '');
+    + (active? ' <span style="opacity:.7">/ 전체 '+count(state.tab).toLocaleString()+'</span>' : '')
+    + (FULL? '' : ' <span class="hyd">'+(HYDFAIL? '최근분만' : '불러오는 중…')+'</span>');
   // 특허 탭엔 '어느 기간 공개분인지'를 항상 명시(주별 버킷=수집 주와 혼동 방지)
   $('#scope').innerHTML = state.tab==='patents' ? patentScopeHTML() : '';
   $('#scope').hidden = state.tab!=='patents';
@@ -1748,7 +1903,12 @@ function render(){
   const isStats = state.tab==='patents' && state.view==='stats';
   $('#results').classList.toggle('readcol', !isStats);   // 목록=읽기폭, 통계=전체폭
   if(isStats){
-    $('#results').innerHTML = renderStats(list);
+    // 통계는 통째로 '전체를 센 결과'다 — 부분집합으로 그리면 랭킹 순서까지 바뀐다.
+    $('#results').innerHTML = FULL ? renderStats(list)
+      : '<div class="empty">'+(HYDFAIL
+          ? '아카이브 전체를 불러오지 못해 통계를 표시할 수 없습니다. ' + hydWhy()
+          : '아카이브를 불러오는 중입니다 — 통계는 전체를 받은 뒤 표시됩니다.')
+        + '</div>';
     $('#more').hidden = true;
     syncHash(); return;
   }
@@ -2372,12 +2532,14 @@ function wire(){
   });
 }
 
+// 건수는 FEED.*.total 을 쓴다 — items 는 지연 로딩 중이면 최근분뿐이라,
+// items.length 로 적으면 '아카이브가 줄었다'로 읽힌다.
 $('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: EPO OPS 공식 API에서 주요 출원인 '
   + (FEED.patents.applicants||0) + '곳 × 전력 CPC로 매주 수집(1회 조회 범위 = 최근 '
   + (FEED.patents.lookbackDays||90) + '일 공개분, 새로 공개된 것만 누적). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
-  + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+FEED.news.items.length
-  + '건 · 특허 '+FEED.patents.items.length+'건'
+  + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+count('news')
+  + '건 · 특허 '+count('patents')+'건'
   // 기관 홈페이지로 되걸어 공식 서비스임을 확인할 수 있게 한다(주소가 기관 도메인이 아니다).
   + (FEED.org? '<br>운영 <b>'+esc(FEED.org)+'</b>'
       + (FEED.orgUrl? ' · <a href="'+esc(safeUrl(FEED.orgUrl))+'" target="_blank" rel="noopener">'
@@ -2392,5 +2554,7 @@ $('#savedonly').setAttribute('aria-pressed', state.savedOnly);
 $('#unreadonly').setAttribute('aria-pressed', state.unreadOnly);
 document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===state.tab));
 updateViewToggle(); renderChips(); wire(); render();
+// 첫 화면을 그린 **뒤에** 나머지를 받는다. 순서가 바뀌면 지연 로딩의 뜻이 없다.
+hydrate();
 localStorage.setItem(LS_KEY, Date.now());
 """

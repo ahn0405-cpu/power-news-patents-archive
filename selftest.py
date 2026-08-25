@@ -75,6 +75,77 @@ def _kipris_page(rows: list[tuple[int, str, str]], total: int) -> str:
             f"<count><totalCount>{total}</totalCount></count></body></response>")
 
 
+def _lazy_checks(sr) -> None:
+    """목록 분할과, 분할해도 집계가 흔들리지 않는지.
+
+    이 기능의 위험은 '느려진다'가 아니라 **숫자가 조용히 작아진다**는 것이다.
+    집계를 자르기 전 전체로 계산하는 순서가 한 번만 어긋나도 화면의 모든 수가
+    부분집합 기준이 되는데, 그건 눈으로 봐서는 알 수 없다.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    items = [{"title": f"제목 {i}", "url": f"u{i}", "number": f"N{i}",
+              "pub_date": f"2026-08-{(i % 28) + 1:02d}"} for i in range(50)]
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        sec = {"items": list(items), "totals": {"한국전력공사": 999}}
+        rest = sr._split_items(sec, 10, "patents", d)
+
+        check(rest == 40, f"나머지를 갈라낸다 (뒤 {rest}건)")
+        check(len(sec["items"]) == 10, f"인라인은 상한만큼만 ({len(sec['items'])}건)")
+        check(sec["total"] == 50, f"total 은 자르기 전 전체 ({sec['total']})")
+        check(sec["totals"] == {"한국전력공사": 999},
+              "집계는 분할이 건드리지 않는다")
+
+        f = d / sr.FEED_SUBDIR / "patents-rest.json"
+        check(f.exists(), "나머지 파일이 만들어진다")
+        tail = json.loads(f.read_text(encoding="utf-8"))
+        check(len(tail) == 40, f"나머지 파일에 뒤가 다 있다 ({len(tail)}건)")
+
+        # 합치면 원본과 정확히 같아야 한다 — 겹치거나 빠지면 목록이 조용히 틀어진다.
+        merged = {x["number"] for x in sec["items"]} | {x["number"] for x in tail}
+        check(merged == {x["number"] for x in items},
+              f"인라인 + 나머지 = 원본 (합 {len(merged)}건, 중복·누락 없음)")
+        check(not ({x["number"] for x in sec["items"]}
+                   & {x["number"] for x in tail}),
+              "인라인과 나머지가 겹치지 않는다")
+
+        # 최신순으로 갈라야 첫 화면이 최근 것으로 찬다.
+        newest = sorted((x["pub_date"] for x in items), reverse=True)[:10]
+        check(sorted((x["pub_date"] for x in sec["items"]), reverse=True) == newest,
+              "인라인에 남는 것은 가장 최근 건들이다")
+
+        # 상한보다 적으면 그냥 다 인라인 — 쓸데없는 요청을 만들지 않는다.
+        small = {"items": items[:5]}
+        check(sr._split_items(small, 10, "news", d) == 0
+              and "rest" not in small and small["total"] == 5,
+              "상한보다 적으면 나누지 않는다")
+
+        # 탈출구: 통째로 인라인(로컬 검증·오프라인 배포).
+        saved = sr.INLINE_ALL
+        try:
+            sr.INLINE_ALL = True
+            whole = {"items": list(items)}
+            check(sr._split_items(whole, 10, "patents", d) == 0
+                  and len(whole["items"]) == 50 and "rest" not in whole,
+                  "NEWS_INLINE_ALL 이면 나누지 않는다")
+        finally:
+            sr.INLINE_ALL = saved
+
+    js = sr._JS
+    check("hydrate()" in js, "첫 그림 뒤 나머지를 받는 호출이 있다")
+    check("FEED[t].total" in js or "FEED[t] && FEED[t].total" in js,
+          "건수는 total 로 읽는다 (items.length 는 로딩 중 작다)")
+    check("_shareCache = null" in js,
+          "다 받은 뒤 항목 기반 캐시를 버린다 (안 버리면 최근분으로 계산한 값이 남는다)")
+    for name, guard in (("공급자 표", "FULL ? supplierHTML"),
+                        ("경쟁 구도", "if(!FULL) return '<div class=\"sec\" id=\"sec-analysis\">"),
+                        ("통계 뷰", "FULL ? renderStats")):
+        check(guard in js, f"{name}는 다 받기 전에는 그리지 않는다")
+
+
 def _supplier_checks(sr) -> None:
     """공급자 표(_supKind/suppliers)를 실제로 실행해 본다.
 
@@ -534,6 +605,9 @@ def main() -> int:
 
         print("· 분야별 국내 공급자 (site_render 안의 JS)")
         _supplier_checks(sr)
+
+        print("· 지연 로딩 (목록 분할)")
+        _lazy_checks(sr)
 
         print("· 거래·지원 안내 데이터 (사람이 관리하는 상수)")
         import ip_guide as ig
