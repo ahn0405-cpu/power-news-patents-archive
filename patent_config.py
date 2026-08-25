@@ -257,6 +257,24 @@ KIPRIS_ROWS = int(os.getenv("KIPRIS_ROWS", "100"))       # 한 요청에 받을 
 KIPRIS_PER_CAT = int(os.getenv("KIPRIS_PER_CAT", "5000"))
 KIPRIS_DELAY = float(os.getenv("KIPRIS_DELAY", "0.3"))
 
+# ── 해외특허 (계열이 완전히 다르다 — patent_source_foreign 주석 참고) ──
+# 전부 러너 실측(2026-08-25). 이름의 오타 'Advenced' 가 진짜다 — 철자를 고치면
+# 경로 없음이 온다. 키 질의도 국내(ServiceKey)와 달리 accessKey 다.
+FOREIGN = os.getenv("KIPRIS_FOREIGN", "on").lower() not in ("0", "off", "false")
+FOREIGN_BASE = os.getenv("FOREIGN_BASE", "http://plus.kipris.or.kr/openapi/rest")
+FOREIGN_SERVICE = os.getenv("FOREIGN_SERVICE",
+                            "ForeignPatentAdvencedSearchService")
+FOREIGN_OP = os.getenv("FOREIGN_OP", "advancedSearch")
+FOREIGN_KEYPARAM = os.getenv("FOREIGN_KEYPARAM", "accessKey")
+# 대상국. 쉼표로 한 번에 여러 개를 줄 수 있다(US,EP,JP,CN 실측). 비우면 필수값
+# 오류(11)가 난다. KR 은 넣지 않는다 — 국내는 국내 API 로 전수를 받고 있어
+# 여기서 또 받으면 같은 특허가 두 벌로 들어온다.
+FOREIGN_COUNTRIES = [s for s in os.getenv(
+    "FOREIGN_COUNTRIES", "US,EP,JP,CN").split(",") if s.strip()]
+# 한 요청에 받을 건수. docsCount=50 이 먹는 것을 확인했다(기본은 30).
+FOREIGN_ROWS = int(os.getenv("FOREIGN_ROWS", "50"))
+FOREIGN_PER_CAT = int(os.getenv("FOREIGN_PER_CAT", "3000"))
+
 # ── CPC 보강 ─────────────────────────────────────────────────────
 # 검색은 IPC 로만 되지만(cpcNumber 파라미터 없음), **출원번호를 주면 그 특허의
 # CPC 를 받을 수 있다**(명세서 실측):

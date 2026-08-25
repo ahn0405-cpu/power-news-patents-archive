@@ -151,6 +151,13 @@ def merge_stats(store: dict, fresh: dict | None, today: str = "") -> int:
         had = len(store.get("totals") or {})
         store["totals"], store["updated"] = {}, {}
         print(f"  집계 초기화: 옛 출원인 {had}곳을 버리고 이번 전수 결과로 대체")
+    # 공개국별 집계도 같은 이유로 갈아 끼운다. totals 만 비우고 offices 를 두면
+    # '어느 시장에 몇 건'만 옛 OPS 기준(전 세계·표본)으로 남아 한 화면에서 두
+    # 기준이 섞인다. 병합이 옳았던 것은 OPS 가 부분집합만 가져오던 때뿐이다.
+    if fresh.get("replaceOffices"):
+        had = len(store.get("offices") or {})
+        store["offices"] = {}
+        print(f"  공개국 집계 초기화: 옛 출원인 {had}곳을 버린다")
     n = 0
     for name, v in (fresh.get("totals") or {}).items():
         store["totals"][name] = v

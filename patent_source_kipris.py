@@ -400,6 +400,53 @@ def _live_collect(today: datetime) -> tuple[list[dict], dict]:
 
 
 # ── 계약 맞추기 ──────────────────────────────────────────────────
+def _add_foreign(today: datetime, items: list[dict],
+                 stats: dict) -> tuple[list[dict], dict]:
+    """해외 수집을 붙인다. 실패해도 국내 결과는 지키고 그 사실을 남긴다.
+
+    해외가 안 되면 통째로 실패하게 두면 안 된다 — 지금 잘 돌고 있는 국내 전수까지
+    같이 죽는다. 대신 조용히 넘어가지도 않는다(빠진 줄 모르면 '해외가 원래 적다'로
+    읽힌다). 로그에 남기고 국내만으로 계속한다.
+    """
+    if not cfg.FOREIGN:
+        return items, stats
+    try:
+        import patent_source_foreign as fg
+        fitems, fstats = fg.collect(today)
+    except Exception as e:
+        print(f"⚠️ 해외 수집 실패 — 국내 결과만 씁니다: {e}")
+        stats["foreignError"] = str(e)
+        return items, stats
+
+    have = {p["number"] for p in items}
+    added = [p for p in fitems if p["number"] not in have]
+    items = items + added
+
+    # 출원인 총계는 국내와 같은 규칙으로 '모은 것을 센다'. 다만 국적을 모르는
+    # 해외 출원인이 많아, 총계에는 넣되 국적별 랭킹에서는 알아서 빠진다.
+    totals = stats.setdefault("totals", {})
+    for it in added:
+        totals[it["applicant"]] = totals.get(it["applicant"], 0) + 1
+    cats = stats.setdefault("categoryTotals", {})
+    for k, v in (fstats.get("categoryTotals") or {}).items():
+        cats[k] = cats.get(k, 0) + v
+    if fstats.get("truncated"):
+        stats.setdefault("truncated", []).extend(fstats["truncated"])
+    # 공개국(시장) 축 — 국내 소스만 있을 때는 전부 KR 이라 만들 수 없었다.
+    # 화면이 읽는 모양은 officeCounts[출원인][특허청] 이다(site_render 참고).
+    # 다른 모양으로 넣으면 오류 없이 그냥 표가 비어 버린다 — 한 번 그렇게 넣었다.
+    per: dict[str, dict[str, int]] = {}
+    for it in items:
+        who, code = it.get("applicant") or "미상", it.get("office") or "?"
+        per.setdefault(who, {})[code] = per.setdefault(who, {}).get(code, 0) + 1
+    stats["offices"] = per
+    # totals 와 같은 이유로 offices 도 갈아 끼워야 한다 — 이번 실행이 전수라,
+    # 옛 OPS 시절 값이 남아 섞이면 '어느 시장에 몇 건'이 거짓이 된다.
+    stats["replaceOffices"] = True
+    print(f"  국내+해외 합계 {len(items)}건 (해외 신규 {len(added)}건)")
+    return items, stats
+
+
 def collect(today: datetime) -> tuple[list[dict], bool, dict]:
     """(특허 목록, mock 여부, 집계). patent_source.collect 와 같은 계약."""
     if cfg.is_mock():
@@ -408,6 +455,7 @@ def collect(today: datetime) -> tuple[list[dict], bool, dict]:
         return items, True, stats
     try:
         items, stats = _live_collect(today)
+        items, stats = _add_foreign(today, items, stats)
         return items, False, stats
     except Exception as e:
         if cfg.force_live():

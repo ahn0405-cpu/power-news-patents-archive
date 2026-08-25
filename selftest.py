@@ -324,6 +324,172 @@ def _supplier_checks(sr) -> None:
           f"분야 합계가 건수다 (공동출원 중복 없이 3건, 받은 값 {rows[0]['total']})")
 
 
+def _fg_page(rows: list[tuple[str, str, str]], total: int) -> str:
+    """해외 응답 흉내. 성공이면 resultCode 가 **비어 있다**(실측)."""
+    body = "".join(
+        f"<searchResult><ltrtno>{lit}</ltrtno><ipc>{ipc}</ipc>"
+        f"<applicationNo>{lit[:8]}</applicationNo><registerNo></registerNo>"
+        f"<publishrNo>{lit}</publishrNo><countryCode>{cc}</countryCode>"
+        f"<applicationDate>20250301</applicationDate>"
+        f"<openDate>20260715</openDate><registerDate></registerDate>"
+        f"<applicant>Panasonic Holdings|Nichicon</applicant>"
+        f"<inventors>A|B</inventors><openNumber>{lit}</openNumber>"
+        f"<inventionName>POWER {lit}</inventionName></searchResult>"
+        for lit, ipc, cc in rows)
+    return ('<?xml version="1.0" encoding="UTF-8"?><response><header>'
+            "<resultCode></resultCode><resultMsg></resultMsg></header>"
+            f"<body><items>{body}<colString>US</colString>"
+            f"<totalSearchCount>{total}</totalSearchCount>"
+            "</items></body></response>")
+
+
+def _foreign_checks() -> None:
+    """해외 수집기. 국내와 규칙이 뒤집힌 자리가 많아 회귀 검사가 특히 중요하다."""
+    import xml.etree.ElementTree as ET
+    from datetime import datetime
+
+    import patent_source_foreign as fg
+
+    print("\n[해외 백엔드]")
+    orig_get, orig_key = fg._get, cfg.KIPRIS_KEY
+    orig_cap, orig_rows = cfg.FOREIGN_PER_CAT, cfg.FOREIGN_ROWS
+    cfg.KIPRIS_KEY = "TEST"
+    calls: list[dict] = []
+    try:
+        # 이름·키 질의·파라미터가 국내와 섞이지 않았는지 (섞이면 조용히 빈 결과다)
+        url = fg._url({"ipc": "H02M", "currentPage": "1"})
+        check("ForeignPatentAdvencedSearchService" in url,
+              "서비스 이름의 오타(Advenced)를 그대로 쓴다")
+        check("ForeignPatentAdvancedSearchService" not in url,
+              "철자를 고친 이름(Advanced)을 쓰지 않는다 — 그 경로는 없다")
+        check("accessKey=" in url and "ServiceKey=" not in url,
+              "키 질의 이름이 accessKey 다 (국내는 ServiceKey)")
+        check("ipc=" in url and "ipcNumber=" not in url,
+              "분류 파라미터가 ipc 다 (국내는 ipcNumber)")
+        check("/openapi/rest/" in url, "기준 경로가 openapi/rest 다")
+
+        # 성공 판정이 국내와 뒤집혀 있다 — 여기가 틀리면 정상 응답이 전부 오류가 된다
+        ok = ET.fromstring(_fg_page([("202600213551A1", "H02M1/10", "US")], 1))
+        check(fg._total(ok) == 1, "totalSearchCount 를 읽는다 (국내는 totalCount)")
+        bad = ('<?xml version="1.0"?><response><header><resultCode>11'
+               "</resultCode><resultMsg>No Mandatory Request Parameters Error"
+               "</resultMsg></header></response>")
+
+        import urllib.request
+        saved_open = urllib.request.urlopen
+
+        class _R:
+            def __init__(self, s): self.s = s
+            def read(self): return self.s.encode()
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        urllib.request.urlopen = lambda *a, **k: _R(bad)
+        try:
+            fg._get({"ipc": "H02M"})
+            check(False, "resultCode 가 채워져 오면 오류로 본다")
+        except RuntimeError as e:
+            check("11" in str(e), f"resultCode 가 채워져 오면 오류로 본다 ({e})")
+        finally:
+            urllib.request.urlopen = saved_open
+
+        urllib.request.urlopen = lambda *a, **k: _R(
+            _fg_page([("202600213551A1", "H02M1/10", "US")], 1))
+        try:
+            fg._get({"ipc": "H02M"})
+            check(True, "resultCode 가 비어 오면 정상으로 본다 (국내와 정반대)")
+        except Exception as e:
+            check(False, f"resultCode 가 비어 오면 정상으로 본다 ({e})")
+        finally:
+            urllib.request.urlopen = saved_open
+
+        # ── 쪽넘김: currentPage 는 '시작 위치'다 ──────────────────────
+        # 쪽 번호로 넘기면 각 쪽이 겹치면서 뒤쪽 자료에 영원히 닿지 못한다.
+        cfg.FOREIGN_ROWS, cfg.FOREIGN_PER_CAT = 50, 500
+        universe = [(f"20260021{i:04d}A1", "H02M1/10", "US") for i in range(120)]
+
+        def fake(params, timeout=None):
+            calls.append(dict(params))
+            start = int(params["currentPage"])
+            n = int(params["docsCount"])
+            return ET.fromstring(
+                _fg_page(universe[start - 1:start - 1 + n], len(universe)))
+        fg._get = fake
+
+        cat = {"key": "mega", "name": "전력반도체", "emoji": "x",
+               "ipc": ["H02M"], "cpc": ["H02M"]}
+        items, total, capped = fg._sweep(cat, "20260601~20260825")
+        starts = [int(c["currentPage"]) for c in calls]
+        check(starts[:3] == [1, 51, 101],
+              f"시작 위치를 쪽 크기만큼 더해 넘긴다 (보낸 값 {starts[:3]})")
+        check(len(items) == len(universe),
+              f"120건을 하나도 빠뜨리지 않고 받는다 (받은 값 {len(items)}건)")
+        check(len({i['number'] for i in items}) == len(items),
+              "받은 목록에 중복이 없다")
+        check(total == len(universe), f"전체 건수를 읽는다 ({total})")
+        check(not capped, "상한에 걸리지 않았다")
+
+        # 항목 스키마가 국내와 같아야 목록에 그대로 섞인다
+        need = {"number", "title", "assignee", "pub_date", "office", "cpc",
+                "category", "applicant", "country", "flag", "url"}
+        check(not (need - set(items[0])),
+              f"항목 스키마가 국내와 같다 (누락 {need - set(items[0]) or '없음'})")
+        check(items[0]["number"].startswith("US"),
+              f"공개번호 앞에 나라를 붙인다 ({items[0]['number']})")
+        check(items[0]["office"] == "US", "office 가 공개국이다")
+
+        # 모르는 해외 출원인을 한국으로 떨어뜨리면 '국내 공급자' 표가 오염된다
+        n, r, f = fg._identify_foreign("Nichicon Corporation")
+        check(r == "" and f == "",
+              f"큐레이션에 없는 해외 출원인의 국적은 비운다 (받은 값 {r!r})")
+        n2, r2, _ = fg._identify_foreign("Siemens Energy AG")
+        check(r2 and r2 != "KR",
+              f"큐레이션에 있으면 그 국적을 쓴다 ({n2} → {r2})")
+
+        # 국내 수집이 살아 있는데 해외가 죽으면, 국내까지 잃으면 안 된다
+        import patent_source_kipris as ks
+        saved_fg = fg.collect
+        fg.collect = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("해외 다운"))
+        try:
+            kept = [{"number": "KR1", "office": "KR", "applicant": "한국전력공사"}]
+            out, st = ks._add_foreign(datetime(2026, 8, 25), kept,
+                                      {"totals": {"한국전력공사": 1}})
+            check(out == kept and "foreignError" in st,
+                  "해외가 실패해도 국내 결과를 지키고 그 사실을 남긴다")
+        finally:
+            fg.collect = saved_fg
+
+        # 공개국 축이 화면이 읽는 모양으로 나오는지 — 모양이 다르면 오류 없이
+        # 표만 빈다(officeCounts[출원인][특허청]).
+        saved_fg2 = fg.collect
+        fg.collect = lambda *a, **k: ([{
+            "number": "US1", "office": "US", "applicant": "Siemens"}], {})
+        try:
+            out, st = ks._add_foreign(
+                datetime(2026, 8, 25),
+                [{"number": "KR1", "office": "KR", "applicant": "한국전력공사"}],
+                {"totals": {}})
+            off = st.get("offices") or {}
+            check(off.get("한국전력공사", {}).get("KR") == 1
+                  and off.get("Siemens", {}).get("US") == 1,
+                  f"공개국 집계가 [출원인][특허청] 모양이다 ({off})")
+            check(st.get("replaceOffices") is True,
+                  "공개국 집계도 전수라 갈아 끼우게 표시한다")
+            import patent_archive as pa
+            store = {"totals": {}, "offices": {"Siemens": {"WO": 183}},
+                     "updated": {}}
+            pa.merge_stats(store, {"totals": {}, "offices": off,
+                                   "replaceTotals": True,
+                                   "replaceOffices": True})
+            check("WO" not in store["offices"].get("Siemens", {}),
+                  "옛 공개국 수치(OPS 시절)가 실제로 버려진다")
+        finally:
+            fg.collect = saved_fg
+    finally:
+        fg._get, cfg.KIPRIS_KEY = orig_get, orig_key
+        cfg.FOREIGN_PER_CAT, cfg.FOREIGN_ROWS = orig_cap, orig_rows
+
+
 def _kipris_checks() -> None:
     """KIPRIS 백엔드의 라이브 경로를 네트워크 없이 실제로 실행한다.
 
@@ -340,6 +506,11 @@ def _kipris_checks() -> None:
     print("\n[KIPRIS 백엔드]")
     orig_get, orig_key = ks._get, cfg.KIPRIS_KEY
     orig_lim, orig_open = cfg.KIPRIS_CPC_LIMIT, urllib.request.urlopen
+    # 이 검사는 **국내 경로**를 본다. collect() 는 이제 해외까지 붙이므로 꺼 둔다 —
+    # 켜 두면 해외 요청이 이 검사의 스텁으로 새어 들어와 CPC 호출 수가 어긋난다
+    # (실제로 5건이어야 할 것이 22건으로 찍혔다). 해외는 _foreign_checks 가 본다.
+    orig_fg = cfg.FOREIGN
+    cfg.FOREIGN = False
     cfg.KIPRIS_KEY = "TEST"
     calls: list[dict] = []
     cpc_calls: list[str] = []
@@ -496,6 +667,7 @@ def _kipris_checks() -> None:
     finally:
         ks._get, cfg.KIPRIS_KEY = orig_get, orig_key
         cfg.KIPRIS_CPC_LIMIT = orig_lim
+        cfg.FOREIGN = orig_fg
         urllib.request.urlopen = orig_open
 
 
@@ -714,6 +886,7 @@ def main() -> int:
         cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY = orig[2], orig[3], orig[4]
 
     _kipris_checks()
+    _foreign_checks()
 
     print(f"\n{'실패 ' + str(len(FAILS)) + '건' if FAILS else '전부 통과'}")
     return 1 if FAILS else 0
