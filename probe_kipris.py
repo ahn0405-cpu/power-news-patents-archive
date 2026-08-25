@@ -211,6 +211,34 @@ PROBES = [
      "http://plus.kipris.or.kr/openapi/rest/"
      "ForeignPatentBibliographicService/bibliographicInfo",
      {"literatureNumber": "20260213551", "countryCode": "US"}, "accessKey"),
+
+    # ── 3차: currentPage 가 '쪽'인가 '몇 번째 건부터'인가 ────────────────
+    # 2차에서 1쪽의 2번째 건이 2쪽의 1번째로 나왔다. 그대로 읽으면 currentPage 는
+    # 쪽 번호가 아니라 시작 위치(1부터)다. 잘못 읽으면 같은 건을 반복해 받거나
+    # 사이를 건너뛴다 — 전수 수집에서 둘 다 치명적이다. 세 쪽을 나란히 본다.
+    ("[실측] 해외 쪽넘김 · currentPage=1",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    ("[실측] 해외 쪽넘김 · currentPage=2",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "2"}, "accessKey"),
+    ("[실측] 해외 쪽넘김 · currentPage=3",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "3"}, "accessKey"),
+    # 한 쪽 건수를 늘릴 수 있나 — 못 늘리면 요청 수가 그대로 건수가 된다.
+    ("[실측] 해외 · docsCount 로 쪽 크기 조절",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "1",
+      "docsCount": "50"}, "accessKey"),
+    ("[실측] 해외 · rows 로 쪽 크기 조절",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "1",
+      "rows": "50"}, "accessKey"),
 ]
 
 
@@ -566,6 +594,20 @@ def main() -> int:
         # 응답 본문은 판정과 무관하게 찍는다. 오류 XML 도 짧고, 거기에 '어느
         # 파라미터가 문제인지'가 적혀 오는 경우가 있어 다음 수를 정하는 근거가 된다.
         if verdict != "경로없음":
+            # 해외 응답은 목록 뒤에 집계(totalSearchCount)가 붙고, 목록이 길어
+            # 앞부분만 봐서는 그 값도 '한 쪽에 몇 건인지'도 보이지 않는다.
+            # 세어서 먼저 알려 주고, 꼬리도 같이 찍는다.
+            n_sr = body.count("<searchResult>")
+            if n_sr or "totalSearchCount" in body:
+                tail = ""
+                for t in ("totalSearchCount", "colString"):
+                    m = re.search(rf"<{t}>(.*?)</{t}>", body, re.S)
+                    if m:
+                        tail += f" · {t}={m.group(1).strip() or '(빈값)'}"
+                ids = re.findall(r"<ltrtno>(.*?)</ltrtno>", body)
+                print(f"    ▸ searchResult {n_sr}건{tail}")
+                if ids:
+                    print(f"    ▸ 문헌번호 앞 3건: {', '.join(ids[:3])}")
             print("    ── 응답 앞부분 " + "-" * 40)
             print("    " + _squash(body, HEAD))
         rows.append((mark, verdict, label, path))
