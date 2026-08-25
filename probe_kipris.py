@@ -353,10 +353,29 @@ def _fetch_doc(url: str) -> int:
         if ln and ln != prev:          # 빈 줄·연속 중복은 접는다
             out.append(ln)
             prev = ln
+    # 본문을 통째로 찍으면 정작 필요한 세 줄(요청 URL·오퍼레이션·인증키 이름)이
+    # 필드 목록 수백 줄에 묻힌다 → 먼저 뽑아서 앞에 놓는다.
+    print("── 뽑은 것 " + "-" * 53)
+    urls = sorted(set(re.findall(r"https?://[^\s\"'<>()]+", body)))
+    api = [u for u in urls if re.search(r"openapi|kipo-api|/api/|Service|Sevice", u)]
+    print(f"  API 로 보이는 주소 {len(api)}개 (전체 {len(urls)}개 중)")
+    for u in api[:40]:
+        print(f"    {u[:160]}")
+    keys = sorted(set(re.findall(r"\b(?:ServiceKey|serviceKey|accessKey|AccessKey)\b", body)))
+    print(f"  인증키 파라미터 표기: {keys or '문서에 안 보임'}")
+    ops = sorted(set(re.findall(r"\b(get[A-Z][A-Za-z]{4,40})\b", body)))
+    print(f"  오퍼레이션 후보 {len(ops)}개: {', '.join(ops[:30]) or '없음'}")
+    # 명세 표에 자주 나오는 파라미터 이름들(영문 소문자로 시작하는 camelCase).
+    hits = [ln for ln in out if re.search(r"(요청|Request|샘플|Sample|예시|URL)", ln)]
+    print(f"  '요청/URL/샘플' 이 든 줄 {len(hits)}개")
+    for ln in hits[:30]:
+        print(f"    {ln[:160]}")
+
     print("── 본문 " + "-" * 56)
-    print("\n".join(out[:900]))
-    if len(out) > 900:
-        print(f"… ({len(out) - 900}줄 더 있음)")
+    head = int(os.getenv("KIPRIS_DOC_LINES") or "180")
+    print("\n".join(out[:head]))
+    if len(out) > head:
+        print(f"… ({len(out) - head}줄 더 있음 — KIPRIS_DOC_LINES 로 늘릴 수 있다)")
     return 0
 
 
