@@ -34,6 +34,7 @@ import html
 import json
 import os
 import re
+import urllib.parse
 from datetime import timezone, timedelta
 from pathlib import Path
 
@@ -173,6 +174,61 @@ def _plain(s: str) -> str:
             break
         s = once
     return s
+
+
+_STD_NO = re.compile(r"^[A-Z]{2}\d+[A-Z]\d?$")
+
+
+def _docno(p: dict) -> str:
+    """바깥 창구(구글 특허·Espacenet)가 알아듣는 표준 문헌번호를 만든다.
+
+    왜 필요한가: 카드의 링크가 저장된 번호를 그대로 질의로 넘기고 있었는데, 그
+    번호가 창구마다 통하는 표기가 아니었다. 국내 공개번호 '1020260127780' 을
+    넣으면 구글은 아무것도 못 찾는다 — 사용자가 준 예제가 그 답이었다.
+      https://patents.google.com/patent/KR20250160754A/en?oq=KR20250160754
+    'oq'(원래 질의)가 KR20250160754 다. 즉 **표준 표기로 검색하면** 구글이 알아서
+    문헌 페이지로 보낸다.
+
+    실측(2026-08-25, 러너에서 열어 봄)
+      · 2025년 공개 KR20250160754A → 열림
+      · 우리 아카이브의 최근 90일 공개분은 표기가 맞아도 전부 404 다.
+        EPO OPS 가 준 표준번호(US12687116B1·WO2026142708A1·EP4778833A2 …)까지
+        404 였으니 표기 문제가 아니라 **구글이 아직 수록하지 않은 것**이다.
+      → 그래서 문헌 직통(/patent/…)이 아니라 검색(?q=)으로 보낸다. 직통은 없는
+        문헌이면 404 지만 검색은 '결과 없음' 이라 덜 나쁘고, 수록되는 순간
+        같은 링크가 바로 문헌으로 이어진다.
+
+    표기 규칙(저장된 값에서 만든다 — 아카이브가 누적이라 그리기 직전에 고친다):
+      이미 표준형(KR20260088580A)  그대로 — OPS 시절 항목이 그렇다
+      국내 13자리 1020260127780    앞의 문서종류 '10' 을 떼고 KR + A
+      공개국이 앞에 붙은 것         US20260221300 → US20260221300 + 종류코드
+      일본의 파이프 JP38…|2026…    파이프 뒤(국제표기) 쪽을 쓴다
+      유럽의 앞 0  EP04793971      0 을 떼어 EP4793971
+    종류코드는 ltrtno 끝 두 글자에서 가져온다(US 는 A1, EP 는 A1 …). 'A0' 은
+    KIPRIS 안에서만 쓰는 표기라 바깥에서는 'A' 로 보낸다.
+    """
+    raw = (p.get("number") or "").strip()
+    if not raw:
+        return ""
+    if _STD_NO.match(raw):
+        return raw
+    office = (p.get("office") or "").strip().upper()
+    lit = (p.get("ltrtno") or "").strip()
+    kind = ""
+    m = re.search(r"([A-Z]\d?)$", lit)
+    if m:
+        kind = "A" if m.group(1) == "A0" else m.group(1)
+    body = raw
+    if "|" in body:                      # 일본: 자국번호|국제표기
+        body = body.split("|")[-1]
+    if body.startswith(office) and office:
+        body = body[len(office):]
+    elif re.fullmatch(r"\d{13}", body):  # 국내 공개번호: 10 + 연도 + 일련번호
+        body, office = body[2:], "KR"
+    body = body.lstrip("0") or body
+    if not office or not body.isdigit():
+        return raw                        # 모르는 모양은 손대지 않는다
+    return f"{office}{body}{kind or 'A'}"
 
 
 def _lead(name: str) -> str:
@@ -343,15 +399,29 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
                     q_own[ap] = q_own.get(ap, 0) + 1
             if fix:
                 aname, region, flag = fix
+            # 바깥 창구로 넘길 표준 문헌번호. 화면에 보이는 번호는 저장된 표기를
+            # 그대로 두고(국내는 13자리가 관행), 링크만 표준형으로 보낸다.
+            std = _docno(p)
+            num = p.get("number", "")
+            # 일본 공보는 자국번호와 국제표기가 파이프로 이어져 저장돼 있다
+            # (JP38528513|2026528513). 읽는 사람에게 파이프는 아무 뜻이 없으므로
+            # 화면에도 표준 표기를 보인다 — 다른 나라는 저장된 표기가 곧 관행이다.
+            if "|" in num and std:
+                num = std
             it = {
-                "title": _plain(p.get("title", "")), "url": p.get("url", ""),
-                "number": p.get("number", ""),
+                "title": _plain(p.get("title", "")),
+                "url": ("https://patents.google.com/?q="
+                        + urllib.parse.quote(std) + "&hl=ko") if std
+                       else p.get("url", ""),
+                "number": num,
                 "aName": aname, "aCountry": region, "aFlag": flag,
                 "office": p.get("office", ""),
                 "pub_date": p.get("pub_date"),
                 "category": p.get("category", "etc"), "country": region,
                 "week": wk,
             }
+            if std and std != num:          # 같으면 싣지 않는다(페이로드 절약)
+                it["nq"] = std
             if raw and raw != aname:
                 it["assignee"] = raw
             if p.get("snippet"):
@@ -1389,7 +1459,10 @@ function card(it, cm){
 function patLinks(it){
   const L = (FEED.patents.links)||[];
   if(!L.length || !it.number) return '';
-  const n = encodeURIComponent(it.number);
+  // 화면에는 저장된 표기를 그대로 보이되(국내는 13자리가 관행이다) 바깥 창구에는
+  // 표준 문헌번호로 넘긴다. 둘이 다를 때만 nq 가 실려 온다 — 자세한 것은
+  // site_render._docno 주석 참조.
+  const n = encodeURIComponent(it.nq || it.number);
   const out = L.filter(l=> !l.office || l.office===it.office).map(l=>
     '<a class="xl" href="'+esc(safeUrl(String(l.url||'').replace('{n}', n)))+'"'
     + ' target="_blank" rel="noopener" title="'+esc(l.tip||'')+'">'+esc(l.label)+' ↗</a>');

@@ -282,6 +282,40 @@ def _lazy_checks(sr) -> None:
         check(guard in js, f"{name}는 다 받기 전에는 그리지 않는다")
 
 
+def _docno_checks(sr) -> None:
+    """바깥 링크에 넘길 표준 문헌번호(_docno).
+
+    조용한 실패다 — 번호를 한 글자 틀려도 페이지는 멀쩡히 뜨고 링크만 빈손으로
+    간다. 실제로 국내 공개번호(1020260127780)를 그대로 넘기고 있었고, 아무도
+    그걸 열어 보지 않아 오래 남아 있었다. 표기 여섯 갈래를 실제 값으로 고정한다.
+    """
+    print("\n· 바깥 링크용 문헌번호")
+    cases = [
+        # (저장된 값, office, ltrtno, 기대값, 설명)
+        ({"number": "KR20260088580A", "office": "KR"}, "KR20260088580A",
+         "이미 표준형이면 손대지 않는다 (OPS 시절 항목)"),
+        ({"number": "1020260127780", "office": "KR"}, "KR20260127780A",
+         "국내 13자리에서 문서종류 '10' 을 떼고 KR·A 를 붙인다"),
+        ({"number": "US20260221300", "office": "US", "ltrtno": "202600221300A1"},
+         "US20260221300A1", "공개국 접두를 살리고 종류코드를 ltrtno 에서 가져온다"),
+        ({"number": "CN122158202", "office": "CN", "ltrtno": "202610335327A0"},
+         "CN122158202A", "KIPRIS 안에서만 쓰는 'A0' 은 바깥에서 'A' 로 보낸다"),
+        ({"number": "JP38528513|2026528513", "office": "JP",
+          "ltrtno": "202600528513A0"}, "JP2026528513A",
+         "일본은 파이프 뒤(국제표기) 쪽을 쓴다"),
+        ({"number": "EP04793971", "office": "EP", "ltrtno": "000004793971A1"},
+         "EP4793971A1", "유럽은 앞의 0 을 뗀다"),
+        ({"number": "WO2026142708A1", "office": "WO"}, "WO2026142708A1",
+         "PCT 도 표준형 그대로"),
+        ({"number": "이상한번호", "office": "KR"}, "이상한번호",
+         "모르는 모양은 손대지 않는다 (틀린 번호를 지어내지 않는다)"),
+        ({"number": "", "office": "KR"}, "", "번호가 없으면 빈 값"),
+    ]
+    for item, want, why in cases:
+        got = sr._docno(item)
+        check(got == want, f"{why} — {item.get('number') or '(빈 값)'} → {got}")
+
+
 def _quad_checks(sr) -> None:
     """분야 지도(quadChartHTML)를 실제 값 분포로 그려 보고 눈으로 볼 것을 대신 센다.
 
@@ -1184,6 +1218,8 @@ def main() -> int:
 
         print("· 분야별 국내 공급자 (site_render 안의 JS)")
         _supplier_checks(sr)
+
+        _docno_checks(sr)
 
         print("· 분야 지도 (축·등급·이름표 배치)")
         _quad_checks(sr)
