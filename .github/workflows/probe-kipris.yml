@@ -34,6 +34,10 @@ on:
         description: "명세 페이지 URL — 넣으면 두드리지 않고 그 페이지 본문만 찍는다"
         required: false
         default: ""
+      head:
+        description: "응답 본문을 몇 자까지 찍을지 (해외는 한 건에 필드가 스무 개 넘는다)"
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -77,4 +81,5 @@ jobs:
           # 개발 환경은 plus.kipris.or.kr 이 프록시 허용목록 밖이라 명세를 못 연다.
           # 러너는 열리므로 여기서 받아 로그로 읽는다(요청 URL·파라미터를 문서에서 가져온다).
           KIPRIS_DOC_URL: ${{ inputs.docurl }}
+          KIPRIS_HEAD: ${{ inputs.head }}
         run: python probe_kipris.py

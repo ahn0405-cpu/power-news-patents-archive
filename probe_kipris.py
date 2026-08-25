@@ -38,7 +38,9 @@ import urllib.request
 
 KEY = os.getenv("KIPRIS_KEY", "").strip()
 TIMEOUT = 25
-HEAD = 900            # 응답 앞부분만 찍는다(로그가 길면 읽기 어렵다)
+# 응답 앞부분만 찍는다(로그가 길면 읽기 어렵다). 다만 해외 응답은 한 건에 필드가
+# 스무 개 넘어 900자로는 목록 한 건도 다 못 본다 — 필요할 때 KIPRIS_HEAD 로 늘린다.
+HEAD = int((os.getenv("KIPRIS_HEAD") or "").strip() or 900)   # 빈 입력=기본값
 
 # 명세서 두 건에서 확인된 요청 주소(추측 아님):
 #   국내 특허·실용 공개·등록공보
@@ -154,6 +156,61 @@ PROBES = [
      "http://plus.kipris.or.kr/openapi/rest/"
      "ForeignPatentBibliographicService/bibliographicInfo",
      {"literatureNumber": "10539396", "countryCode": "US"}, "accessKey"),
+
+    # ── 2차: 해외가 열린 건 확인됐다. 이제 수집기를 짜는 데 필요한 것을 잰다 ──
+    # 1차에서 드러난 것: 해외 응답은 성공인데도 resultCode 가 **비어 있고**,
+    # 항목 태그가 <item> 이 아니라 <searchResult> 다. 국내와 같은 코드로는 못 읽는다.
+    #
+    # (가) 성공/실패를 무엇으로 가르나 — resultCode 가 비면 판정 근거가 없다.
+    ("[실측] 해외 · 일부러 틀린 키 (실패는 어떻게 생겼나)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "1",
+      "__badkey__": "1"}, "accessKey"),
+    ("[실측] 해외 · 없는 파라미터를 넣으면",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "1",
+      "nosuchparam": "1"}, "accessKey"),
+    # (나) openDate 가 실제로 거르나 — 1차에서는 범위를 넣으나 빼나 첫 건이 같아
+    #      걸러진 것인지 무시된 것인지 갈리지 않았다. 결과가 있을 수 없는 범위를
+    #      넣어 본다. 그래도 결과가 나오면 그 파라미터는 무시되는 것이다.
+    ("[실측] 해외 · 결과가 있을 수 없는 기간 (1900년)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "19000101~19000102",
+      "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    ("[실측] 해외 · 좁은 기간 (2026년 7월 한 달)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "openDate": "20260701~20260731",
+      "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    # (다) 전수 수집의 전제 — 총 건수를 주나? 한 번에 몇 건을 주나?
+    ("[실측] 해외 · 한 쪽에 몇 건을 주나 (numOfRows 시도)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "1",
+      "numOfRows": "5"}, "accessKey"),
+    ("[실측] 해외 · 2쪽은 다른 내용인가",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "2"}, "accessKey"),
+    # (라) 대상국을 여러 개 줄 수 있나 (한 번에 US+EP+JP+CN 이면 요청이 4분의 1)
+    ("[실측] 해외 · 대상국 여러 개 (US,EP,JP,CN)",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US,EP,JP,CN",
+      "currentPage": "1"}, "accessKey"),
+    ("[실측] 해외 · 대상국을 비우면",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"ipc": "H02M", "currentPage": "1"}, "accessKey"),
+    # (마) CPC — 국내는 검색 파라미터가 없어 출원번호로 되받아 보강했다.
+    #      해외 응답에 epc 칸이 있는데 1차 표본에서는 비어 있었다. 별도 CPC
+    #      파라미터가 있는지, 서지상세에 CPC 가 실려 오는지 확인한다.
+    ("[실측] 해외 · cpc 파라미터가 있나",
+     f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
+     {"cpc": "Y04S", "collectionValues": "US", "currentPage": "1"}, "accessKey"),
+    ("[실측] 해외 서지상세 · 1차에서 받은 실제 문헌번호로",
+     "http://plus.kipris.or.kr/openapi/rest/"
+     "ForeignPatentBibliographicService/bibliographicInfo",
+     {"literatureNumber": "202600213551A1", "countryCode": "US"}, "accessKey"),
+    ("[실측] 해외 서지상세 · 공개번호 표기로",
+     "http://plus.kipris.or.kr/openapi/rest/"
+     "ForeignPatentBibliographicService/bibliographicInfo",
+     {"literatureNumber": "20260213551", "countryCode": "US"}, "accessKey"),
 ]
 
 
@@ -243,7 +300,11 @@ def _url(base: str, path: str, params: dict, kp: str) -> str:
     한 실행에서 둘 다 두드려야 하므로 항목마다 다른 기준 경로를 쓸 수 있어야 한다.
     """
     q = dict(params)
-    q[kp] = KEY or "NO-KEY-PROBE"
+    # __badkey__ 는 '일부러 틀린 키로 불러 실패가 어떻게 생겼는지 본다'는 표시다.
+    # 해외 응답은 성공해도 resultCode 가 비어 있어서, 성공만 봐서는 판정 근거를
+    # 만들 수 없다 — 실패한 모습을 봐야 둘을 가르는 규칙이 나온다.
+    bad = q.pop("__badkey__", None)
+    q[kp] = "NOT-A-REAL-KEY" if bad else (KEY or "NO-KEY-PROBE")
     head = path if path.startswith("http") else f"{base}/{path}"
     return head + "?" + urllib.parse.urlencode(q)
 
