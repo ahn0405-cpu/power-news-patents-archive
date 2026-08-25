@@ -1513,8 +1513,12 @@ function patentScopeHTML(){
   const f=FEED.patents, r=f.pubRange;
   if(!r) return '';
   return '<p class="scope">📄 <b>공개일 '+esc(r.from)+' ~ '+esc(r.to)+'</b> 특허 '
-    + f.items.length.toLocaleString()+'건 · 주요 출원인 '+(f.applicants||0)+'곳을 매주 조회해'
-    + '(1회 조회 범위: 최근 '+(f.lookbackDays||90)+'일 공개분) 새로 공개된 것만 누적합니다.</p>';
+    // 수집 축이 바뀌었다(출원인 목록 → 분야+기간 전수). 문구가 옛 방식 그대로면
+    // 읽는 사람은 아직 65곳만 보는 줄 안다.
+    + count('patents').toLocaleString()+'건 · <b>분야(IPC)와 기간</b>으로 조회해 '
+    + '조건에 맞는 것을 모두 담습니다(1회 조회 범위: 최근 '
+    + (f.lookbackDays||90)+'일 공개분, 국내 공보 + 미국·유럽·일본·중국). '
+    + '새로 공개된 것만 누적합니다.</p>';
 }
 
 function renderOverview(){
@@ -2381,8 +2385,8 @@ function renderStats(list){
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
       + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수입니다(출원인이 35곳이어도 셋이 대부분을 가져가면 4곳 수준으로 나옵니다). '
       + '칩의 %는 그 분야 안에서의 지분입니다. 집중된 분야일수록 회피설계·라이선스 검토가 먼저 필요합니다.<br>'
-      + '수집은 출원인마다 상한이 있어 큰 기업이 잘려 있습니다 → 분야 구성비는 표본에서, 규모는 실제 공개 총계에서 가져와 되돌린 <b>추정치</b>입니다. '
-      + '<b>※ 시장 점유율이 아닙니다</b> — 추적 중인 주요 출원인 '+(FEED.patents.applicants||0)+'곳 안에서의 분포입니다.</p>'
+      + '<b>※ 시장 점유율이 아닙니다</b> — 최근 '+(FEED.patents.lookbackDays||90)
+      + '일 공개분 안에서의 분포이며, 각 기업이 가진 특허 전체가 아닙니다.</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹'
       + '<span class="rankseg">'
@@ -2594,8 +2598,9 @@ function wire(){
 
 // 건수는 FEED.*.total 을 쓴다 — items 는 지연 로딩 중이면 최근분뿐이라,
 // items.length 로 적으면 '아카이브가 줄었다'로 읽힌다.
-$('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: EPO OPS 공식 API에서 주요 출원인 '
-  + (FEED.patents.applicants||0) + '곳 × 전력 CPC로 매주 수집(1회 조회 범위 = 최근 '
+$('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: KIPRISplus 공식 API에서 '
+  + '전력 8대 분야(IPC)로 매주 수집 — 국내 공보와 해외(미국·유럽·일본·중국) 공보 '
+  + '(1회 조회 범위 = 최근 '
   + (FEED.patents.lookbackDays||90) + '일 공개분, 새로 공개된 것만 누적). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
   + '<br>최종 갱신 <b class="mono">'+esc(FEED.generated)+'</b> · 뉴스 '+count('news')
