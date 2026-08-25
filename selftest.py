@@ -75,6 +75,81 @@ def _kipris_page(rows: list[tuple[int, str, str]], total: int) -> str:
             f"<count><totalCount>{total}</totalCount></count></body></response>")
 
 
+def _favicon_checks(sr) -> None:
+    """탭 아이콘. 여기서 틀리면 오류 없이 조용히 아이콘만 사라진다.
+
+    특히 data URI 는 HTML 속성 안에 그대로 들어가므로, 따옴표나 꺾쇠가 살아
+    있으면 속성이 그 자리에서 끊긴다 — 페이지는 멀쩡히 뜨고 아이콘만 안 나온다.
+    """
+    import struct
+    import tempfile
+    from pathlib import Path
+
+    import favicon as fv
+
+    svg = fv.svg()
+    check(svg.startswith("<svg") and svg.rstrip().endswith("</svg>"),
+          "SVG 가 온전히 닫힌다")
+    check('width="32"' in svg and 'viewBox="0 0 32 32"' in svg,
+          "SVG 에 고유 크기와 viewBox 가 다 있다")
+    check(f"#{fv.BG[0]:02X}{fv.BG[1]:02X}{fv.BG[2]:02X}" in svg,
+          "타일 색이 사이트 강조색(--accent)과 같다")
+    import re as _re2
+    pts = _re2.search(r'points="([^"]+)"', svg)
+    pairs = pts.group(1).split() if pts else []
+    check(len(pairs) == len(fv.BOLT)
+          and all(len(p.split(",")) == 2 for p in pairs),
+          f"번개 꼭짓점이 {len(fv.BOLT)}개 다 들어간다 (읽은 값 {len(pairs)}개)")
+    # 벡터와 래스터가 같은 좌표를 쓰는지. 갈라지면 탭과 바로가기의 모양이 달라진다.
+    fit = fv._fit(32)
+    check(all(abs(float(p.split(",")[0]) - fit[i][0]) < 0.01
+              and abs(float(p.split(",")[1]) - fit[i][1]) < 0.01
+              for i, p in enumerate(pairs)),
+          "SVG 좌표가 래스터와 같은 _fit() 에서 나온다")
+
+    uri = fv.data_uri()
+    check(uri.startswith("data:image/svg+xml,"), "data URI 형식이 맞다")
+    bad = [c for c in '"<>#' if c in uri]
+    check(not bad,
+          f"data URI 에 속성을 깨뜨리는 문자가 없다 (발견: {bad or '없음'})")
+
+    # PNG 서명과 실제 크기
+    for size in (16, 32, 180):
+        data = fv.png(size)
+        w, h = struct.unpack(">II", data[16:24])
+        check(data[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) == (size, size),
+              f"PNG {size}px 가 유효하다 ({w}x{h})")
+
+    # ICO 헤더: reserved=0, type=1, 그리고 담은 장수
+    blob = fv.ico()
+    res, typ, cnt = struct.unpack("<HHH", blob[:6])
+    check((res, typ) == (0, 1) and cnt == 2,
+          f"ICO 헤더가 맞다 (type={typ}, 장수={cnt})")
+    # 각 항목이 가리키는 자리에 진짜 PNG 가 있는지 — 오프셋을 잘못 쌓으면
+    # 파일 크기는 그럴듯한데 브라우저가 못 읽는다.
+    okpng = True
+    for i in range(cnt):
+        off, = struct.unpack("<I", blob[6 + 16 * i + 12: 6 + 16 * i + 16])
+        n, = struct.unpack("<I", blob[6 + 16 * i + 8: 6 + 16 * i + 12])
+        if blob[off:off + 8] != b"\x89PNG\r\n\x1a\n" or off + n > len(blob):
+            okpng = False
+    check(okpng, "ICO 안의 각 항목이 실제 PNG 를 가리킨다")
+
+    with tempfile.TemporaryDirectory() as td:
+        fv.write(Path(td))
+        made = sorted(p.name for p in Path(td).iterdir())
+        check(made == ["apple-touch-icon.png", "favicon.ico", "favicon.svg"],
+              f"아이콘 파일 세 개를 쓴다 ({', '.join(made)})")
+
+    # 페이지가 실제로 그걸 가리키는지. favicon.ico 는 링크가 없어도 브라우저가
+    # 자동으로 찾는 자리라, 파일만 있으면 404 는 사라진다.
+    page = sr._PAGE
+    check('rel="icon"' in page and "__FAVICON__" in page,
+          "head 에 기본 아이콘 링크가 있다")
+    check('href="favicon.ico"' in page, "head 에 ico 대비책이 있다")
+    check('rel="apple-touch-icon"' in page, "head 에 iOS 바로가기 아이콘이 있다")
+
+
 def _lazy_checks(sr) -> None:
     """목록 분할과, 분할해도 집계가 흔들리지 않는지.
 
@@ -608,6 +683,9 @@ def main() -> int:
 
         print("· 지연 로딩 (목록 분할)")
         _lazy_checks(sr)
+
+        print("· 탭 아이콘(파비콘)")
+        _favicon_checks(sr)
 
         print("· 거래·지원 안내 데이터 (사람이 관리하는 상수)")
         import ip_guide as ig

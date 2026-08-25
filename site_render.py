@@ -40,6 +40,7 @@ import news_config as ncfg
 import patent_config as pcfg
 import insights as _insights
 import ip_guide
+import favicon as _favicon
 
 KST = timezone(timedelta(hours=9))
 
@@ -456,12 +457,14 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                .replace("__CI__", _ci_markup()) \
                .replace("__GSV__", _esc(GSV_TOKEN)) \
                .replace("__SITEURL__", _esc(SITE_URL)) \
+               .replace("__FAVICON__", _favicon.data_uri()) \
                .replace("__CSS__", _CSS) \
                .replace("__JS__", _JS) \
                .replace("__FEED__", payload)
     if not GSV_TOKEN:
         html = re.sub(r'\n<meta name="google-site-verification"[^>]*>', "", html)
     (site_dir / "index.html").write_text(html, encoding="utf-8")
+    _favicon.write(site_dir)
 
     # 검색엔진용 최소 파일 두 개. 사이트가 index.html 한 장이라 sitemap 도 한 줄이다.
     # robots.txt 가 없으면 크롤러가 사이트맵 위치를 알 방법이 없다.
@@ -968,6 +971,12 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta property="og:description" content="__TAGLINE__">
 <meta property="og:url" content="__SITEURL__">
 <meta property="og:locale" content="ko_KR">
+<!-- 탭 아이콘. 기본은 data: 로 박아 요청이 없고 file:// 로 열어도 뜬다.
+     favicon.ico 는 링크가 없어도 브라우저가 자동으로 찾는 자리라 같이 둔다
+     (없으면 404 가 남고, SVG 를 못 읽는 옛 클라이언트의 대비책이기도 하다). -->
+<link rel="icon" type="image/svg+xml" href="__FAVICON__">
+<link rel="alternate icon" href="favicon.ico" sizes="16x16 32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>__CSS__</style></head>
 <body>
 <div class="wrap">
