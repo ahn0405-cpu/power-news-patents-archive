@@ -50,24 +50,42 @@ def _url(lit: str, office: str) -> str:
             + urllib.parse.urlencode(q))
 
 
-def _fetch(lit: str, office: str) -> str | None:
-    """(국적 코드) 또는 None. 예외는 삼킨다 — 한 건 실패로 실행이 죽으면 안 된다."""
-    # 여기서는 어떤 예외도 밖으로 내보내지 않는다. 이 보강은 '있으면 좋은' 것이라
-    # 한 건이 이상하다고 매일 도는 빌드를 죽이면 안 된다. http.client 쪽 예외는
-    # OSError 계열이 아니라 따로 잡히지도 않는다 → 통째로 삼키고 다음에 다시 한다.
+def _fetch(lit: str, office: str) -> tuple[str | None, str]:
+    """(국적 코드 또는 None, 실패 사유). 성공이면 사유는 빈 문자열.
+
+    사유를 돌려주는 이유: 첫 실행에서 800곳 중 579곳이 실패했는데 전부 None 으로
+    뭉개 놓아 '왜'를 가릴 수 없었다. 타임아웃인지, 서버가 오류 코드를 준 것인지,
+    응답은 왔는데 국적 칸이 빈 것인지에 따라 다음 수가 정반대다(재시도 / 요청 교정
+    / 포기). 실패를 세는 것과 실패를 아는 것은 다르다.
+    """
+    # 어떤 예외도 밖으로 내보내지 않는다. 이 보강은 '있으면 좋은' 것이라 한 건이
+    # 이상하다고 매일 도는 빌드를 죽이면 안 된다. http.client 쪽 예외는 OSError
+    # 계열이 아니라 따로 잡히지도 않는다 → 통째로 삼키고 사유만 남긴다.
     try:
         req = urllib.request.Request(_url(lit, office),
                                      headers={"Accept": "application/xml"})
         with urllib.request.urlopen(req, timeout=cfg.ORIGIN_TIMEOUT) as r:
             body = r.read()
+    except TimeoutError:
+        return None, "시간초과"
+    except Exception as e:                       # noqa: BLE001 — 사유만 남긴다
+        return None, f"연결:{type(e).__name__}"
+    try:
         root = ET.fromstring(body)
-    except Exception:
-        return None
+    except Exception:                            # noqa: BLE001
+        return None, "본문파싱"
     # 해외는 정상일 때 resultCode 가 비어 있다(국내와 반대) — 채워져 있으면 실패다.
-    if (root.findtext(".//resultCode") or "").strip():
-        return None
+    code = (root.findtext(".//resultCode") or "").strip()
+    if code:
+        return None, f"코드{code}"
     cc = (root.findtext(".//applicantInfo/applicantCountry") or "").strip()
-    return cc.upper() or None
+    if cc:
+        return cc.upper(), ""
+    # 응답은 정상인데 국적 칸이 비었다. 문헌 자체가 없어서 빈 것인지(출원인 이름도
+    # 없다) 국적만 빠진 것인지 갈라 둔다 — 앞의 것은 번호 표기 문제이고 뒤의 것은
+    # 그 문헌에 원래 없는 것이라 다시 두드려도 소용없다.
+    has_name = (root.findtext(".//applicantInfo/applicantName") or "").strip()
+    return None, "국적칸없음" if has_name else "빈응답"
 
 
 def targets(weeks: dict[str, dict], store: dict) -> list[tuple[str, str, str, int]]:
@@ -121,7 +139,8 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
 
     def one(t):
         name, lit, office, _ = t
-        return name, _fetch(lit, office)
+        cc, why = _fetch(lit, office)
+        return name, office, cc, why
 
     with ThreadPoolExecutor(max_workers=max(1, cfg.ORIGIN_WORKERS)) as pool:
         results = list(pool.map(one, todo))
@@ -129,18 +148,27 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
     got: dict[str, str] = {}
     fail: dict[str, int] = {}
     prev = store.get("originTry") or {}
-    for name, cc in results:
+    why_cnt: dict[str, int] = {}
+    fail_off: dict[str, int] = {}
+    for name, office, cc, why in results:
         if cc:
             got[name] = cc
         else:
             fail[name] = prev.get(name, 0) + 1
+            why_cnt[why] = why_cnt.get(why, 0) + 1
+            fail_off[office] = fail_off.get(office, 0) + 1
     by_cc: dict[str, int] = {}
     for cc in got.values():
         by_cc[cc] = by_cc.get(cc, 0) + 1
     top = " ".join(f"{k} {v}" for k, v in
                    sorted(by_cc.items(), key=lambda x: -x[1])[:6])
+    _tally = lambda d: " ".join(  # noqa: E731 — 로그 한 줄용
+        f"{k} {v}" for k, v in sorted(d.items(), key=lambda x: -x[1])[:6])
     print(f"  출원인 국적 보강: {len(todo)}곳 조회 → {len(got)}곳 확인"
           f" · 실패 {len(fail)}곳 · 남은 곳 {rest:,}")
     if top:
         print(f"    확인된 국적: {top}")
+    if why_cnt:
+        print(f"    실패 사유: {_tally(why_cnt)}")
+        print(f"    실패한 공개국: {_tally(fail_off)}")
     return got, fail

@@ -587,19 +587,20 @@ def _origin_checks() -> None:
     pcfg.KIPRIS_KEY = "x"
     try:
         ur.urlopen = lambda req, timeout=None: (seen.append(req.full_url), _R(ok))[1]
-        check(po._fetch("L1", "CN") == "CN", "정상 응답에서 출원인 국적을 뽑는다")
+        check(po._fetch("L1", "CN") == ("CN", ""), "정상 응답에서 출원인 국적을 뽑는다")
         check(seen and "literatureNumber=L1" in seen[0]
               and "countryCode=CN" in seen[0]
               and pcfg.ORIGIN_KEYPARAM + "=" in seen[0],
               "문헌번호·공개국·키 질의를 제대로 싣는다")
         ur.urlopen = lambda req, timeout=None: _R(bad)
-        check(po._fetch("L1", "CN") is None,
-              "resultCode 가 **채워져** 있으면 실패로 읽는다 (국내와 반대다)")
+        check(po._fetch("L1", "CN") == (None, "코드11"),
+              "resultCode 가 **채워져** 있으면 실패로 읽고 사유를 남긴다 (국내와 반대다)")
 
         def boom(req, timeout=None):
             raise TimeoutError("timed out")
         ur.urlopen = boom
-        check(po._fetch("L1", "CN") is None, "타임아웃은 삼키고 None 을 돌려준다")
+        check(po._fetch("L1", "CN") == (None, "시간초과"),
+              "타임아웃은 삼키고 사유를 남긴다")
     finally:
         ur.urlopen, pcfg.KIPRIS_KEY = orig_open, orig_key
     del io
