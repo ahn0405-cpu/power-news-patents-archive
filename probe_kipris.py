@@ -41,6 +41,10 @@ TIMEOUT = 25
 # 응답 앞부분만 찍는다(로그가 길면 읽기 어렵다). 다만 해외 응답은 한 건에 필드가
 # 스무 개 넘어 900자로는 목록 한 건도 다 못 본다 — 필요할 때 KIPRIS_HEAD 로 늘린다.
 HEAD = int((os.getenv("KIPRIS_HEAD") or "").strip() or 900)   # 빈 입력=기본값
+# 태그 이름 정규식. 찍으면 그 이름에 걸리는 태그 블록만 따로 뽑아 앞에 놓는다.
+# '앞부분 N자'는 찾는 필드가 뒤에 있으면 쓸모가 없다(실측: 국내 서지상세는 청구항이
+# 앞을 다 먹어 출원인 블록이 4천 자 밖으로 밀렸다).
+PICK = (os.getenv("KIPRIS_PICK") or "").strip()
 
 # 명세서 두 건에서 확인된 요청 주소(추측 아님):
 #   국내 특허·실용 공개·등록공보
@@ -634,6 +638,19 @@ def main() -> int:
                 print(f"    ▸ searchResult {n_sr}건{tail}")
                 if ids:
                     print(f"    ▸ 문헌번호 앞 3건: {', '.join(ids[:3])}")
+            # 찾는 필드가 응답 뒤쪽에 있으면 '앞부분'으로는 영영 안 보인다.
+            # 국내 서지상세가 그랬다 — 청구항 26개가 앞을 다 먹어, 출원인 블록이
+            # 4천 자 밖으로 밀렸다. 머리 길이를 키우면 로그만 커지고 읽기는 더
+            # 어려워지므로, 볼 태그를 찍어서 그 블록만 뽑는다(KIPRIS_PICK).
+            if PICK:
+                hit = [f"<{t}>{_squash(v, 300)}</{t}>"
+                       for t, v in re.findall(r"<(\w+)>(.*?)</\1>", body, re.S)
+                       if re.search(PICK, t, re.I)]
+                print(f"    ── 고른 태그 /{PICK}/ — {len(hit)}개 " + "-" * 24)
+                for h in hit[:40]:
+                    print("      " + h[:300])
+                if not hit:
+                    print("      (없음 — 그런 이름의 태그가 응답에 없다)")
             print("    ── 응답 앞부분 " + "-" * 40)
             print("    " + _squash(body, HEAD))
         rows.append((mark, verdict, label, path))
