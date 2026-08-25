@@ -239,6 +239,65 @@ def _paths(svc: str) -> list[tuple[str, str, dict]]:
     return [(label, path.format(svc=svc), params) for label, path, params in PROBES]
 
 
+def _shape(k: str) -> str:
+    """키의 '생김새'만 요약한다. 값은 절대 찍지 않는다 — 시크릿이다.
+
+    이중 인코딩·복사 오류는 생김새로 드러난다: base64 키에 '%' 가 섞여 있으면
+    퍼센트 인코딩된 문자열을 그대로 넣은 것이고, 공백이 있으면 붙여넣기 사고다.
+    """
+    marks = {c: k.count(c) for c in "=+/-_%" if c in k}
+    extra = " ".join(f"'{c}'×{n}" for c, n in marks.items()) or "특수문자 없음"
+    ws = sum(c.isspace() for c in k)
+    return (f"{len(k)}자 · 영문 {sum(c.isalpha() for c in k)} "
+            f"숫자 {sum(c.isdigit() for c in k)} · {extra}"
+            + (f" · ⚠️ 공백 {ws}자 포함" if ws else ""))
+
+
+def _key_diagnosis(base: str, svc: str, kp: str) -> None:
+    """'기간 만료'가 정말 기간 문제인지 가른다.
+
+    왜 필요한가: 사용자 포털에는 승인 완료·종료일 26.12.31 로 떠 있는데 서버는
+    DEADLINE_HAS_EXPIRED 를 돌려준다. 앞뒤가 맞지 않는다. resultCode 31 을
+    '기간 만료'로 읽은 것은 resultMsg 문자열에서 온 해석일 뿐, KIPRIS 가 그
+    코드를 다른 상황에도 쓰는지는 확인한 적이 없다.
+
+    가르는 방법: **일부러 틀린 키**를 같은 요청에 넣어 본다.
+      · 틀린 키도 31 → 31 은 '이 키로는 못 쓴다' 는 뭉뚱그린 코드다. 우리 키가
+        서버에 등록된 키로 인식되고 있다는 근거가 사라진다(키 자체를 의심).
+      · 틀린 키는 다른 코드 → 우리 키는 등록된 키가 맞다. 그러면 남는 설명은
+        정말로 기간(특히 **시작일 미도래**)이다.
+    함께 볼 것: 퍼센트 인코딩된 키를 그대로 넣었다면 우리가 한 번 더 인코딩해
+    다른 문자열이 되어 나간다 → unquote 한 값도 같이 시험한다.
+    """
+    op, dparams = DISCOVERY
+    print("\n   키 진단 — '기간 문제'인지 '키 문제'인지 가른다")
+    print(f"     키 생김새: {_shape(KEY)}")
+
+    variants = [("있는 그대로", KEY), ("일부러 틀린 키", KEY + "ZZ")]
+    un = urllib.parse.unquote(KEY)
+    if un != KEY:
+        variants.append(("퍼센트 디코딩", un))
+        print("     ⚠️ 퍼센트 인코딩된 키로 보입니다 — 디코딩본도 함께 시험합니다.")
+    # 키를 URL 에 그대로 붙이는 경로도 본다. urlencode 는 '+' 를 %2B 로 바꾸는데,
+    # 서버가 그걸 되돌리지 않으면 다른 키가 되어 버린다(base64 키의 흔한 함정).
+    raw_url = (f"{base}/{svc}/{op}?" + urllib.parse.urlencode(dparams)
+               + f"&{kp}={KEY}")
+
+    for label, val in variants:
+        q = dict(dparams)
+        q[kp] = val
+        code, body, err = _fetch(f"{base}/{svc}/{op}?" + urllib.parse.urlencode(q))
+        v, why = _verdict(code, body, err)
+        print(f"     · {label:14s} [{v}] {why}")
+    code, body, err = _fetch(raw_url)
+    v, why = _verdict(code, body, err)
+    print(f"     · {'인코딩 안 함':14s} [{v}] {why}")
+
+    print("     읽는 법: '일부러 틀린 키'가 위와 **같은 코드**면 → 키 쪽을 의심해야 "
+          "한다. **다른 코드**면 → 우리 키는 등록된 키이고, 남는 설명은 활용 "
+          "시작일이 아직 오지 않았을 가능성이다.")
+
+
 def main() -> int:
     print("KIPRISplus 프로브 — 무엇이 열리는지 실측\n" + "=" * 66)
     keyless = not KEY
@@ -272,6 +331,8 @@ def main() -> int:
     code, body, err = _fetch(nokey)
     v, why = _verdict(code, body, err)
     print(f"     · (키 없음)   [{v}] {why}")
+
+    _key_diagnosis(base, svc, kp)
 
     rows: list[tuple[str, str, str, str]] = []
     print("\n③ 서비스별 — 이 키로 승인돼 있는가")
