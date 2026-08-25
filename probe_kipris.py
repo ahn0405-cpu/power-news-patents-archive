@@ -361,6 +361,22 @@ def _fetch_doc(url: str) -> int:
     print(f"  API 로 보이는 주소 {len(api)}개 (전체 {len(urls)}개 중)")
     for u in api[:40]:
         print(f"    {u[:160]}")
+    # 이 페이지에 요청 URL 이 없을 수 있다(해외특허 명세가 그랬다). 그럴 때 다음
+    # 단서는 '명세서·설명서·다운로드' 링크다 → 앵커를 주소와 글자로 짝지어 찍는다.
+    anchors = re.findall(r"<a\b[^>]*href\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+                         body, re.S | re.I)
+    want = re.compile(r"명세|설명서|다운로드|가이드|매뉴얼|샘플|API")
+    picked, seen_a = [], set()
+    for href, label in anchors:
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", label)).strip()
+        if not want.search(text) or (href, text) in seen_a:
+            continue
+        seen_a.add((href, text))
+        picked.append((urllib.parse.urljoin(url, href), text))
+    print(f"  '명세서·설명서·다운로드' 링크 {len(picked)}개")
+    for href, text in picked[:25]:
+        print(f"    {text[:40]:42s} {href[:150]}")
+
     keys = sorted(set(re.findall(r"\b(?:ServiceKey|serviceKey|accessKey|AccessKey)\b", body)))
     print(f"  인증키 파라미터 표기: {keys or '문서에 안 보임'}")
     ops = sorted(set(re.findall(r"\b(get[A-Z][A-Za-z]{4,40})\b", body)))
