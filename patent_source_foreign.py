@@ -121,7 +121,7 @@ def _normalize(node: ET.Element, cat_key: str) -> dict | None:
         "snippet": "",
         "office": office,
         "filing_no": kr._text(node, "applicationNo"),
-        "cpc": ipcs[:6],
+        "cpc": ipcs[:10],   # 국내와 같은 상한(patent_source_kipris.IPC_KEEP)
         "category": kr._classify(ipcs, cat_key),
         "applicant": name,
         "country": region,

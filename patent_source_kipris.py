@@ -117,17 +117,29 @@ def _date(v: str) -> str | None:
     return f"{digits[:4]}-{digits[4:6]}-{digits[6:]}"
 
 
+# 한 항목에 담아 둘 분류 코드 수. 6 이었는데, 코드를 자르지 않게 되면서
+# 같은 메인그룹의 형제 서브그룹(H01M 50/242·50/271·50/289 …)이 자리를 다
+# 먹어 뒤의 다른 서브클래스가 밀려났다 — 그 뒤 분류가 그만큼 흔들린다.
+IPC_KEEP = 10
+
+
 def _ipcs(v: str) -> list[str]:
-    """'H02J 3/38|H02M 7/48' → ['H02J3', 'H02M7'] (접두 비교용으로 정규화)."""
+    """'H02J 3/38|H02M 7/48' → ['H02J3/38', 'H02M7/48'] (공백만 없앤 전체 코드).
+
+    예전에는 메인그룹까지만 남겼다('H02J3/38' → 'H02J3'). 접두 비교에는 그것으로
+    충분했지만, 서브그룹이 곧 정보인 자리가 있다:
+      H02J 3/28  저장을 이용한 계통 부하평준화   ← 장주기 ESS
+      H02J 3/38  복수 전원 병렬(재생에너지 연계)
+      Y04S 10/14 에너지 저장   /  Y04S 10/12 발전설비 감시·제어
+    잘라 버리면 이 둘을 영영 가를 수 없다. 전체 코드를 담아도 접두 비교는 그대로
+    동작하고('H02J3/28'.startswith('H02J3')), 저장된 옛 항목(잘린 표기)과도 섞여
+    쓸 수 있다 — 양쪽 다 같은 접두 규칙에 걸린다.
+    """
     out = []
     for part in (v or "").replace(",", "|").split("|"):
         s = part.strip().replace(" ", "")
-        if not s:
-            continue
-        # 'H02J3/38' 에서 메인그룹까지만 남긴다 → 'H02J3'
-        head = s.split("/")[0]
-        if head and head not in out:
-            out.append(head)
+        if s and s not in out:
+            out.append(s)
     return out
 
 
@@ -225,7 +237,7 @@ def _normalize(item: ET.Element, cat_key: str) -> dict | None:
         "office": "KR",
         # CPC 보강은 공개번호가 아니라 **출원번호**로 조회한다 → 따로 들고 있는다.
         "filing_no": _text(item, "applicationNumber"),
-        "cpc": ipcs[:6],
+        "cpc": ipcs[:IPC_KEEP],
         "category": _classify(ipcs, cat_key),
         "applicant": name,
         "country": region,
@@ -344,7 +356,7 @@ def _enrich_cpc(items: list[dict]) -> int:
             continue
         merged = cpc + [c for c in it["cpc"] if c not in cpc]
         before = it["category"]
-        it["cpc"] = merged[:6]
+        it["cpc"] = merged[:IPC_KEEP]
         it["category"] = _classify(merged, before)
         if it["category"] != before:
             changed += 1
