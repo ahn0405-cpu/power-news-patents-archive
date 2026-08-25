@@ -1,0 +1,34 @@
+# 바깥 링크가 실제로 열리는지 확인 (수동 실행 전용).
+#
+# 카드의 '원문 보기' 링크는 우리가 만든 주소다 — 번호 표기를 한 글자 틀리면
+# 페이지는 멀쩡히 뜨면서 링크만 404 가 된다. 조용한 실패라 눈으로는 안 잡힌다.
+# 개발 환경은 patents.google.com 이 프록시 정책에 막혀 있어(게이트웨이 403)
+# 여기서 열어 본다.
+#
+# KIPRIS 프로브와 나눠 둔 이유: 그쪽은 실행 이력이 길어 결과를 찾기가 번거롭다.
+# 이 워크플로는 링크 확인만 해서 이력이 짧게 유지된다.
+name: 바깥 링크 확인 (수동)
+
+on:
+  workflow_dispatch:
+    inputs:
+      links:
+        description: "공백으로 구분한 URL 들 — 열리는지 제목으로 판정한다"
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: 링크 열어 보기
+        env:
+          PROBE_LINKS: ${{ inputs.links }}
+        run: python probe_kipris.py
