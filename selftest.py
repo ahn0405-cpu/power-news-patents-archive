@@ -446,7 +446,7 @@ def _quad_checks(sr) -> None:
 
 
 def _subs_checks(sr) -> None:
-    """세부 기술 쏠림(subsRows/subsPanelHTML)을 실제로 실행해 본다.
+    """세부 기술 쏠림(subsRows/subsBlockHTML)을 실제로 실행해 본다.
 
     여기서 틀리기 쉬운 것은 '퍼센트의 분모'다. 한 건에 IPC 가 여러 개 붙어 있어
     전부 세면 한 건이 여러 번 계수돼 합이 100%를 넘는데, 화면은 그래도 100% 폭
@@ -505,9 +505,10 @@ def _subs_checks(sr) -> None:
             + json.dumps(items, ensure_ascii=False) + "},trade:{ipcNames:"
             + json.dumps(names, ensure_ascii=False)
             + ",subsLead:'앞말',subsNote:'각주'}};\n"
-            + "const R=subsRows(), H=subsPanelHTML();\n"
-            + "FULL=false; const HL=subsPanelHTML();\n"
-            + "console.log(JSON.stringify({rows:R,html:H,loading:HL}));")
+            + "const R=subsRows();\n"
+            + "const H=R.map(r=>subsBlockHTML(r, FEED.trade)).join('');\n"
+            + "console.log(JSON.stringify({rows:R,html:H,"
+              "empty:subsBlockHTML(null, FEED.trade)}));")
     prog = prog.replace("\\\\", "\\")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
                                      encoding="utf-8") as f:
@@ -545,19 +546,51 @@ def _subs_checks(sr) -> None:
     html = res["html"]
     # 'X99Z 가 html 안에 있다' 로는 부족하다 — 이름 자리가 비어도 작은 코드칩
     # 때문에 통과한다. 이름 자리에 무엇이 들어갔는지를 본다.
-    check('전지·연료전지<span class="sbc mono">H01M</span>' in html
-          and '<span class="mono">X99Z</span>' in html,
+    check('풍력 발전<span class="sbc mono">F03D</span>' in html
+          and '<b>20%</b>X99Z</span>' in html,
           "코드에 한국어 이름을 붙이고, 이름이 없는 코드는 코드가 이름 자리에 선다")
     widths = [float(w) for w in _re.findall(r'width:([\d.]+)%', html)]
     check(len(widths) == 8 and all(abs(sum(widths[i:i + 4]) - 100) < 0.25
                                    for i in (0, 4)),
           f"막대 네 칸의 폭 합이 100%다 (받은 값 {widths})")
-    swatches = _re.findall(r'<span class="sbn"><i style="background:([^"]+)"', html)
-    check(len(swatches) == 6 and len(set(swatches[:3])) == 3
-          and swatches[:3] == swatches[3:],
-          f"이름표마다 그 줄의 순위 색이 붙는다 (받은 값 {swatches[:3]})")
-    check("로딩" in res["loading"] and "shbar" not in res["loading"],
-          "아카이브를 다 받기 전에는 비율을 내보내지 않는다")
+    # 그 줄의 요점(1위 이름과 몫)은 막대 **안**에 있어야 한다. 아래 칩 줄로만
+    # 내려가면 여덟 줄이 전부 비슷해 보이고 요점이 문장 끝 작은 숫자로 묻힌다.
+    inbar = _re.findall(r'<i title="[^"]*" style="width:[\d.]+%;background:[^"]+">'
+                        r'<b>([^<]+)</b>(?:<span[^>]*>[^<]*</span>)?'
+                        r'<em>(\d+)%</em></i>', html)
+    check(inbar == [("전지·연료전지", "60"), ("전력 공급·계통", "40")],
+          f"1위 이름과 몫이 막대 안에 들어간다 (받은 값 {inbar})")
+    swatches = _re.findall(
+        r'<span class="sbn[^"]*"><i style="background:([^"]+)"', html)
+    check(swatches == ["var(--q3)", "var(--q2)", "var(--q1)"] * 2,
+          f"칩에 그 줄의 순위 색이 붙는다 (받은 값 {swatches})")
+    # 칸 안에 이름을 넣은 1위도 칩을 **버리지 않는다** — 좁은 화면에서는 칸 안
+    # 글자가 잘려(실측 430px) 칩이 대신 나서야 하는데, 글자 폭은 그리기 전에
+    # 알 수 없다. 서버가 둘 다 내보내고 CSS 가 화면 폭으로 하나를 고른다.
+    check(html.count('<span class="sbn inb">') == 2,
+          "칸 안에 이름을 넣은 1위도 칩을 남겨 둔다 (좁은 화면에서 칩이 대신한다)")
+    # 퍼센트가 이름보다 앞이다 — 칩 끝에 붙여 두면 숫자를 찾으려고 이름을 다 읽어야 했다.
+    check(_re.search(r'</i><b>\d+%</b>[^<]', html) is not None,
+          "칩은 퍼센트를 이름보다 앞에 둔다")
+    # 분야 카드가 축이다 — 세부 기술은 그 안의 한 토막이라 이름을 달고 들어간다.
+    check(res["html"].count('<div class="blk">무엇을 내고 있나') == 2
+          and "서로 다른 4갈래" in res["html"],
+          "분야 카드 안에 이름 붙은 토막으로 들어간다")
+    # 클래스 이름 충돌. 이 스타일시트는 한 파일에 다 들어 있어서, 새로 지은 이름이
+    # 이미 있는 전역 클래스와 겹치면 조용히 남의 스타일을 뒤집어쓴다. 두 번 겪었다 —
+    # 전역 .more 때문에 공급자 칩이 줄 가운데로 밀렸고, 이번에는 전역
+    # .lead{display:flex;flex-direction:column} 때문에 칩 안이 세 줄로 갈렸다.
+    # 화면으로만 보면 '왜 줄바꿈이 되지?' 로 보여 원인이 안 잡힌다.
+    # 규칙: 한 이름에 **전역 규칙(.x{)과 스코프 규칙(… .x{)이 둘 다** 있으면 충돌이다.
+    css = sr._CSS
+    clash = [c for c in ("inb", "blk", "blkd", "subrow", "sbn", "sbc")
+             if _re.search(r"(?:^|[,}])\s*\." + c + r"(?=[\s,{:])", css, _re.M)
+             and _re.search(r"[\w\]\)]\s+\." + c + r"(?=[\s,{:.])", css)]
+    check(not clash,
+          "새 클래스 이름이 이미 있는 전역 클래스와 겹치지 않는다 "
+          + (f"(겹침: {clash})" if clash else "(겹침 없음)"))
+    check(res["empty"] == "",
+          "그 분야에 셀 것이 없으면 토막을 통째로 뺀다 (빈 막대를 그리지 않는다)")
 
 
 def _supplier_checks(sr) -> None:
@@ -789,6 +822,73 @@ def _origin_checks() -> None:
     check(pcfg.flag_of("DK") == "\U0001F1E9\U0001F1F0",
           "표에 없는 나라도 국기(지역표시자)를 만들어 준다")
     check(pcfg.flag_of("KR") == "🇰🇷", "표에 있는 나라는 그대로 쓴다")
+
+    # ── 국내 공보 쪽. 고치는 오류의 성격이 반대다 ────────────────────
+    # 해외는 '비어 있는 것을 채우는' 일이고 국내는 '틀리게 적힌 것을 고치는' 일이다
+    # (수집기가 별칭표에 없는 출원인을 전부 KR 로 적는다). 그래서 대상을 고를 때
+    # country 가 이미 차 있다고 건너뛰면 안 되고, 그리는 쪽도 덮어써야 한다.
+    print("\n· 국내 출원인 국적 확인")
+
+    def kpat(name, no, office="KR", country="KR"):
+        return {"applicant": name, "filing_no": no, "office": office,
+                "country": country, "number": no}
+
+    kweeks = {"2026-08-24": {"week": "2026-08-24", "patents": [
+        kpat("컨템포러리 엠퍼렉스", "A1"), kpat("컨템포러리 엠퍼렉스", "A2"),
+        kpat("한국전력공사", "B1"),
+        kpat("이미 확인한 곳", "C1"),
+        kpat("실패 쌓인 곳", "D1"),
+        kpat("번호 없는 곳", ""),
+        kpat("해외 항목", "E1", office="US", country=""),   # 국내 공보가 아니다
+    ]}}
+    kstore = {"origins": {"이미 확인한 곳": "JP"},
+              "originTry": {"실패 쌓인 곳": pcfg.ORIGIN_MAX_TRY}}
+    kt = po.targets_kr(kweeks, kstore)
+    knames = [t[0] for t in kt]
+    check(knames == ["컨템포러리 엠퍼렉스", "한국전력공사"],
+          f"국내 공보만 골라 출원인당 한 번, 건수 많은 곳부터 (받은 목록 {knames})")
+    check(kt and kt[0][1] == "A1" and kt[0][2] == 2,
+          "조회 열쇠는 출원번호다 (공개번호로는 서지상세가 안 열린다)")
+    check("이미 확인한 곳" not in knames and "실패 쌓인 곳" not in knames
+          and "번호 없는 곳" not in knames and "해외 항목" not in knames,
+          "이미 확인한 곳·실패가 쌓인 곳·번호 없는 곳·해외 항목은 뺀다")
+
+    # 응답 파싱. 함정은 agentInfo 다 — 대리인은 거의 언제나 한국 특허법인이라,
+    # 스코프 없이 .//country 를 읽으면 외국 출원인이 전부 KR 로 돌아온다.
+    kok = ('<response><header><resultCode>00</resultCode></header><body><item>'
+           '<applicantInfoArray><applicantInfo><name>컨템포러리 엠퍼렉스</name>'
+           '<country>중국</country></applicantInfo></applicantInfoArray>'
+           '<agentInfoArray><agentInfo><name>특허법인</name>'
+           '<country>대한민국</country></agentInfo></agentInfoArray>'
+           '</item></body></response>')
+    knone = kok.replace("<country>중국</country>", "<country> </country>")
+    kodd = kok.replace("<country>중국</country>", "<country>바나나공화국</country>")
+    kbad = ('<response><header><resultCode>10</resultCode></header>'
+            '<body></body></response>')
+    kseen = []
+    orig_open, orig_key = ur.urlopen, pcfg.KIPRIS_KEY
+    pcfg.KIPRIS_KEY = "x"
+    try:
+        ur.urlopen = lambda req, timeout=None: (kseen.append(req.full_url), _R(kok))[1]
+        check(po._fetch_kr("A1") == ("CN", ""),
+              "출원인의 국적을 읽는다 — 대리인(대한민국)이 아니라")
+        check(kseen and "applicationNumber=A1" in kseen[0]
+              and pcfg.ORIGIN_KR_KEYPARAM + "=" in kseen[0],
+              "출원번호와 키 질의를 제대로 싣는다")
+        ur.urlopen = lambda req, timeout=None: _R(kbad)
+        check(po._fetch_kr("A1") == (None, "코드10"),
+              "resultCode 가 00 이 아니면 실패로 읽는다 (해외와 반대다)")
+        ur.urlopen = lambda req, timeout=None: _R(knone)
+        check(po._fetch_kr("A1") == (None, "국적칸없음"),
+              "이름은 있는데 국적만 비면 그 문헌에 원래 없는 것으로 센다")
+        ur.urlopen = lambda req, timeout=None: _R(kodd)
+        check(po._fetch_kr("A1") == (None, "이름모르는나라:바나나공화국"),
+              "표에 없는 나라 이름은 추측하지 않고 이름을 사유에 실어 올린다")
+    finally:
+        ur.urlopen, pcfg.KIPRIS_KEY = orig_open, orig_key
+    check(pcfg.COUNTRY_KO.get("중국") == "CN"
+          and pcfg.COUNTRY_KO.get("대한민국") == "KR",
+          "한국어 나라 이름을 코드로 옮긴다 (서지상세가 코드를 주지 않는다)")
 
 
 def _foreign_checks() -> None:

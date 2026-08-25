@@ -380,10 +380,17 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
             aname = ap or _canon_assignee(_plain(p.get("assignee", "")))
             region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
-            # 해외 목록에는 출원인 국적이 없어 비어 있는 것이 많다. 서지상세로
-            # 따로 채워 둔 값(stats.origins)이 있으면 그리기 직전에 붙인다 —
-            # 저장된 항목을 고치지 않으므로 옛 자료도 한 번에 맞아진다.
-            if not region and aname:
+            # 서지상세로 따로 확인해 둔 국적(stats.origins)이 있으면 그리기 직전에
+            # 붙인다 — 저장된 항목을 고치지 않으므로 옛 자료도 한 번에 맞아진다.
+            # 비어 있을 때만 채우는 게 아니라 **덮어쓴다**. 두 경로가 서로 다른
+            # 종류의 오류를 고치기 때문이다:
+            #   해외 공보 — 응답에 국적 칸이 없어 그냥 비어 있다(채우기)
+            #   국내 공보 — 수집기가 별칭표에 없는 출원인을 전부 KR 로 적었다(고치기).
+            #     한국에 공개한 CATL·BYD·테슬라가 국내 기업으로 잡혀 있었고,
+            #     '비면 채운다' 규칙으로는 이미 KR 이 적혀 있어 영영 안 고쳐진다.
+            # origins 는 서지상세에서 읽은 값이고 region 은 수집기의 기본값이라,
+            # 둘이 다르면 origins 쪽이 근거가 있다.
+            if aname:
                 cc = origins.get(aname) or ""
                 if cc:
                     region = pcfg.region_of(cc)
@@ -811,20 +818,51 @@ a{color:inherit}
 /* 세부 기술 쏠림 — 지분 막대와 같은 부품을 쓰되, 이 패널에서는 막대가 주인공이라
    조금 두껍게 하고 이름표에 색 점을 붙인다(색이 줄마다 다른 기술을 가리키므로
    패널 하나짜리 범례로는 묶이지 않는다). */
-.subs{display:flex;flex-direction:column;gap:14px}
+/* 카드 안의 토막 이름. 붙이지 않았을 때는 막대 두 개가 잇달아 나와 둘 다 '지분'
+   처럼 보였다 — 하나는 출원인 지분이고 하나는 기술 갈래 비중이다. */
+.blk{display:flex;align-items:baseline;gap:8px;margin:13px 0 0;
+  font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--muted)}
+.blk .blkd{margin-left:auto;font-weight:600;letter-spacing:0;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.subrow{margin-top:2px}
 /* 좁은 화면에서 분야 이름이 낱말 가운데서 잘렸다('전력수급·수 / 요관리') — 머리글이
    한 줄에 묶여 있어서다. 줄바꿈을 허용하고 건수를 통째로 아랫줄로 내린다. */
 .subrow .subh{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px;
   font-size:13px;font-weight:700;word-break:keep-all}
 .subrow .subd{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);
   white-space:nowrap;font-variant-numeric:tabular-nums}
-.subrow .shbar{height:13px;margin:8px 0 6px}
-.subrow .shbar i{cursor:help}
-.shns .sbn{display:inline-flex;align-items:center;gap:5px}
-.shns .sbn>i{width:9px;height:9px;border-radius:2px;flex:none}
-.shns .sbn .sbc{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.02em}
-.shns .sbn b{color:var(--accent2);font-variant-numeric:tabular-nums}
-.shns .sbn.rest{color:var(--muted)} .shns .sbn.rest b{color:var(--muted)}
+/* 카드 안 두 막대는 **같은 높이**다. 처음에는 기술 막대만 24px 로 키웠는데(칸 안에
+   이름을 넣느라), 출원인 막대가 9px 로 남아 기술 쪽이 더 중요해 보였다 — 이 카드의
+   머리 물음은 '누가' 쪽이다. 칸 안 글자는 진한 파랑 위 흰색이라 대비가 충분하다. */
+.trow .shbar{height:22px;margin:7px 0 6px;border-radius:6px;align-items:stretch}
+.trow .shbar i:first-child{border-radius:6px 0 0 6px}
+.trow .shbar i:last-child{border-radius:0 6px 6px 0}
+.trow .shbar i{cursor:help;display:flex;align-items:center;gap:7px;
+  overflow:hidden;white-space:nowrap;padding:0 9px}
+.trow .shbar i b{color:#fff;font-size:11.5px;font-weight:700}
+.trow .shbar i .sbc{color:#fff;opacity:.6;margin-left:-2px}
+.trow .shbar i .fl{flex:none}
+.trow .shbar i em{color:#fff;font-style:normal;font-size:11.5px;font-weight:800;
+  opacity:.82;font-variant-numeric:tabular-nums}
+/* 칸 안 이름과 그 칩은 같은 것을 두 번 말한다 → 넓을 때는 칸 안이, 좁을 때는
+   칩이 맡는다. 칸 폭은 퍼센트라 화면이 좁아지면 그대로 줄어드는데 글자는 안 줄어
+   잘린다(실측 430px). 서버는 둘 다 내보내고 여기서 하나를 고른다. */
+.shns .inb{display:none}
+@media (max-width:700px){
+  .trow .shbar i b, .trow .shbar i em,
+  .trow .shbar i .sbc, .trow .shbar i .fl{display:none}
+  .shns .sbn.inb{display:inline-flex} .shns .shn.inb{display:block}
+}
+/* 칩 안에서 줄이 갈리면 안 된다 — 좁은 화면에서 '■ 59%' / '전기 계측' / 'G01R' 이
+   세 줄로 흩어져 무엇이 무엇의 값인지 읽히지 않았다(실측 430px). */
+.shns .sbn{display:inline-flex;align-items:baseline;gap:5px;color:var(--muted);
+  font-weight:600;white-space:nowrap;max-width:100%}
+.shns .sbn>i{width:8px;height:8px;border-radius:2px;flex:none;align-self:center}
+.shns .sbn .sbc{font-size:10px;font-weight:600;color:var(--muted);opacity:.75}
+/* 숫자를 이름보다 먼저 놓는다 — 퍼센트를 훑어 내려가는 것이 이 줄의 쓸모다 */
+.shns .sbn b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;
+  min-width:2.4em;text-align:right}
+.shns .sbn.rest b{color:var(--muted)}
 .shns .sbn.rest>i{background:var(--line)}
 @media (max-width:560px){ .subrow .subd{margin-left:0;flex-basis:100%} }
 /* ③ 국내 권리는 '누가 갖고 있나' 와 성격이 다른 신호 → 모양을 달리한다 */
@@ -1726,16 +1764,13 @@ function renderHome(){
 
   // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 분야별 경쟁 구도를
   // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
-  // 그 다음이 세부 기술 쏠림이다 — 순서가 뒤집히면 안 된다. 위 패널이 '이 분야를
-  // 누가 쥐고 있나' 를 말한 다음이라야 '그 분야 안이 무엇으로 채워져 있나' 가
-  // 이어지는 물음으로 읽힌다.
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(),
-        mx=tradeSectionHTML(), sb=subsPanelHTML();
-  if(pb||pk||mx||sb){
+  // 세부 기술은 패널을 따로 두지 않는다 — 같은 여덟 분야를 두 패널이 각각 한 번씩
+  // 나열하면 한 분야의 그림을 맞추려고 위아래를 오가게 된다. 분야 카드 안에 넣었다.
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=tradeSectionHTML();
+  if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
-      + (mx? '<div class="homemx">'+mx+'</div>' : '')
-      + (sb? '<div class="homemx">'+sb+'</div>' : ''));
+      + (mx? '<div class="homemx">'+mx+'</div>' : ''));
   }
   $('#home').innerHTML = parts.join('');
 }
@@ -2059,6 +2094,8 @@ function tradeSectionHTML(){
   const rows=tradeRows(); if(!rows.length) return '';
   const cmp=FEED.insights.comparable;
   const ADJ=FEED.patents.totalsAdjusted||{};
+  // 분야별 세부 기술은 따로 패널을 두지 않고 여기 카드 안으로 들어온다(축은 분야다).
+  const SUB={}; subsRows().forEach(s=>SUB[s.cat.key]=s);
   const body=rows.map(d=>{
     const r=d.r, pct=Math.round(r.cr3*100);
     // ① 지분 막대 — '상위 3곳 77%' 라고 쓰기보다 그 77% 를 보이게 한다. 위아래로
@@ -2067,13 +2104,25 @@ function tradeSectionHTML(){
     const col=d.lv==='hi'?'var(--q3)':d.lv==='mid'?'var(--q2)':'var(--q1)';
     const segs=r.top.map(t=>t.v/r.tot);
     const rest=Math.max(0, 1-segs.reduce((a,b)=>a+b,0));
+    // 1위 몫이 넉넉하면 이름을 칸 안에 넣는다 — 기술 막대와 같은 규칙이다. 다만
+    // 출원인은 1위가 12% 인 분야도 흔해(재생에너지=LG에너지솔루션 12%) 대개는
+    // 빈 막대로 남고, 이름은 아래 칩이 진다. 그래도 두 막대의 높이는 같아야 한다.
+    const inbar1 = segs.length>0 && segs[0]>=0.25;
     const bar='<div class="shbar" role="img" aria-label="상위 3곳이 '+pct+'%">'
-      + segs.map(s=>'<i style="width:'+(s*100).toFixed(1)+'%;background:'+col+'"></i>').join('')
+      + segs.map((s,i)=>'<i style="width:'+(s*100).toFixed(1)+'%;background:'+col+'">'
+          + (i===0 && inbar1
+             ? flg(r.top[0].flag)+'<b>'+esc(r.top[0].name)+'</b>'
+               + '<em>'+Math.round(s*100)+'%</em>' : '')
+          + '</i>').join('')
       + (rest>0.005? '<i class="rest" style="width:'+(rest*100).toFixed(1)+'%"></i>':'')
       + '</div>';
-    const names=r.top.map(t=>{
+    // 1위 칩은 칸 안에 이름을 넣었어도 **버리지 않고** .lead 로 실어 둔다. 몫이
+    // 같아도 화면이 좁으면 칸 안 글자가 잘린다(실측 430px: '한국전력ㄱ' 에서
+    // 끊겼다). 글자 폭은 그리기 전에 알 수 없으므로 둘 다 내보내고 CSS 가 고른다.
+    const names=r.top.map((t,i)=>{
       const a=ADJ[t.name];
-      return '<span class="shn"'+(a?' title="총계 보정: '+esc(a.raw+'건 → 표본 '+a.of
+      return '<span class="shn'+(i===0 && inbar1? ' inb':'')+'"'
+             +(a?' title="총계 보정: '+esc(a.raw+'건 → 표본 '+a.of
              +'건 중 제 것 '+a.kept+'건 비율')+'"':'')+'>'
         + (t.flag||'')+' '+esc(t.name)+(a?'*':'')
         + '<b>'+Math.round(t.v/r.tot*100)+'%</b></span>'; }).join('')
@@ -2115,11 +2164,16 @@ function tradeSectionHTML(){
     else if(d.paired===false) badges.push(esc('뉴스 짝 없음'));
     // 국내 지분 — 이 분야에 국내 협상 상대가 있는지. 없으면 도입 말고는 길이 없다.
     badges.push(esc('🇰🇷 국내 '+Math.round(r.krShare*100)+'%'));
+    // 카드 하나가 분야 하나다. 안은 두 토막 — 누가 갖고 있나 / 무엇을 내고 있나.
+    // 토막에 이름을 붙이는 이유: 붙이지 않았을 때는 막대 두 개가 잇달아 나와
+    // 둘 다 '지분' 처럼 보였다(하나는 출원인 지분, 하나는 기술 갈래 비중이다).
     return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
       + r.cat.emoji+' '+esc(r.cat.name)
-      + '<span class="thp mono">'+pct+'%</span>'
       + '<div class="tb">'+badges.map(b=>'<span>'+b+'</span>').join('')+'</div></div>'
+      + '<div class="blk">누가 갖고 있나<span class="blkd">'
+      + r.n.toLocaleString()+'곳 중 상위 3곳이 '+pct+'%</span></div>'
       + bar + '<div class="shns">'+names+'</div>' + krc
+      + subsBlockHTML(SUB[r.cat.key], T)
       + '<p class="tr" title="'+esc(short)+'">'+esc(gen)+'</p>'
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
@@ -2129,12 +2183,14 @@ function tradeSectionHTML(){
   // '지금 이 분야가 어떻게 생겼나' 를 말하므로 홈이 제자리다.
   return '<div class="homepanel" id="sec-analysis"><h3>🧭 분야별 경쟁 구도'
     + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">뉴스에서 차지하는 비중이 어느 쪽으로 움직였는지와, 그 분야 권리를 '
-    + '몇 곳이 나눠 갖고 있는지를 겹쳐 봅니다. 원 크기는 그 분야의 추정 공개 규모입니다.'
+    + '<p class="sub">여덟 분야를 하나씩 봅니다. 먼저 지도로 분야끼리 견주고, 그 아래 '
+    + '분야마다 <b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>(세부 기술)를 '
+    + '한자리에 놓았습니다.'
     + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
     + '</p>'
     + quadChartHTML(rows) + body
     + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
+    + (T.subsNote? '<p class="gnote">' + esc(T.subsNote) + '</p>' : '')
     + '<p class="gnote">' + esc(T.note) + '</p></div>';
 }
 
@@ -2170,55 +2226,57 @@ function subsRows(){
   }).filter(Boolean).sort((a,b)=> b.top[0].share-a.top[0].share);
 }
 
-function subsPanelHTML(){
-  const T=FEED.trade||{};
-  if(!T.subsLead) return '';
-  // 집중도 표와 같은 이유로 전수를 받기 전에는 내보내지 않는다 — 부분집합으로
-  // 세면 '몇 퍼센트' 가 실제와 다르게 나오는데, 화면에는 확정값처럼 보인다.
-  if(!FULL) return '<div class="sec" id="sec-subs">🔬 분야 안을 들여다보면</div>'
-    + loadingNote('세부 기술');
-  const rows=subsRows(); if(rows.length<2) return '';
-  const NM=T.ipcNames||{};
+// 한 분야의 '무엇을' 토막. 패널을 따로 두지 않고 분야 카드 안에 들어간다 —
+// 여덟 분야를 두 패널이 각각 한 번씩 나열하면, 한 분야의 그림을 맞추려고
+// 위아래를 오가게 된다. 축은 분야이고, '누가'와 '무엇을'은 그 아래 두 토막이다.
+function subsBlockHTML(r, T){
+  if(!r) return '';
+  const NM=(T||{}).ipcNames||{};
   const nameOf=c=> NM[c] || c;                 // 툴팁·대체텍스트용(글자만)
-  // 이름표. 이름이 없는 코드는 코드 자체를 이름 자리에 놓는다 — 작은 회색 코드칩만
-  // 남기면 그 줄만 유난히 흐려지고, '표에 한 줄 채우라'는 신호도 묻힌다.
-  const labOf=c=> NM[c]
-    ? esc(NM[c])+'<span class="sbc mono">'+esc(c)+'</span>'
-    : '<span class="mono">'+esc(c)+'</span>';
   const COL=['var(--q3)','var(--q2)','var(--q1)'];
-  const body=rows.map(r=>{
-    const segs=r.top.map((t,i)=>{
-      const tip=nameOf(t.code)+' ('+t.code+') — '+r.cat.name+' '+r.n.toLocaleString()
-        +'건 중 '+t.v.toLocaleString()+'건, '+Math.round(t.share*100)+'%';
-      return '<i title="'+esc(tip)+'" style="width:'+(t.share*100).toFixed(1)
-        + '%;background:'+COL[i]+'"></i>';
-    }).join('');
-    const rest=r.rest.share>0.005
-      ? '<i class="rest" title="'+esc('그 밖의 갈래 '+(r.kinds-r.top.length)
-          +'종 합계 — '+r.rest.v.toLocaleString()+'건, '+Math.round(r.rest.share*100)+'%')
-        + '" style="width:'+(r.rest.share*100).toFixed(1)+'%"></i>' : '';
-    // 색은 그 줄 안의 순위일 뿐이라 줄마다 뜻이 달라진다 → 이름표에 같은 색 점을
-    // 달아 줄 단위로 색과 이름을 묶는다(패널 하나짜리 범례로는 묶이지 않는다).
-    const names=r.top.map((t,i)=>
-      '<span class="sbn"><i style="background:'+COL[i]+'"></i>'
-      + labOf(t.code)
-      + '<b>'+Math.round(t.share*100)+'%</b></span>').join('')
-      + (r.rest.share>0.005
-         ? '<span class="sbn rest"><i></i>나머지<b>'+Math.round(r.rest.share*100)+'%</b></span>'
-         : '');
-    return '<div class="subrow"><div class="subh">'
-      + r.cat.emoji+' '+esc(r.cat.name)
-      + '<span class="subd">'+r.n.toLocaleString()+'건 · 서로 다른 '
-      + r.kinds+'갈래</span></div>'
-      + '<div class="shbar" role="img" aria-label="'
-      + esc(r.cat.name+' 상위 세 갈래: '
-            + r.top.map(t=>nameOf(t.code)+' '+Math.round(t.share*100)+'%').join(', '))
-      + '">'+segs+rest+'</div><div class="shns">'+names+'</div></div>';
+  // 1위 이름을 막대 **안**에 넣는다. 처음에는 네 갈래를 전부 같은 크기의 칩으로
+  // 막대 아래에 늘어놓았는데, 그 줄의 요점(‘73%가 한 갈래’)이 칩 네 개짜리
+  // 문장 끝의 작은 숫자로 묻혀 여덟 줄이 전부 비슷해 보였다. 요점은 막대가
+  // 지고, 아래 줄은 2·3위와 나머지만 작게 받는다.
+  // 안에 넣을지는 데이터로 정한다(글자 폭을 재지 않는다) — 1위 몫이 30% 아래면
+  // 좁은 화면에서 이름이 잘리므로 그때는 아래 줄이 1위까지 맡는다.
+  const inbar = r.top[0].share >= 0.30;
+  const segs=r.top.map((t,i)=>{
+    const tip=nameOf(t.code)+' ('+t.code+') — '+r.cat.name+' '+r.n.toLocaleString()
+      +'건 중 '+t.v.toLocaleString()+'건, '+Math.round(t.share*100)+'%';
+    const lab = (i===0 && inbar)
+      ? '<b>'+esc(nameOf(t.code))+'</b>'
+        + (NM[t.code] ? '<span class="sbc mono">'+esc(t.code)+'</span>' : '')
+        + '<em>'+Math.round(t.share*100)+'%</em>' : '';
+    return '<i title="'+esc(tip)+'" style="width:'+(t.share*100).toFixed(1)
+      + '%;background:'+COL[i]+'">'+lab+'</i>';
   }).join('');
-  return '<div class="homepanel" id="sec-subs"><h3>🔬 분야 안을 들여다보면</h3>'
-    + '<p class="sub">'+esc(T.subsLead)+'</p>'
-    + '<div class="subs">'+body+'</div>'
-    + '<p class="gnote">'+esc(T.subsNote)+'</p></div>';
+  const rest=r.rest.share>0.005
+    ? '<i class="rest" title="'+esc('그 밖의 갈래 '+(r.kinds-r.top.length)
+        +'종 합계 — '+r.rest.v.toLocaleString()+'건, '+Math.round(r.rest.share*100)+'%')
+      + '" style="width:'+(r.rest.share*100).toFixed(1)+'%"></i>' : '';
+  // 아래 줄. 순위를 앞에 두고 숫자를 이름보다 먼저 읽히게 한다 — 칩 끝에
+  // 붙여 두었을 때는 퍼센트를 찾으려면 이름을 다 읽어야 했다.
+  // 이름이 없는 코드는 코드가 이름 자리에 선다. 그때 뒤의 작은 코드칩까지
+  // 붙이면 'X99Z X99Z' 가 되므로 붙이지 않는다.
+  // lead=true 면 칸 안에도 같은 이름이 있다는 뜻이다. 지우지 않고 표시만 해 둔다 —
+  // 좁은 화면에서는 칸 안 글자가 잘려서 이 칩이 대신 나서야 한다(CSS 가 고른다).
+  const chip=(t,i,dup)=>'<span class="sbn'+(dup?' inb':'')+'">'
+    + '<i style="background:'+COL[i]+'"></i>'
+    + '<b>'+Math.round(t.share*100)+'%</b>'+esc(nameOf(t.code))
+    + (NM[t.code] ? '<span class="sbc mono">'+esc(t.code)+'</span>' : '')
+    + '</span>';
+  const names=r.top.map((t,i)=> chip(t, i, i===0 && inbar)).join('')
+    + (r.rest.share>0.005
+       ? '<span class="sbn rest"><i></i><b>'+Math.round(r.rest.share*100)+'%</b>나머지</span>'
+       : '');
+  return '<div class="subrow"><div class="blk">무엇을 내고 있나'
+    + '<span class="blkd">'+r.n.toLocaleString()+'건 · 서로 다른 '
+    + r.kinds+'갈래</span></div>'
+    + '<div class="shbar" role="img" aria-label="'
+    + esc(r.cat.name+' 상위 세 갈래: '
+          + r.top.map(t=>nameOf(t.code)+' '+Math.round(t.share*100)+'%').join(', '))
+    + '">'+segs+rest+'</div><div class="shns">'+names+'</div></div>';
 }
 
 // 국유판매기술 — 권리자가 국가라 창구가 분명하고, 무상은 비용 없이 실시할 수 있다.

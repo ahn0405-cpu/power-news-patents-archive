@@ -347,6 +347,47 @@ ORIGIN_TIMEOUT = int(os.getenv("ORIGIN_TIMEOUT", "20"))
 # 매 실행 같은 것을 다시 두드리며 상한을 다 써 버린다.
 ORIGIN_MAX_TRY = int(os.getenv("ORIGIN_MAX_TRY", "3"))
 
+# ── 국내 공보 출원인 국적 ─────────────────────────────────────────
+# 국내 수집기(patent_source_kipris._identify)는 별칭표에 없는 출원인을 **전부 KR**
+# 로 적는다. 한국에 공개한 외국 기업이 그대로 국내 기업이 된다. 실측(8/25, 누적
+# 16,265건): 이름에 외국 법인 표기가 든 것만 세어도 국내공보·KR표시 4,905건 중
+# 461건(9.4%)·출원인 219곳이고, '🇰🇷 국내 N%' 배지가 분야마다 0.3~5.9%p 부풀어
+# 있었다. 이름만 보고 가르는 것은 하지 않는다(포스코홀딩스는 '홀딩스' 때문에
+# 외국으로 잡힌다) — 해외 쪽에서 공개국 추정을 실측으로 반박하고 버린 것과 같은 이유다.
+#
+# 국내 서지상세에는 그 값이 실제로 있다(8/25 실측, CATL 출원 1020267024585):
+#   <applicantInfoArray><applicantInfo><country>중국</country> …
+#   <agentInfoArray><agentInfo><country>대한민국</country> …   ← 대리인. 함정이다
+# 대리인은 거의 언제나 한국 특허법인이라, 스코프 없이 <country> 를 읽으면 전부
+# KR 로 돌아온다. 반드시 applicantInfo 안에서만 읽는다.
+#
+# 값이 ISO 코드가 아니라 **한국어 나라 이름**이라 표가 필요하다. 표에 없는 이름은
+# 추측하지 않고 사유로 남겨 로그에 찍는다 — 그걸 보고 사람이 한 줄 더한다.
+ORIGIN_KR = os.getenv("KIPRIS_ORIGIN_KR", "on").lower() not in ("0", "off", "false")
+ORIGIN_KR_BASE = os.getenv("ORIGIN_KR_BASE", KIPRIS_BASE)
+ORIGIN_KR_SERVICE = os.getenv("ORIGIN_KR_SERVICE", KIPRIS_SERVICE)
+ORIGIN_KR_OP = os.getenv("ORIGIN_KR_OP", "getBibliographyDetailInfoSearch")
+ORIGIN_KR_KEYPARAM = os.getenv("ORIGIN_KR_KEYPARAM", KIPRIS_KEYPARAM)
+# 대상은 국내 출원인 1,174곳(실측)이라 해외(4천여 곳)보다 훨씬 작다 — 이틀이면 찬다.
+ORIGIN_KR_PER_RUN = int(os.getenv("ORIGIN_KR_PER_RUN", "600"))   # 0 이면 끔
+
+COUNTRY_KO = {
+    "대한민국": "KR", "한국": "KR",
+    "미국": "US", "중국": "CN", "일본": "JP", "대만": "TW", "홍콩": "HK",
+    "독일": "DE", "프랑스": "FR", "영국": "GB", "네덜란드": "NL", "스위스": "CH",
+    "스웨덴": "SE", "덴마크": "DK", "핀란드": "FI", "노르웨이": "NO",
+    "이탈리아": "IT", "스페인": "ES", "오스트리아": "AT", "벨기에": "BE",
+    "아일랜드": "IE", "룩셈부르크": "LU", "폴란드": "PL", "체코": "CZ",
+    "헝가리": "HU", "포르투갈": "PT", "그리스": "GR", "터키": "TR",
+    "튀르키예": "TR", "러시아": "RU", "우크라이나": "UA",
+    "캐나다": "CA", "멕시코": "MX", "브라질": "BR", "칠레": "CL",
+    "이스라엘": "IL", "인도": "IN", "싱가포르": "SG", "말레이시아": "MY",
+    "태국": "TH", "베트남": "VN", "인도네시아": "ID", "필리핀": "PH",
+    "호주": "AU", "오스트레일리아": "AU", "뉴질랜드": "NZ",
+    "남아프리카공화국": "ZA", "사우디아라비아": "SA",
+    "아랍에미리트": "AE", "아랍에미리트연합": "AE",
+}
+
 # ── CPC 보강 ─────────────────────────────────────────────────────
 # 검색은 IPC 로만 되지만(cpcNumber 파라미터 없음), **출원번호를 주면 그 특허의
 # CPC 를 받을 수 있다**(명세서 실측):

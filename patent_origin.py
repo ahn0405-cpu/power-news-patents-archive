@@ -134,18 +134,145 @@ def targets(weeks: dict[str, dict], store: dict) -> list[tuple[str, str, str, in
     return out, skipped
 
 
+# ── 국내 공보 쪽 ─────────────────────────────────────────────────
+# 같은 문제, 다른 원인이다. 해외는 응답에 국적 칸이 없어서 비었고, 국내는 칸이
+# 있는데 수집기가 보지 않고 **전부 KR 로 적어** 왔다(별칭표에 없으면 KR 이 기본값).
+# 그래서 여기는 '빈 것을 채우는' 것이 아니라 '틀린 것을 고치는' 보강이다.
+def _url_kr(app_no: str) -> str:
+    q = {"applicationNumber": app_no, cfg.ORIGIN_KR_KEYPARAM: cfg.KIPRIS_KEY}
+    return (f"{cfg.ORIGIN_KR_BASE}/{cfg.ORIGIN_KR_SERVICE}/{cfg.ORIGIN_KR_OP}?"
+            + urllib.parse.urlencode(q))
+
+
+def _fetch_kr(app_no: str) -> tuple[str | None, str]:
+    """(국적 코드 또는 None, 실패 사유). 해외 _fetch 와 같은 규약."""
+    try:
+        req = urllib.request.Request(_url_kr(app_no),
+                                     headers={"Accept": "application/xml"})
+        with urllib.request.urlopen(req, timeout=cfg.ORIGIN_TIMEOUT) as r:
+            body = r.read()
+    except TimeoutError:
+        return None, "시간초과"
+    except Exception as e:                       # noqa: BLE001 — 사유만 남긴다
+        return None, f"연결:{type(e).__name__}"
+    try:
+        root = ET.fromstring(body)
+    except Exception:                            # noqa: BLE001
+        return None, "본문파싱"
+    # 국내는 정상이 resultCode=00 이다(해외와 반대).
+    code = (root.findtext(".//resultCode") or "").strip()
+    if code and code != "00":
+        return None, f"코드{code}"
+    # **반드시 applicantInfo 안에서만** 읽는다. 응답에는 agentInfo 에도 country 가
+    # 있고 대리인은 거의 언제나 한국 특허법인이라, 스코프 없이 .//country 로 읽으면
+    # 외국 출원인까지 전부 '대한민국' 으로 돌아온다.
+    ko = ""
+    for ap in root.iterfind(".//applicantInfoArray/applicantInfo"):
+        ko = (ap.findtext("country") or "").strip()
+        if ko:
+            break                                # 대표(첫) 출원인의 국적
+    if not ko:
+        has = root.findtext(".//applicantInfoArray/applicantInfo/name")
+        return None, "국적칸없음" if (has or "").strip() else "빈응답"
+    cc = cfg.COUNTRY_KO.get(ko)
+    # 표에 없는 나라 이름은 추측하지 않는다. 사유에 이름을 실어 로그로 올린다 —
+    # 그걸 보고 사람이 COUNTRY_KO 에 한 줄 더하면 다음 실행에서 채워진다.
+    return (cc, "") if cc else (None, f"이름모르는나라:{ko}")
+
+
+def targets_kr(weeks: dict[str, dict], store: dict) -> list[tuple[str, str, int]]:
+    """채울 대상 (출원인, 출원번호, 건수). 건수 많은 곳부터.
+
+    열쇠는 **출원번호**(filing_no)다 — 공개번호로는 서지상세가 조회되지 않는다.
+    실측: 국내 공보 4,967건 중 97.0%에 출원번호가 있고, 출원인 1,182곳 가운데
+    1,174곳을 두드릴 수 있다.
+    """
+    have = store.get("origins") or {}
+    tried = store.get("originTry") or {}
+    seen: dict[str, list] = {}
+    for wk in sorted(weeks):
+        for p in weeks[wk].get("patents", []):
+            if (p.get("office") or "") != "KR":
+                continue
+            name = (p.get("applicant") or "").strip()
+            if not name or name in have:
+                continue
+            if tried.get(name, 0) >= cfg.ORIGIN_MAX_TRY:
+                continue
+            no = (p.get("filing_no") or "").strip()
+            if not no:
+                continue
+            row = seen.get(name)
+            if row is None:
+                seen[name] = [no, 1]
+            else:
+                row[1] += 1
+    out = [(n, v[0], v[1]) for n, v in seen.items()]
+    out.sort(key=lambda t: (-t[2], t[0]))
+    return out
+
+
+def collect_kr(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
+    """국내 공보 출원인의 국적을 확인한다. 반환 규약은 collect 와 같다."""
+    if not cfg.ORIGIN_KR or cfg.ORIGIN_KR_PER_RUN <= 0:
+        return {}, {}
+    if not cfg.KIPRIS_KEY:
+        return {}, {}
+    todo = targets_kr(weeks, store)
+    rest = max(0, len(todo) - cfg.ORIGIN_KR_PER_RUN)
+    todo = todo[:cfg.ORIGIN_KR_PER_RUN]
+    if not todo:
+        print("  국내 출원인 국적 확인: 확인할 곳이 없습니다")
+        return {}, {}
+
+    with ThreadPoolExecutor(max_workers=max(1, cfg.ORIGIN_WORKERS)) as pool:
+        results = list(pool.map(
+            lambda t: (t[0], *_fetch_kr(t[1])), todo))
+
+    got: dict[str, str] = {}
+    fail: dict[str, int] = {}
+    prev = store.get("originTry") or {}
+    why_cnt: dict[str, int] = {}
+    for name, cc, why in results:
+        if cc:
+            got[name] = cc
+        else:
+            fail[name] = (cfg.ORIGIN_MAX_TRY if why == "국적칸없음"
+                          else prev.get(name, 0) + 1)
+            why_cnt[why] = why_cnt.get(why, 0) + 1
+    foreign = {n: c for n, c in got.items() if c != "KR"}
+    print(f"  국내 출원인 국적 확인: {len(todo)}곳 조회 → {len(got)}곳 확인"
+          f" · 실패 {len(fail)}곳 · 남은 곳 {rest:,}")
+    if got:
+        by_cc: dict[str, int] = {}
+        for cc in got.values():
+            by_cc[cc] = by_cc.get(cc, 0) + 1
+        print("    확인된 국적: " + " ".join(
+            f"{k} {v}" for k, v in sorted(by_cc.items(), key=lambda x: -x[1])[:8]))
+        # 이 보강의 값어치는 이 줄이다 — 국내 기업으로 잡혀 있던 외국 출원인이
+        # 몇 곳이었는지. 0 이면 애초에 고칠 것이 없었다는 뜻이다.
+        print(f"    국내로 잘못 잡혀 있던 외국 출원인 {len(foreign):,}곳")
+    if why_cnt:
+        print("    실패 사유: " + " ".join(
+            f"{k} {v}" for k, v in sorted(why_cnt.items(), key=lambda x: -x[1])[:6]))
+    return got, fail
+
+
 def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
     """국적을 채운다. 반환 ({이름: 국적코드}, {이름: 실패횟수}).
 
     반환값은 stats 에 **병합**된다(덮어쓰지 않는다) — 한 실행이 일부만 채우는
     설계라서, 통째로 대입하면 지난 실행이 채운 것이 지워진다.
     """
-    if not cfg.ORIGIN or cfg.ORIGIN_PER_RUN <= 0:
-        print("  출원인 국적 보강: 꺼져 있음")
-        return {}, {}
     if not cfg.KIPRIS_KEY:
         print("  출원인 국적 보강: 키가 없어 건너뜁니다")
         return {}, {}
+    # 국내 쪽을 먼저 돌린다. 대상이 훨씬 작고(1,174곳 대 4천여 곳) '빈 것을 채우는'
+    # 것이 아니라 '틀린 것을 고치는' 일이라, 화면의 오류가 하루라도 빨리 걷힌다.
+    got_kr, fail_kr = collect_kr(weeks, store)
+    if not cfg.ORIGIN or cfg.ORIGIN_PER_RUN <= 0:
+        print("  출원인 국적 보강(해외): 꺼져 있음")
+        return got_kr, fail_kr
 
     todo, skipped = targets(weeks, store)
     rest = max(0, len(todo) - cfg.ORIGIN_PER_RUN)
@@ -153,7 +280,7 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
     if not todo:
         print(f"  출원인 국적 보강: 채울 곳이 없습니다"
               f"{f' (이 경로로 닿지 않는 곳 {skipped:,})' if skipped else ''}")
-        return {}, {}
+        return got_kr, fail_kr          # 국내 쪽 결과를 흘리지 않는다
 
     def one(t):
         name, lit, office, _ = t
@@ -193,4 +320,7 @@ def collect(weeks: dict[str, dict], store: dict) -> tuple[dict, dict]:
     if why_cnt:
         print(f"    실패 사유: {_tally(why_cnt)}")
         print(f"    실패한 공개국: {_tally(fail_off)}")
-    return got, fail
+    # 두 경로의 결과를 합쳐 한 번에 돌려준다(stats 에는 병합으로 들어간다).
+    # 이름 공간이 겹치지 않는다 — 국내 공보의 출원인은 한글 음차 표기이고
+    # 해외 공보는 영문이라 같은 회사도 다른 열쇠가 된다.
+    return {**got_kr, **got}, {**fail_kr, **fail}
