@@ -193,24 +193,54 @@ APPLICANTS = [
 #   H01H 개폐기·차단기        H02B 배전반      H01F 변압기
 #   G21 원자력                H02S 태양광      H01M 전지(저장)
 #   G01R 계측(전력량계)       Y04S 스마트그리드 ICT   Y02E 에너지 감축기술
+# ipc: KIPRISplus 국내 공보 검색에 쓸 IPC 접두(여러 개면 분야당 여러 번 조회).
+#   실측(8/25): KIPRISplus 국내 항목별검색에 cpcNumber 파라미터가 **없다**
+#   (cpcNumber=Y04S → INVALID_REQUEST_PARAMETER). ipcNumber 만 받는다.
+#   그래서 CPC 전용 코드는 IPC 로 갈아 끼워야 한다:
+#     Y04S(스마트그리드 ICT) → IPC 에 없음. 원격 감시·제어는 H02J13,
+#       전력량 계측은 G01R21/G01R22 가 같은 자리를 덮는다.
+#     Y02E(에너지 감축) → 애초에 우리 분야 정의에는 쓰지 않았다.
+#   나머지 일곱 분야는 CPC 와 IPC 가 같은 코드라 그대로 쓴다.
 CATEGORIES = [
     {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
-     "cpc": ["G21C", "G21D"], "match": ["G21"]},
+     "cpc": ["G21C", "G21D"], "ipc": ["G21C", "G21D"], "match": ["G21"]},
     {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장",
-     "cpc": ["H02S", "H01M10", "F03D"], "match": ["H02S", "F03D", "H01M"]},
+     "cpc": ["H02S", "H01M10", "F03D"], "ipc": ["H02S", "H01M10", "F03D"],
+     "match": ["H02S", "F03D", "H01M"]},
     {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드",
-     "cpc": ["Y04S", "G01R21", "G01R22"], "match": ["Y04S", "G01R21", "G01R22"]},
+     "cpc": ["Y04S", "G01R21", "G01R22"],
+     "ipc": ["G01R21", "G01R22", "H02J13"],     # Y04S 대체 — 위 주석 참고
+     "match": ["Y04S", "G01R21", "G01R22"]},
     {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·무정전전원",
-     "cpc": ["H02J9"], "match": ["H02J9"]},
+     "cpc": ["H02J9"], "ipc": ["H02J9"], "match": ["H02J9"]},
     {"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리",
-     "cpc": ["H02J3"], "match": ["H02J3", "H02J13"]},
+     "cpc": ["H02J3"], "ipc": ["H02J3"], "match": ["H02J3", "H02J13"]},
     {"key": "mega", "emoji": "🏗️", "name": "전력반도체·전력변환",
-     "cpc": ["H02M", "H01L29"], "match": ["H02M", "H01L", "H03K17"]},
+     "cpc": ["H02M", "H01L29"], "ipc": ["H02M", "H01L29"],
+     "match": ["H02M", "H01L", "H03K17"]},
     {"key": "industry", "emoji": "🏭", "name": "전력설비·기기",
-     "cpc": ["H01H33", "H02B"], "match": ["H01H", "H02B"]},
+     "cpc": ["H01H33", "H02B"], "ipc": ["H01H33", "H02B"], "match": ["H01H", "H02B"]},
     {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망",
-     "cpc": ["H02G", "H01F27", "H02J1"], "match": ["H02G", "H01F", "H02J"]},
+     "cpc": ["H02G", "H01F27", "H02J1"], "ipc": ["H02G", "H01F27", "H02J1"],
+     "match": ["H02G", "H01F", "H02J"]},
 ]
+
+# ── KIPRISplus (국내 공보) ────────────────────────────────────────
+# 명세서 실측(8/25). OPS 와 결정적으로 다른 점: **출원인 없이 분야+기간만으로**
+# 조회된다. OPS 는 pa= 가 필수라 큐레이션한 65곳 안에서만 볼 수 있었는데, 여기서는
+# 그 분야에 실제로 출원하는 국내 주체가 전부 나온다(대학 산학협력단·중소기업 포함)
+# → 오래 막혀 있던 '공급자 축'이 목록 없이 풀린다.
+KIPRIS_KEY = os.getenv("KIPRIS_KEY", "")
+KIPRIS_BASE = os.getenv("KIPRIS_BASE", "http://plus.kipris.or.kr/kipo-api/kipi")
+KIPRIS_SERVICE = os.getenv("KIPRIS_SERVICE", "patUtiModInfoSearchSevice")
+KIPRIS_KEYPARAM = os.getenv("KIPRIS_KEYPARAM", "ServiceKey")
+KIPRIS_ROWS = int(os.getenv("KIPRIS_ROWS", "100"))       # 한 요청에 받을 건수
+# 분야당 상한. OPS 때와 달리 '표본'이 아니라 **모집단 전수**를 받는 것이 목표다
+# (그래야 출원인 총계를 세기만 하면 되고, 표본 편향이 아예 생기지 않는다).
+# 실측: H02M × 최근 90일 = 595건. 분야당 2천이면 8대 분야가 넉넉히 들어온다.
+# 상한에 걸리면 수집기가 어느 분야가 잘렸는지 로그와 stats 에 남긴다.
+KIPRIS_PER_CAT = int(os.getenv("KIPRIS_PER_CAT", "2000"))
+KIPRIS_DELAY = float(os.getenv("KIPRIS_DELAY", "0.3"))
 
 CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
 APPLICANT_BY_NAME = {a["name"]: a for a in APPLICANTS}

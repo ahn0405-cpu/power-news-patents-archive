@@ -59,6 +59,103 @@ class Stub:
             "ops:search-result": {"exchange-documents": docs}}}}, self.total)
 
 
+def _kipris_page(rows: list[tuple[int, str, str]], total: int) -> str:
+    body = "".join(
+        f"<item><applicantName>{who}</applicantName>"
+        f"<applicationDate>20240701</applicationDate>"
+        f"<applicationNumber>10202400{i:05d}</applicationNumber>"
+        f"<astrtCont>초록 {i}</astrtCont><inventionTitle>제목 {i}</inventionTitle>"
+        f"<ipcNumber>{ipc}</ipcNumber><openDate>20260115</openDate>"
+        f"<openNumber>102026{i:07d}</openNumber>"
+        f"<registerStatus>공개</registerStatus></item>"
+        for i, who, ipc in rows)
+    return ('<?xml version="1.0" encoding="UTF-8"?><response><header>'
+            "<resultCode>00</resultCode><resultMsg>NORMAL SERVICE.</resultMsg>"
+            f"</header><body><items>{body}</items>"
+            f"<count><totalCount>{total}</totalCount></count></body></response>")
+
+
+def _kipris_checks() -> None:
+    """KIPRIS 백엔드의 라이브 경로를 네트워크 없이 실제로 실행한다.
+
+    py_compile 로는 못 잡는 것들을 잡으려는 것이다 — OPS 때 _live_collect 의
+    NameError 가 월요일 실행에서야 드러난 적이 있다. 여기서 확인하는 것은
+    '수집이 도는가'가 아니라 **site_render 가 기대하는 계약을 지키는가**다.
+    """
+    import xml.etree.ElementTree as ET
+    from datetime import datetime
+    import patent_source_kipris as ks
+
+    print("\n[KIPRIS 백엔드]")
+    orig_get, orig_key = ks._get, cfg.KIPRIS_KEY
+    cfg.KIPRIS_KEY = "TEST"
+    calls: list[dict] = []
+    try:
+        def fake(op, params, timeout=None):
+            calls.append(dict(params, _op=op))
+            who = ["한국전력공사", "인천대학교 산학협력단", "주식회사 현대케피코"]
+            n = len(calls)
+            return ET.fromstring(_kipris_page(
+                [(n * 10 + k, who[k], params["ipcNumber"]) for k in range(3)], 42))
+        ks._get = fake
+
+        items, mock, stats = ks.collect(datetime(2026, 8, 25))
+        check(not mock, "라이브 경로로 돈다 (MOCK 폴백이 아니다)")
+        check(bool(items), f"수집 결과가 있다 ({len(items)}건)")
+
+        need = {"number", "title", "assignee", "pub_date", "office", "cpc",
+                "category", "applicant", "country", "flag", "url"}
+        missing = need - set(items[0])
+        check(not missing, f"항목 스키마가 site_render 계약을 지킨다 (누락 {missing or '없음'})")
+
+        keys = {c["key"] for c in cfg.CATEGORIES}
+        check(all(i["category"] in keys for i in items),
+              "모든 항목이 8대 분야 중 하나로 분류된다")
+        check(all(i["office"] == "KR" for i in items), "국내 공보이므로 office 는 전부 KR")
+        nums = [i["number"] for i in items]
+        check(len(nums) == len(set(nums)), "공개번호가 중복되지 않는다")
+        check(all(i["url"].startswith("https://") for i in items),
+              "카드 링크가 전부 https 다")
+        check(len({i["url"] for i in items}) == len(items),
+              "url 이 항목마다 다르다 (읽음 상태의 키라 겹치면 한꺼번에 토글된다)")
+
+        # 총계는 따로 조회하지 않고 모은 것을 센다 — 그 약속이 지켜지는지 본다.
+        check(sum(stats["totals"].values()) == len(items),
+              "출원인 총계의 합 = 수집 건수 (표본과 전수가 어긋나지 않는다)")
+        check(all(p.get("openDate") for p in calls),
+              "모든 질의에 공개일 범위가 들어간다 (기간 없이 전수를 긁지 않는다)")
+        check(all("~" in p["openDate"] for p in calls),
+              "공개일 범위 표기가 'YYYYMMDD~YYYYMMDD' 다 (실측 형식)")
+        check(not any("cpcNumber" in p for p in calls),
+              "cpcNumber 를 보내지 않는다 (이 API 에 없는 파라미터 — 실측)")
+
+        # 국내 전용이라 특허청 축은 만들지 않는다. 빈 dict 이어야 기존 stats 가
+        # 덮이지 않는다(merge_stats 계약).
+        check(ks.collect_offices(datetime(2026, 8, 25)) == {},
+              "collect_offices 는 빈 dict (기존 공개국 집계를 덮지 않는다)")
+
+        # 경로가 틀리면 KIPRIS 는 HTTP 200 + 포털 HTML 을 준다. 그때 XML 파싱이
+        # 깨지는데, 사람이 읽을 수 있는 오류로 바뀌는지 확인한다(실측으로 물렸던 함정).
+        ks._get = orig_get
+        import urllib.request
+
+        class _Fake:
+            def read(self): return b"<!doctype html><html>\xed\x8e\x98\xec\x9d\xb4\xec\xa7\x80"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        real_open = urllib.request.urlopen
+        urllib.request.urlopen = lambda *a, **k: _Fake()
+        try:
+            ks._get("getAdvancedSearch", {"ipcNumber": "H02M"})
+            check(False, "포털 HTML 응답이 오류로 드러난다")
+        except RuntimeError as e:
+            check("XML" in str(e), f"포털 HTML 응답이 오류로 드러난다 ({e})")
+        finally:
+            urllib.request.urlopen = real_open
+    finally:
+        ks._get, cfg.KIPRIS_KEY = orig_get, orig_key
+
+
 def main() -> int:
     today = datetime(2026, 7, 27)
     orig = (ps._search, ps._get_token, cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY)
@@ -263,6 +360,8 @@ def main() -> int:
     finally:
         ps._search, ps._get_token = orig[0], orig[1]
         cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY = orig[2], orig[3], orig[4]
+
+    _kipris_checks()
 
     print(f"\n{'실패 ' + str(len(FAILS)) + '건' if FAILS else '전부 통과'}")
     return 1 if FAILS else 0

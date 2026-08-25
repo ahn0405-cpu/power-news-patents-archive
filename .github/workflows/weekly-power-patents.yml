@@ -50,7 +50,12 @@ jobs:
           NEWS_PREV_DIR: _prev     # 이전 뉴스·특허 아카이브 로드
           NEWS_SITE_DIR: site      # 전체 사이트 재생성 대상
           PATENT_MOCK: "off"       # 특허 실데이터 강제 (러너는 외부망 정상)
-          OPS_KEY: ${{ secrets.OPS_KEY }}        # EPO OPS 공식 API 자격
+          # 수집 백엔드. 기본은 KIPRISplus(국내 공보).
+          # OPS 는 8/09·8/16·8/23 세 주 연속 401(Client credentials are invalid)로
+          # 실패해 특허 데이터가 8/03 에서 멈췄다. 자격이 되살아나면 ops 로 되돌린다.
+          PATENT_BACKEND: ${{ vars.PATENT_BACKEND || 'kipris' }}
+          KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}  # KIPRISplus 인증키
+          OPS_KEY: ${{ secrets.OPS_KEY }}        # EPO OPS 공식 API 자격(폴백용)
           OPS_SECRET: ${{ secrets.OPS_SECRET }}
         run: python build_site.py --collect patents
 

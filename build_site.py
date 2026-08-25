@@ -33,6 +33,17 @@ import brief_archive
 import ip_guide
 import site_render
 
+# 특허 수집 백엔드를 고른다. 두 모듈이 같은 계약(collect / collect_offices)을
+# 지키므로 site_render 는 어느 쪽이 돌았는지 알 필요가 없다.
+#   kipris — KIPRISplus 국내 공보 (기본)
+#   ops    — EPO OPS. 8/09·8/16·8/23 세 주 연속 401(Client credentials are
+#            invalid)로 실패했고 특허 데이터가 8/03 에서 멈췄다. 자격이 되살아나면
+#            PATENT_BACKEND=ops 로 되돌릴 수 있게 남겨 둔다.
+if os.getenv("PATENT_BACKEND", "kipris").lower() == "ops":
+    patent_backend = patent_source
+else:
+    import patent_source_kipris as patent_backend
+
 
 def _load_brief(name: str = "brief.json") -> dict | None:
     """저장소에 커밋된 서술형 브리핑을 읽는다(뉴스=brief.json 매일, 특허=patent_brief.json
@@ -85,8 +96,9 @@ def main() -> None:
     # ── 특허 수집 (주 단위) ──
     if what in ("patents", "both"):
         wk = patent_archive.week_start(now)
-        print(f"{'[MOCK] ' if patent_source.cfg.is_mock() else ''}특허 수집 → {wk} 주")
-        pfresh, pmock, pstats = patent_source.collect(now)
+        print(f"{'[MOCK] ' if patent_backend.cfg.is_mock() else ''}특허 수집 "
+              f"→ {wk} 주 · {patent_backend.__name__}")
+        pfresh, pmock, pstats = patent_backend.collect(now)
         _, padded = patent_archive.merge_week(patent_weeks, wk, pfresh, pmock)
         n = patent_archive.merge_stats(pstats_store, pstats, today)
         print(f"  특허 신규 {padded}건 (수집 {len(pfresh)}{' MOCK' if pmock else ''})"
@@ -96,7 +108,7 @@ def main() -> None:
     # 전 출원인을 한 번에 돌리면 OPS 쿼터에 걸리므로, 매일 도는 뉴스 실행에 얹어
     # 날짜 기준으로 일부만 갱신한다(PATENT_OFFICE_BATCH, 65곳 ≈ 6일 한 바퀴). 결과는 병합만 하고 덮어쓰지 않는다.
     if what in ("news", "offices", "both"):
-        n = patent_archive.merge_stats(pstats_store, patent_source.collect_offices(now), today)
+        n = patent_archive.merge_stats(pstats_store, patent_backend.collect_offices(now), today)
         if n:
             print(f"  공개국 집계 갱신 {n}곳 "
                   f"(누적 {len(pstats_store.get('offices', {}))}곳)")
