@@ -224,6 +224,10 @@ def _lazy_checks(sr) -> None:
     check("EPO OPS" not in js,
           "화면 문구에 EPO OPS 가 남아 있지 않다 (지금 쓰는 것은 KIPRISplus)")
     check("KIPRISplus" in js, "푸터가 실제 출처(KIPRISplus)를 밝힌다")
+    check("칸의 수는 표본 건수" not in js and "출원인마다 수집 상한이 있어" not in js,
+          "매트릭스 안내가 '칸은 표본' 이라고 하지 않는다 (지금은 전수라 실제 건수다)")
+    check("규모를 실제 총계로 되돌린" not in js,
+          "'총계로 되돌린' 이라는 OPS 시절 보정 이야기가 남아 있지 않다")
     check("곳을 매주 조회해" not in js,
           "'주요 출원인 N곳을 조회' 라는 옛 설명이 남아 있지 않다")
     check("안에서의 분포입니다" not in js
