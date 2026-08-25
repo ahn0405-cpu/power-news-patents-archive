@@ -143,16 +143,41 @@ def _ipcs(v: str) -> list[str]:
     return out
 
 
+_MAIN_GROUP = re.compile(r"^[A-H][0-9]{2}[A-Z]([0-9]+)")
+
+
+def is_index_code(code: str) -> bool:
+    """'2000 시리즈' 색인 코드인가.
+
+    CPC/IPC 는 주분류 외에 **부가 태그**를 따로 둔다. 상위 분류의 계층을 거울처럼
+    비추면서 소재·용도·환경 특성 같은 세부 속성을 짚어 주는 코드로, 메인그룹 번호가
+    2000 이상이다(H02J 2300/28 저장, H01M 2300 전해질, F05B 2270 풍력 제어…).
+    검색 정밀도를 위한 심사관 참고용이지 **그 특허의 성격을 규정하는 코드가 아니다.**
+    그래서 담아 두기는 하되 분야를 정하는 데는 쓰지 않는다.
+
+    메인그룹 번호가 100 을 넘는다고 색인 코드인 것은 아니다 — C07D 307/00,
+    C09J 141/00 처럼 진짜 메인그룹도 세 자리를 쓴다(처음에 그렇게 재서 59건을
+    잘못 골랐다). 기준은 **2000 이상**이다.
+    """
+    m = _MAIN_GROUP.match((code or "").replace(" ", ""))
+    return bool(m) and int(m.group(1).split("/")[0]) >= 2000
+
+
 def _classify(ipcs: list[str], fallback: str) -> str:
     """응답 IPC 로 분야를 다시 정한다(CATEGORIES 순서 = 우선순위).
 
     조회는 분야별로 하지만, 한 특허가 여러 IPC 를 갖고 있으면 조회한 분야가
     그 특허의 대표 분야가 아닐 수 있다. OPS 때와 같은 규칙으로 되분류하고,
     어디에도 안 걸리면 조회한 분야를 쓴다(그 코드로 잡혔으니 근거는 있다).
+
+    색인 코드(2000 시리즈)는 빼고 본다. 부가 태그가 분야를 정하면 안 된다 —
+    송·변전의 match 가 'H02J' 라서, H02J 코드가 색인 코드뿐인 항목이 그리로
+    끌려간다(실측 1건. 지금은 작지만 코드를 자르지 않게 된 뒤로는 늘 수 있다).
     """
+    real = [c for c in ipcs if not is_index_code(c)] or ipcs
     for cat in cfg.CATEGORIES:
         for pref in cat["match"]:
-            if any(c.startswith(pref) for c in ipcs):
+            if any(c.startswith(pref) for c in real):
                 return cat["key"]
     return fallback
 
