@@ -573,6 +573,9 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
                   "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE,
                   "quadLead": ip_guide.QUAD_GUIDE_LEAD,
                   "quadGuide": ip_guide.QUAD_GUIDE,
+                  "ipcNames": ip_guide.IPC_NAMES,
+                  "subsLead": ip_guide.SUBS_LEAD,
+                  "subsNote": ip_guide.SUBS_NOTE,
                   "concShort": ip_guide.READ_SHORT,
                   "newsShort": ip_guide.NEWS_SHORT,
                   "gen": ip_guide.READ_GEN, "genKr": ip_guide.READ_GEN_KR,
@@ -805,6 +808,25 @@ a{color:inherit}
 .shns{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--ink)}
 .shns .shn b{color:var(--accent2);margin-left:4px;font-variant-numeric:tabular-nums}
 .shns .shn.rest{color:var(--muted)} .shns .shn.rest b{color:var(--muted)}
+/* 세부 기술 쏠림 — 지분 막대와 같은 부품을 쓰되, 이 패널에서는 막대가 주인공이라
+   조금 두껍게 하고 이름표에 색 점을 붙인다(색이 줄마다 다른 기술을 가리키므로
+   패널 하나짜리 범례로는 묶이지 않는다). */
+.subs{display:flex;flex-direction:column;gap:14px}
+/* 좁은 화면에서 분야 이름이 낱말 가운데서 잘렸다('전력수급·수 / 요관리') — 머리글이
+   한 줄에 묶여 있어서다. 줄바꿈을 허용하고 건수를 통째로 아랫줄로 내린다. */
+.subrow .subh{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px;
+  font-size:13px;font-weight:700;word-break:keep-all}
+.subrow .subd{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.subrow .shbar{height:13px;margin:8px 0 6px}
+.subrow .shbar i{cursor:help}
+.shns .sbn{display:inline-flex;align-items:center;gap:5px}
+.shns .sbn>i{width:9px;height:9px;border-radius:2px;flex:none}
+.shns .sbn .sbc{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.shns .sbn b{color:var(--accent2);font-variant-numeric:tabular-nums}
+.shns .sbn.rest{color:var(--muted)} .shns .sbn.rest b{color:var(--muted)}
+.shns .sbn.rest>i{background:var(--line)}
+@media (max-width:560px){ .subrow .subd{margin-left:0;flex-basis:100%} }
 /* ③ 국내 권리는 '누가 갖고 있나' 와 성격이 다른 신호 → 모양을 달리한다 */
 .tkr{margin:9px 0 0;padding:7px 10px;border-radius:8px;background:var(--bg);
   border:1px solid var(--line);border-left:3px solid var(--accent);
@@ -1704,11 +1726,16 @@ function renderHome(){
 
   // 📄 특허 — 브리핑 전문 + 이번 주 공개 특허를 두 칸으로, 그 아래 분야별 경쟁 구도를
   // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=tradeSectionHTML();
-  if(pb||pk||mx){
+  // 그 다음이 세부 기술 쏠림이다 — 순서가 뒤집히면 안 된다. 위 패널이 '이 분야를
+  // 누가 쥐고 있나' 를 말한 다음이라야 '그 분야 안이 무엇으로 채워져 있나' 가
+  // 이어지는 물음으로 읽힌다.
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(),
+        mx=tradeSectionHTML(), sb=subsPanelHTML();
+  if(pb||pk||mx||sb){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
-      + (mx? '<div class="homemx">'+mx+'</div>' : ''));
+      + (mx? '<div class="homemx">'+mx+'</div>' : '')
+      + (sb? '<div class="homemx">'+sb+'</div>' : ''));
   }
   $('#home').innerHTML = parts.join('');
 }
@@ -2109,6 +2136,89 @@ function tradeSectionHTML(){
     + quadChartHTML(rows) + body
     + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
     + '<p class="gnote">' + esc(T.note) + '</p></div>';
+}
+
+// ── 분야 안을 들여다보면: 세부 기술 쏠림 ──────────────────────────────
+// 위 '분야별 경쟁 구도' 는 **누가** 갖고 있는지를 말한다. 그런데 같은 분야 안에서
+// 출원이 **무엇에** 몰려 있는지는 거기서 통째로 뭉개진다 — 재생에너지·저장이
+// 8,540건이라는 말만으로는 그중 62%가 배터리라는 사실이 보이지 않는다.
+// 새 수집 없이 지금 피드로 계산된다(항목마다 IPC 코드가 이미 실려 있다).
+//
+// 대표 코드는 첫 IPC 의 앞 네 자리(서브클래스)다. 한 건에 여러 코드가 붙지만
+// 전부 세면 한 건이 여러 번 계수돼 합이 100%를 넘고, '몇 퍼센트' 라는 말이
+// 뜻을 잃는다 → 첫 코드 하나만 센다. 실측(누적 16,265건): 코드가 아예 없는 항목 0건,
+// 첫 코드가 Y(CPC 전용 태깅) 인 항목 1건 — 대표 코드로 쓰기에 무리가 없다.
+const SUBS_MIN = 30;        // 이 아래로는 비율이 한두 건에 휘둘린다
+function subsRows(){
+  const cats=FEED.patents.categories||[];
+  const by={};
+  (FEED.patents.items||[]).forEach(it=>{
+    const c=(it.cpc||[])[0]; if(!c) return;
+    const k=String(c).slice(0,4).toUpperCase();
+    if(k.length<4) return;
+    const m=by[it.category]||(by[it.category]={});
+    m[k]=(m[k]||0)+1;
+  });
+  return cats.map(c=>{
+    const m=by[c.key]; if(!m) return null;
+    const all=Object.entries(m).sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]));
+    const n=all.reduce((s,x)=>s+x[1],0);
+    if(n<SUBS_MIN) return null;
+    const top=all.slice(0,3).map(([code,v])=>({code, v, share:v/n}));
+    const restV=n-top.reduce((s,t)=>s+t.v,0);
+    return {cat:c, n, kinds:all.length, top, rest:{v:restV, share:restV/n}};
+  }).filter(Boolean).sort((a,b)=> b.top[0].share-a.top[0].share);
+}
+
+function subsPanelHTML(){
+  const T=FEED.trade||{};
+  if(!T.subsLead) return '';
+  // 집중도 표와 같은 이유로 전수를 받기 전에는 내보내지 않는다 — 부분집합으로
+  // 세면 '몇 퍼센트' 가 실제와 다르게 나오는데, 화면에는 확정값처럼 보인다.
+  if(!FULL) return '<div class="sec" id="sec-subs">🔬 분야 안을 들여다보면</div>'
+    + loadingNote('세부 기술');
+  const rows=subsRows(); if(rows.length<2) return '';
+  const NM=T.ipcNames||{};
+  const nameOf=c=> NM[c] || c;                 // 툴팁·대체텍스트용(글자만)
+  // 이름표. 이름이 없는 코드는 코드 자체를 이름 자리에 놓는다 — 작은 회색 코드칩만
+  // 남기면 그 줄만 유난히 흐려지고, '표에 한 줄 채우라'는 신호도 묻힌다.
+  const labOf=c=> NM[c]
+    ? esc(NM[c])+'<span class="sbc mono">'+esc(c)+'</span>'
+    : '<span class="mono">'+esc(c)+'</span>';
+  const COL=['var(--q3)','var(--q2)','var(--q1)'];
+  const body=rows.map(r=>{
+    const segs=r.top.map((t,i)=>{
+      const tip=nameOf(t.code)+' ('+t.code+') — '+r.cat.name+' '+r.n.toLocaleString()
+        +'건 중 '+t.v.toLocaleString()+'건, '+Math.round(t.share*100)+'%';
+      return '<i title="'+esc(tip)+'" style="width:'+(t.share*100).toFixed(1)
+        + '%;background:'+COL[i]+'"></i>';
+    }).join('');
+    const rest=r.rest.share>0.005
+      ? '<i class="rest" title="'+esc('그 밖의 갈래 '+(r.kinds-r.top.length)
+          +'종 합계 — '+r.rest.v.toLocaleString()+'건, '+Math.round(r.rest.share*100)+'%')
+        + '" style="width:'+(r.rest.share*100).toFixed(1)+'%"></i>' : '';
+    // 색은 그 줄 안의 순위일 뿐이라 줄마다 뜻이 달라진다 → 이름표에 같은 색 점을
+    // 달아 줄 단위로 색과 이름을 묶는다(패널 하나짜리 범례로는 묶이지 않는다).
+    const names=r.top.map((t,i)=>
+      '<span class="sbn"><i style="background:'+COL[i]+'"></i>'
+      + labOf(t.code)
+      + '<b>'+Math.round(t.share*100)+'%</b></span>').join('')
+      + (r.rest.share>0.005
+         ? '<span class="sbn rest"><i></i>나머지<b>'+Math.round(r.rest.share*100)+'%</b></span>'
+         : '');
+    return '<div class="subrow"><div class="subh">'
+      + r.cat.emoji+' '+esc(r.cat.name)
+      + '<span class="subd">'+r.n.toLocaleString()+'건 · 서로 다른 '
+      + r.kinds+'갈래</span></div>'
+      + '<div class="shbar" role="img" aria-label="'
+      + esc(r.cat.name+' 상위 세 갈래: '
+            + r.top.map(t=>nameOf(t.code)+' '+Math.round(t.share*100)+'%').join(', '))
+      + '">'+segs+rest+'</div><div class="shns">'+names+'</div></div>';
+  }).join('');
+  return '<div class="homepanel" id="sec-subs"><h3>🔬 분야 안을 들여다보면</h3>'
+    + '<p class="sub">'+esc(T.subsLead)+'</p>'
+    + '<div class="subs">'+body+'</div>'
+    + '<p class="gnote">'+esc(T.subsNote)+'</p></div>';
 }
 
 // 국유판매기술 — 권리자가 국가라 창구가 분명하고, 무상은 비용 없이 실시할 수 있다.

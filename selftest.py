@@ -445,6 +445,121 @@ def _quad_checks(sr) -> None:
           f"({'겹침: ' + str(over2[:2]) if over2 else '겹침 없음'})")
 
 
+def _subs_checks(sr) -> None:
+    """세부 기술 쏠림(subsRows/subsPanelHTML)을 실제로 실행해 본다.
+
+    여기서 틀리기 쉬운 것은 '퍼센트의 분모'다. 한 건에 IPC 가 여러 개 붙어 있어
+    전부 세면 한 건이 여러 번 계수돼 합이 100%를 넘는데, 화면은 그래도 100% 폭
+    막대를 그린다 — 눈으로는 멀쩡하고 숫자만 틀린다. 그래서 ⓐ 첫 코드만 세는가
+    ⓑ 네 자리로 자르는가 ⓒ 네 칸의 합이 정확히 100인가 를 실행해서 센다.
+    이름표는 줄마다 색이 다른 기술을 가리키므로 ⓓ 줄 안에서 색과 이름이 묶여
+    있는지도 본다(패널 하나짜리 범례로는 묶이지 않는다).
+    """
+    import json
+    import re as _re
+    import shutil
+    import subprocess
+    import tempfile
+
+    import ip_guide
+
+    # 실측(2026-08-25, 누적 16,265건)으로 여덟 분야의 1~3위에 실제로 오르는 코드.
+    # 이 중 하나라도 이름이 없으면 화면에 코드가 그대로 나온다 → 사람이 채워야 한다.
+    seen = ["B60L", "B60R", "F03D", "G01R", "G06F", "G06Q", "G21C", "G21D",
+            "H01F", "H01H", "H01M", "H02B", "H02G", "H02H", "H02J", "H02M", "H02S"]
+    missing = [c for c in seen if c not in ip_guide.IPC_NAMES]
+    check(not missing, f"화면에 실제로 오르는 IPC 에 한국어 이름이 다 있다 "
+                       f"({'빠짐: ' + ','.join(missing) if missing else '17종 모두'})")
+
+    js = sr._JS
+    if not shutil.which("node"):
+        check(True, "(node 없음 — 세부 기술 실행 검사는 건너뛴다)")
+        return
+    s, e = js.find("const SUBS_MIN"), js.find("// 국유판매기술")
+    check(s >= 0 < e - s, "세부 기술 블록을 떼어낼 수 있다")
+    if not 0 <= s < e:
+        return
+
+    # 쏠림이 **덜한** 분야를 목록 앞에 둔다 — 순서가 이미 맞아 있으면 정렬을
+    # 지워도 검사가 통과해 버린다(실제로 그랬다).
+    CATS = [{"key": "b", "emoji": "🅱️", "name": "다라분야"},
+            {"key": "a", "emoji": "🅰️", "name": "가나분야"},
+            {"key": "c", "emoji": "🆑", "name": "작은분야"}]
+    # 두 번째 코드는 전부 Y02E10 이다 — 첫 코드만 센다면 Y02E 는 어디에도 안 나온다.
+    def mk(cat, code, n):
+        return [{"category": cat, "cpc": [code, "Y02E10"]} for _ in range(n)]
+    items = (mk("a", "H01M10/052", 60) + mk("a", "F03D7/02", 25)
+             + mk("a", "H02S40", 10) + mk("a", "G06F1", 5)
+             + mk("b", "H02J3/38", 40) + mk("b", "G06Q50", 30)
+             + mk("b", "X99Z1", 20) + mk("b", "H02M1", 10)      # 이름표에 없는 코드
+             + mk("c", "H02G1", 10))                            # SUBS_MIN 미만
+    names = {k: v for k, v in ip_guide.IPC_NAMES.items()
+             if k in ("H01M", "F03D", "H02S", "H02J", "G06Q", "G06F", "H02M", "H02G")}
+    prog = (js[s:e]
+            + "\nfunction esc(s){return String(s).replace(/[&<>\"]/g,"
+              "c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}\n"
+            + "function loadingNote(w){return '<p>'+w+' 로딩</p>';}\n"
+            + "let FULL=true;\n"
+            + "const FEED={patents:{categories:"
+            + json.dumps(CATS, ensure_ascii=False) + ",items:"
+            + json.dumps(items, ensure_ascii=False) + "},trade:{ipcNames:"
+            + json.dumps(names, ensure_ascii=False)
+            + ",subsLead:'앞말',subsNote:'각주'}};\n"
+            + "const R=subsRows(), H=subsPanelHTML();\n"
+            + "FULL=false; const HL=subsPanelHTML();\n"
+            + "console.log(JSON.stringify({rows:R,html:H,loading:HL}));")
+    prog = prog.replace("\\\\", "\\")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(prog)
+        path = f.name
+    try:
+        out = subprocess.run(["node", path], capture_output=True, text=True, timeout=30)
+        if out.returncode != 0:
+            check(False, f"세부 기술 JS 가 실행된다 ({out.stderr.strip()[:200]})")
+            return
+        res = json.loads(out.stdout)
+    finally:
+        try:
+            __import__("os").unlink(path)
+        except OSError:
+            pass
+
+    rows = res["rows"]
+    check([r["cat"]["key"] for r in rows] == ["a", "b"],
+          "건수가 적은 분야는 빼고, 1위에 많이 몰린 분야가 위로 온다 "
+          f"(받은 순서 {[r['cat']['key'] for r in rows]})")
+    a = rows[0]
+    check(a["n"] == 100 and [t["code"] for t in a["top"]] == ["H01M", "F03D", "H02S"],
+          f"IPC 를 앞 네 자리로 자르고 큰 것부터 센다 (받은 값 "
+          f"{[t['code'] for t in a['top']]}, 분모 {a['n']})")
+    check("Y02E" not in json.dumps(rows) and a["kinds"] == 4,
+          f"한 건에서 대표(첫) 코드 하나만 센다 (갈래 {a['kinds']}종, Y02E 안 나옴)")
+    for r in rows:
+        tot = sum(t["share"] for t in r["top"]) + r["rest"]["share"]
+        check(abs(tot - 1.0) < 1e-9,
+              f"{r['cat']['name']}: 세 갈래 + 나머지 = 100% (받은 값 {tot * 100:.4f}%)")
+    check(abs(a["rest"]["share"] - 0.05) < 1e-9 and a["rest"]["v"] == 5,
+          f"나머지는 전체에서 상위 셋을 뺀 값이다 (받은 값 {a['rest']['v']}건)")
+
+    html = res["html"]
+    # 'X99Z 가 html 안에 있다' 로는 부족하다 — 이름 자리가 비어도 작은 코드칩
+    # 때문에 통과한다. 이름 자리에 무엇이 들어갔는지를 본다.
+    check('전지·연료전지<span class="sbc mono">H01M</span>' in html
+          and '<span class="mono">X99Z</span>' in html,
+          "코드에 한국어 이름을 붙이고, 이름이 없는 코드는 코드가 이름 자리에 선다")
+    widths = [float(w) for w in _re.findall(r'width:([\d.]+)%', html)]
+    check(len(widths) == 8 and all(abs(sum(widths[i:i + 4]) - 100) < 0.25
+                                   for i in (0, 4)),
+          f"막대 네 칸의 폭 합이 100%다 (받은 값 {widths})")
+    swatches = _re.findall(r'<span class="sbn"><i style="background:([^"]+)"', html)
+    check(len(swatches) == 6 and len(set(swatches[:3])) == 3
+          and swatches[:3] == swatches[3:],
+          f"이름표마다 그 줄의 순위 색이 붙는다 (받은 값 {swatches[:3]})")
+    check("로딩" in res["loading"] and "shbar" not in res["loading"],
+          "아카이브를 다 받기 전에는 비율을 내보내지 않는다")
+
+
 def _supplier_checks(sr) -> None:
     """공급자 표(_supKind/suppliers)를 실제로 실행해 본다.
 
@@ -1223,6 +1338,9 @@ def main() -> int:
 
         print("· 분야 지도 (축·등급·이름표 배치)")
         _quad_checks(sr)
+
+        print("· 세부 기술 쏠림 (분모·대표 코드·이름표)")
+        _subs_checks(sr)
 
         print("· 지연 로딩 (목록 분할)")
         _lazy_checks(sr)
