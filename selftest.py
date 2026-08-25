@@ -466,6 +466,19 @@ def _foreign_checks() -> None:
         check(kr._unescape("정상 이름 & 회사") == "정상 이름 & 회사",
               "이미 정상인 글자는 건드리지 않는다")
 
+        # 수집기에서 푸는 것만으로는 부족하다 — 아카이브는 누적이라 이미 저장된
+        # 항목은 그대로다(실측: 고친 뒤에도 저장분 430건에 XI&apos;AN 이 남았다).
+        # 그래서 그리기 직전에 한 번 더 푼다.
+        import site_render as _sr
+        check(_sr._plain("XI&apos;AN JIAOTONG") == "XI'AN JIAOTONG",
+              "화면에 그리기 직전에도 실체참조를 푼다 (옛 저장분까지 고쳐진다)")
+        check(_sr._plain("Vorwerk &amp; Co.") == "Vorwerk & Co.",
+              "&amp; 도 화면에서 풀린다")
+        check('_plain(p.get("applicant")' in _sr.__doc__ or
+              '_plain' in open("site_render.py", encoding="utf-8").read()
+              .split("def _patent_feed")[1][:3000],
+              "_patent_feed 가 이름을 그리기 전에 _plain 을 거친다")
+
         # 국내 수집이 살아 있는데 해외가 죽으면, 국내까지 잃으면 안 된다
         import patent_source_kipris as ks
         saved_fg = fg.collect

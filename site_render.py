@@ -30,6 +30,7 @@ file:// 로 열면 fetch 가 CORS 에 막힌다. 그때는 받은 만큼만 쓰�
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -149,6 +150,29 @@ def _reassign(raw: str, cur: str):
         if t in r:
             return None if name == cur else (name, region, flag)
     return None
+
+
+def _plain(s: str) -> str:
+    """남은 HTML 실체참조를 푼다 — **표시 직전에** 한다.
+
+    KIPRIS 는 실체참조를 두 번 감싸 줘서 XML 파서가 한 번 푼 뒤에도 '&apos;' 가
+    글자로 남는다. 수집기(patent_source_kipris._unescape)에서 이미 풀지만, 그건
+    **새로 들어오는 항목에만** 걸린다 — 아카이브는 누적이라 이미 저장된 것은
+    그대로다(실측: 고친 뒤에도 저장분 430건에 XI&apos;AN 이 남아 있었다).
+    저장소를 건드려 고치는 대신 그리기 직전에 풀면 옛 자료까지 한 번에 맞는다.
+
+    두 번까지만 푼다 — 이름에 '&amp;' 라는 글자가 진짜로 들어 있는 경우까지
+    먹어 치우면 안 된다.
+    """
+    s = s or ""
+    for _ in range(2):
+        if "&" not in s:
+            break
+        once = html.unescape(s)
+        if once == s:
+            break
+        s = once
+    return s
 
 
 def _canon_assignee(name: str) -> str:
@@ -276,14 +300,16 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         for p in pats:
             # 출원인은 수집 시 명시(우리가 조회한 주체) → 그 값을 우선 사용.
             # 옛 데이터(applicant 없음)는 이름 정규화로 대체(하위호환).
-            ap = p.get("applicant") or ""
-            aname = ap or _canon_assignee(p.get("assignee", ""))
+            # 실체참조는 별칭을 맞추기 **전에** 푼다 — 'XI&apos;AN' 상태로는
+            # 별칭·정규화가 어긋나고, 화면에도 그대로 새어 나간다.
+            ap = _plain(p.get("applicant") or "")
+            aname = ap or _canon_assignee(_plain(p.get("assignee", "")))
             region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
             flag = p.get("flag") or (pcfg.REGION_LABEL.get(region, ("", ""))[0])
             # 페이로드 절약: 원문 assignee 는 정규화명(aName)과 다를 때만, snippet 은
             # 있을 때만 담는다. cpc 는 카드에 분류 근거로 보여주므로 상위 3개만.
-            raw = p.get("assignee", "")
+            raw = _plain(p.get("assignee", ""))
             fix = _reassign(raw, aname)     # 자회사 문서를 모회사 밑에 두지 않는다
             if ap:
                 q_all[ap] = q_all.get(ap, 0) + 1
@@ -292,7 +318,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
             if fix:
                 aname, region, flag = fix
             it = {
-                "title": p.get("title", ""), "url": p.get("url", ""),
+                "title": _plain(p.get("title", "")), "url": p.get("url", ""),
                 "number": p.get("number", ""),
                 "aName": aname, "aCountry": region, "aFlag": flag,
                 "office": p.get("office", ""),
