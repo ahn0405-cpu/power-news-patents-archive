@@ -333,6 +333,8 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "lookbackDays": pcfg.LOOKBACK_DAYS,
         "krLimit": pcfg.KR_LIMIT,
         "perApplicantLimit": pcfg.PER_APPLICANT_LIMIT,   # 표본 상한(랭킹의 '이상' 표기용)
+        # 공급자 절의 "최근 N일" 문구가 설정과 어긋나지 않게 값으로 넘긴다.
+        "lookbackDays": pcfg.LOOKBACK_DAYS,
         "applicants": len(pcfg.APPLICANTS),
         # 카드마다 붙는 조회 창구(Espacenet·Google Patents 등). 공개번호만 있으면
         # 되므로 항목별로 URL 을 저장하지 않고 템플릿만 한 번 내려보낸다.
@@ -863,6 +865,13 @@ a{color:inherit}
 .catlead .cn{color:var(--muted);font-weight:600}
 .catlead .conc.na{color:var(--muted)}
 @media (max-width:560px){ .catlead .conc{margin-left:0;width:100%} .catlead .clab{flex-wrap:wrap} }
+/* 분야별 국내 공급자. 경쟁 구도 표와 같은 뼈대(.catlead)를 쓰되, 칩이 누를 수 있는
+   것임을 커서·테두리로만 알린다. 색은 새로 만들지 않는다. */
+.catlead.sup .cta.sup{cursor:pointer;background:var(--card)}
+.catlead.sup .cta.sup:hover{border-color:var(--accent2)}
+.catlead.sup .cta.sup:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.catlead.sup .cta.supmore{color:var(--muted);border-style:dashed}
+.catlead.sup .cbar i{background:var(--q2)}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
 .statkpi .v{font-size:19px;font-weight:800}
@@ -1691,6 +1700,9 @@ function renderGuide(){
       + '움직였는지는 <b>홈</b>에 있습니다. 거기서 분야를 고른 뒤 아래 창구로 오시면 됩니다. '
       + '<button type="button" class="golink" data-gohome="1">홈에서 보기 →</button></p>'
     : '';
+  // 분석 다음에 '누구한테 가면 되나'가 온다. 매물(국유판매기술)·창구보다 앞이다 —
+  // 상대를 정하고 나서야 매물과 창구가 뜻을 갖는다.
+  const supply = supplierHTML(FEED.patents.items||[]);
   const staown = staownHTML();
   let desks = G.map((g,i)=>
     '<div class="sec"'+(i===0? ' id="sec-desks"':'')+'>'
@@ -1706,12 +1718,13 @@ function renderGuide(){
   if(desks && FEED.guideNote) desks += '<p class="gnote">'+esc(FEED.guideNote)+'</p>';
   const jumps=[];
   if(trade)  jumps.push(['sec-analysis','🧭 분석']);
+  if(supply) jumps.push(['sec-supply','🎓 공급자']);
   if(staown) jumps.push(['sec-staown','🏛️ 매물']);
   if(desks)  jumps.push(['sec-desks','🏢 창구']);
   const nav = jumps.length>1
     ? '<div class="jump">'+jumps.map(j=>'<button type="button" data-jump="'+j[0]+'">'
       + esc(j[1])+'</button>').join('')+'</div>' : '';
-  $('#guide').innerHTML = nav + trade + staown + desks;
+  $('#guide').innerHTML = nav + trade + supply + staown + desks;
 }
 
 function render(){
@@ -1994,6 +2007,116 @@ function concRowsHTML(rows){
   }).join('');
 }
 
+// ── 분야별 국내 공급자 ────────────────────────────────────────────────
+// 왜 필요한가: 이 사이트가 아직 답하지 못한 질문이 "그래서 누구한테 가면 되나"
+// 였다. 경쟁 구도는 '누가 이 분야를 쥐고 있나'를 보여 주지만 그 상위는 대부분
+// 대기업이라, 중소기업에게는 협상 상대가 아니라 회피 대상이다.
+//
+// 실제로 기술을 내놓는 쪽은 대학 산학협력단·출연연·공공기관이다. 기술이전
+// 전담조직이 있어 거래가 제도로 굴러가고 실시 조건도 공개돼 있다. OPS 를 쓰던
+// 때는 이들이 표본에 아예 없었다(큐레이션한 대기업 65곳만 봤다). KIPRIS 는
+// 분야+기간만으로 조회돼 모집단이 통째로 들어오므로 이제 이름과 건수를 그대로
+// 셀 수 있다 — 실측 첫 주 대학·연구기관 85곳 313건.
+const SUP_KINDS = [
+  ['대학', /산학협력단|대학교|대학(?!원생)|UNIV/i, '🎓'],
+  ['출연연·연구기관', /연구원|연구소|연구재단|RESEARCH|INSTITUTE|KIST|ETRI/i, '🔬'],
+  ['공공기관', /공사$|공사\\s|공단|진흥원|한국전력|KEPCO/i, '🏛'],
+];
+// 위 낱말들은 민간 회사 이름에도 그대로 들어간다 — '주식회사동일기술공사'는
+// 공기업이 아니고 '주식회사 스탠더드시험연구소'는 출연연이 아니다. 법인격 표기가
+// 붙어 있으면 민간이므로, 어느 갈래든 여기서 뺀다(공공기관에만 걸었더니 민간
+// 시험연구소가 🔬 로 올라왔다 — 실측).
+const SUP_COMPANY = /주식회사|㈜|\\(주\\)|유한회사|\\bCO\\.|\\bLTD\\b|\\bINC\\b/i;
+function _supKind(name){
+  const nm = name||'';
+  if(SUP_COMPANY.test(nm)) return null;
+  for(var i=0;i<SUP_KINDS.length;i++){
+    if(!SUP_KINDS[i][1].test(nm)) continue;
+    return {label:SUP_KINDS[i][0], icon:SUP_KINDS[i][2]};
+  }
+  return null;
+}
+
+// 분야별로 '공급자 성격의 국내 출원인'만 모은다. 대기업을 섞지 않는 것이 요점이다.
+function suppliers(list){
+  const cats = FEED.patents.categories||[];
+  const byCat = {}, filedIn = {};
+  (list||[]).forEach(it=>{
+    const raw = it.aName||''; if(!raw || raw==='(미상)') return;
+    if((it.aCountry||'') !== 'KR') return;          // 국내 주체만
+    // 공동출원은 '|' 로 이어져 있다. 대표(첫) 출원인만 세면 칩의 숫자와 칩을
+    // 눌렀을 때 열리는 목록이 어긋난다 — 목록 검색은 이름이 어느 자리에 있든
+    // 걸리기 때문이다(한국원자력연구원 칩 11 vs 목록 12, 실측). 참여를 세는 쪽이
+    // '이 기관에 말을 걸 수 있는 건'이라는 이 표의 뜻에도 맞다.
+    const parts = raw.indexOf('|')>=0 ? raw.split('|') : [raw];
+    const seen = {};
+    parts.forEach(p0=>{
+      const nm = (p0||'').trim(); if(!nm || seen[nm]) return; seen[nm]=1;
+      const kind = _supKind(nm); if(!kind) return;  // 대학·출연연·공공만
+      const m = byCat[it.category] || (byCat[it.category] = {});
+      const o = m[nm] || (m[nm] = {name:nm, kind:kind, cnt:0});
+      o.cnt++;
+      // 분야 합계는 건수여야 한다. 기관별 건수를 더하면 공동출원이 두 번 세진다.
+      (filedIn[it.category] || (filedIn[it.category] = new Set()))
+        .add(it.id || it.number || it.url || (it.title+'|'+(it.date||'')));
+    });
+  });
+  return cats.map(c=>{
+    const m = byCat[c.key]; if(!m) return null;
+    const orgs = Object.keys(m).map(k=>m[k])
+      .sort((a,b)=> b.cnt-a.cnt || a.name.localeCompare(b.name));
+    return {cat:c, orgs:orgs, n:orgs.length,
+            total:(filedIn[c.key]||{size:0}).size};
+  }).filter(Boolean).sort((a,b)=> b.n-a.n || b.total-a.total);
+}
+
+const SUP_TOP = 6;          // 한 분야에 보여 줄 기관 수(나머지는 '외 N곳')
+function supplierHTML(list){
+  const rows = suppliers(list);
+  if(!rows.length) return '';
+  const orgAll = new Set();
+  rows.forEach(r=>r.orgs.forEach(o=>orgAll.add(o.name)));
+  const tot = rows.reduce((s,r)=>s+r.total,0);
+  // 막대는 분야끼리 '기관 수'를 눈으로 견주기 위한 것이다. 단일 계열이라 범례가
+  // 필요 없고, 색은 옆 표(.catlead)와 같은 단일 램프를 쓴다 — 한 화면에서 색
+  // 언어를 둘로 쓰면 서로 다른 지표로 오해된다. 뜻은 글자가 지므로 글자는
+  // 색 램프가 아니라 본문 색을 입는다.
+  const maxN = Math.max.apply(null, rows.map(r=>r.n));
+  const body = rows.map(r=>{
+    const chips = r.orgs.slice(0, SUP_TOP).map(o=>
+      '<span class="cta sup" role="button" tabindex="0" data-sup="'+esc(o.name)
+      + '" data-supcat="'+esc(r.cat.key)+'" title="'+esc(o.name+' — 이 분야 '+o.cnt
+      + '건. 누르면 특허 탭에서 이 기관의 해당 분야 공개 건을 봅니다.')+'">'
+      + o.kind.icon+' '+esc(o.name)+'<span class="ctn">'+o.cnt+'</span></span>').join('');
+    const more = r.orgs.length > SUP_TOP
+      // 클래스 이름을 'more' 로 쓰면 안 된다 — 전역 '더 보기' 버튼(.more)이
+      // display:block; margin:14px auto 로 잡혀 있어 칩이 줄 가운데로 밀려난다(실측).
+      ? '<span class="cta supmore">외 '+(r.orgs.length-SUP_TOP)+'곳</span>' : '';
+    // 성격별 구성. 한전 한 곳이 분야 건수를 대부분 차지하는 일이 잦아(송·변전 198건),
+    // 총계만 보이면 '한전 목록'처럼 읽힌다 → 대학·출연연이 몇 곳인지 함께 밝힌다.
+    const mix = {};
+    r.orgs.forEach(o=>{ mix[o.kind.label]=(mix[o.kind.label]||0)+1; });
+    const mixTxt = ['대학','출연연·연구기관','공공기관']
+      .filter(k=>mix[k]).map(k=>k.replace('출연연·연구기관','연구기관')+' '+mix[k]).join(' · ');
+    const metric = '<span class="conc lo" title="'+esc('이 분야에 최근 공개가 있는 국내 '
+      + '대학·출연연·공공기관이 '+r.n+'곳, 합계 '+r.total+'건입니다. 구성: '+mixTxt)+'">'
+      + '<span class="cbar"><i style="width:'+Math.round(r.n/maxN*100)+'%"></i></span>'
+      + '<span class="cn">'+mixTxt+' · '+r.total+'건</span></span>';
+    return '<div class="crow"><div class="clab">'+r.cat.emoji+' '+esc(r.cat.name)+metric
+      + '</div><div class="ctops">'+chips+more+'</div></div>';
+  }).join('');
+  return '<div class="sec" id="sec-supply">🎓 분야별 국내 공급자</div>'
+    + '<p class="gdesc">이 분야에 최근 공개가 있는 <b>대학 산학협력단·출연연·공공기관</b>입니다. '
+    + '기술이전 전담조직이 있어 거래가 제도로 굴러가는 쪽이라, 도입을 검토한다면 먼저 '
+    + '두드릴 상대입니다. 대기업은 협상 상대라기보다 회피 대상이라 여기서는 뺐습니다. '
+    + '기관 이름을 누르면 특허 탭에서 그 분야 공개 건이 열립니다.</p>'
+    + '<div class="catlead sup">'+body+'</div>'
+    + '<p class="gnote">' + rows.length + '개 분야 · 기관 ' + orgAll.size + '곳 · ' + tot + '건. '
+    + '건수는 <b>최근 ' + (FEED.patents.lookbackDays||90) + '일 국내 공개분</b>이며 그 기관이 '
+    + '가진 특허 전체가 아닙니다. 목록에 있다는 것이 이전 의사가 있다는 뜻도 아닙니다 — '
+    + '문의는 아래 창구를 이용하세요.</p>';
+}
+
 function renderStats(list){
   if(!list.length) return '<div class="empty">조건에 맞는 특허가 없습니다.</div>';
   const cats=FEED.patents.categories, regions=FEED.patents.countries;
@@ -2152,6 +2275,12 @@ function wire(){
     const j=e.target.closest('[data-jump]');
     if(j){ const t=document.getElementById(j.getAttribute('data-jump'));
       if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    // 공급자 칩 → 특허 탭에서 그 기관의 해당 분야 공개 건으로 좁힌다.
+    // 이 절은 반드시 #guide 에 달아야 한다 — 공급자 표는 #results 가 아니라
+    // #guide 안에 있어서, #results 위임에 달았더니 클릭이 먹지 않았다(실측).
+    const sp=e.target.closest('[data-sup]');
+    if(sp){ gotoTab('patents', {q: sp.getAttribute('data-sup'),
+                                cat: sp.getAttribute('data-supcat')}); return; }
     // 국유특허 더 보기/접기 — 접을 때는 그 자리로 돌려놔야 화면이 튀지 않는다.
     if(e.target.closest('[data-more="staown"]')){
       const back=staownAll;
@@ -2160,6 +2289,13 @@ function wire(){
         if(t) t.scrollIntoView({block:'start'}); }
       return; }
   };
+  // 공급자 칩은 role=button·tabindex=0 이라 키보드로도 눌려야 한다.
+  $('#guide').addEventListener('keydown', e=>{
+    if(e.key!=='Enter' && e.key!==' ') return;
+    const sp=e.target.closest && e.target.closest('[data-sup]');
+    if(!sp) return;
+    e.preventDefault(); sp.click();
+  });
   $('#home').onclick = e=>{
     // 브리핑 접기/펼치기
     if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;

@@ -75,6 +75,109 @@ def _kipris_page(rows: list[tuple[int, str, str]], total: int) -> str:
             f"<count><totalCount>{total}</totalCount></count></body></response>")
 
 
+def _supplier_checks(sr) -> None:
+    """공급자 표(_supKind/suppliers)를 실제로 실행해 본다.
+
+    이 부분은 파이썬 문자열 안의 JS 라 py_compile 이 봐 주지 않는다. 실제로
+    한 번에 네 가지가 났다 — 선언 없는 SUP_COMPANY(페이지 전체가 죽었다),
+    민간 시험연구소가 출연연으로 분류, 전역 .more 와 클래스 이름 충돌로 칩이
+    줄 가운데로 밀림, 칩 숫자와 눌렀을 때 열리는 목록 건수 불일치. 화면으로만
+    확인하면 다음에 또 난다.
+    """
+    import json
+    import re as _re
+    import shutil
+    import subprocess
+    import tempfile
+
+    js = sr._JS
+    # 1) 소스 수준 — node 가 없어도 도는 최소한의 방어선.
+    check("const SUP_COMPANY" in js,
+          "SUP_COMPANY 가 선언돼 있다 (없으면 페이지 전체가 죽는다)")
+    check("class=\"cta more\"" not in js,
+          "공급자 칩이 전역 '더 보기'(.more) 클래스를 쓰지 않는다")
+    check("$('#guide').addEventListener('keydown'" in js
+          or "$('#guide').onkeydown" in js,
+          "공급자 칩에 키보드 활성화가 달려 있다")
+    # 클릭 위임은 #results 가 아니라 #guide 여야 한다 (표가 #guide 안에 있다).
+    gi = js.find("$('#guide').onclick")
+    ri = js.find("$('#results').addEventListener('click'")
+    sp = js.find("closest('[data-sup]')")
+    check(gi >= 0 and sp > gi and (ri < 0 or not (ri < sp < js.find("$('#reset')"))),
+          "[data-sup] 클릭 위임이 #guide 에 달려 있다")
+
+    if not shutil.which("node"):
+        check(True, "(node 없음 — JS 실행 검사는 건너뛴다)")
+        return
+
+    # 2) 실행 수준 — 함수를 그대로 떼어내 node 에서 돌린다.
+    start = js.find("const SUP_KINDS")
+    end = js.find("const SUP_TOP")
+    check(start >= 0 and end > start, "공급자 블록을 소스에서 떼어낼 수 있다")
+    if start < 0 or end <= start:
+        return
+    block = js[start:end]
+
+    items = [
+        # 대표 출원인 + 공동출원. 한국원자력연구원은 세 번째 자리에 있다.
+        {"aName": "서울대학교산학협력단|한국과학기술원|한국원자력연구원",
+         "aCountry": "KR", "category": "nuclear", "number": "P1"},
+        {"aName": "한국원자력연구원", "aCountry": "KR",
+         "category": "nuclear", "number": "P2"},
+        {"aName": "주식회사 스탠더드시험연구소", "aCountry": "KR",
+         "category": "nuclear", "number": "P3"},   # 민간 — 빠져야 한다
+        {"aName": "주식회사동일기술공사", "aCountry": "KR",
+         "category": "nuclear", "number": "P4"},   # 민간 — 빠져야 한다
+        {"aName": "한국전력공사", "aCountry": "KR",
+         "category": "nuclear", "number": "P5"},
+        {"aName": "Siemens AG", "aCountry": "DE",
+         "category": "nuclear", "number": "P6"},   # 해외 — 빠져야 한다
+    ]
+    prog = (block + "\nconst FEED={patents:{categories:[{key:'nuclear',"
+            "name:'원전·SMR',emoji:'x'}]}};\n"
+            f"const ITEMS={json.dumps(items, ensure_ascii=False)};\n"
+            "const rows=suppliers(ITEMS);\n"
+            "console.log(JSON.stringify(rows.map(r=>({cat:r.cat.key,n:r.n,"
+            "total:r.total,orgs:r.orgs.map(o=>[o.name,o.cnt,o.kind.label])}))));")
+    # site_render 의 JS 는 파이썬 문자열이라 정규식 이스케이프가 '\\s' 로 들어 있다.
+    prog = prog.replace("\\\\", "\\")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(prog)
+        path = f.name
+    try:
+        out = subprocess.run(["node", path], capture_output=True, text=True,
+                             timeout=30)
+        if out.returncode != 0:
+            check(False, f"공급자 JS 가 실행된다 ({out.stderr.strip()[:160]})")
+            return
+        rows = json.loads(out.stdout)
+    finally:
+        try:
+            __import__("os").unlink(path)
+        except OSError:
+            pass
+
+    check(len(rows) == 1 and rows[0]["cat"] == "nuclear",
+          "분야 한 줄이 나온다")
+    orgs = {o[0]: (o[1], o[2]) for o in rows[0]["orgs"]}
+    check("한국원자력연구원" in orgs and orgs["한국원자력연구원"][0] == 2,
+          "공동출원에서 두 번째·세 번째 출원인도 세어진다 "
+          f"(한국원자력연구원 {orgs.get('한국원자력연구원', ('?',))[0]}건)")
+    check("주식회사 스탠더드시험연구소" not in orgs,
+          "'주식회사 …시험연구소'는 출연연으로 분류되지 않는다")
+    check("주식회사동일기술공사" not in orgs,
+          "'주식회사…공사'는 공공기관으로 분류되지 않는다")
+    check("Siemens AG" not in orgs, "해외 출원인은 빠진다")
+    check(orgs.get("한국전력공사", (0, ""))[1] == "공공기관",
+          "한국전력공사는 공공기관이다")
+    check(orgs.get("서울대학교산학협력단", (0, ""))[1] == "대학",
+          "산학협력단은 대학이다")
+    # 합계는 '건수'다. 기관별 건수를 더하면 P1 이 세 번 세져 6이 된다.
+    check(rows[0]["total"] == 3,
+          f"분야 합계가 건수다 (공동출원 중복 없이 3건, 받은 값 {rows[0]['total']})")
+
+
 def _kipris_checks() -> None:
     """KIPRIS 백엔드의 라이브 경로를 네트워크 없이 실제로 실행한다.
 
@@ -391,6 +494,9 @@ def main() -> int:
         check("const safeUrl" in sr._JS, "safeUrl 헬퍼가 있다")
         check(bool(hrefs) and not raw,
               f"모든 링크 href 가 safeUrl 을 거친다 ({len(hrefs)}곳)")
+
+        print("· 분야별 국내 공급자 (site_render 안의 JS)")
+        _supplier_checks(sr)
 
         print("· 거래·지원 안내 데이터 (사람이 관리하는 상수)")
         import ip_guide as ig
