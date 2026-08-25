@@ -331,7 +331,40 @@ def _key_diagnosis(base: str, svc: str, kp: str) -> None:
           "시작일이 아직 오지 않았을 가능성이다.")
 
 
+def _fetch_doc(url: str) -> int:
+    """명세 페이지를 러너로 받아 본문만 찍는다.
+
+    개발 환경은 plus.kipris.or.kr 이 프록시 허용목록 밖이라 명세를 열 수 없다.
+    러너는 열린다 — 사람이 화면으로 읽는 대신 러너에 받아오게 해서, 요청 URL·
+    오퍼레이션·파라미터 이름을 추측이 아니라 문서에서 가져온다.
+    """
+    print(f"명세 페이지 받아오기\n{'=' * 66}\n  {url}")
+    code, body, err = _fetch(url)
+    print(f"  HTTP {code}" + (f" · {err}" if err else "") + f" · {len(body)}자")
+    if not body:
+        return 1
+    # 화면 꾸밈은 걷어내고 글자만 남긴다(스크립트·스타일은 통째로 버린다).
+    txt = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", body)
+    txt = re.sub(r"(?s)<[^>]+>", "\n", txt)
+    txt = re.sub(r"&nbsp;?", " ", txt)
+    lines = [ln.strip() for ln in txt.splitlines()]
+    out, prev = [], ""
+    for ln in lines:
+        if ln and ln != prev:          # 빈 줄·연속 중복은 접는다
+            out.append(ln)
+            prev = ln
+    print("── 본문 " + "-" * 56)
+    print("\n".join(out[:900]))
+    if len(out) > 900:
+        print(f"… ({len(out) - 900}줄 더 있음)")
+    return 0
+
+
 def main() -> int:
+    doc = (os.getenv("KIPRIS_DOC_URL") or "").strip()
+    if doc:
+        return _fetch_doc(doc)
+
     print("KIPRISplus 프로브 — 무엇이 열리는지 실측\n" + "=" * 66)
     keyless = not KEY
     print(f"키 길이: {len(KEY)}자" + ("  ← 0자면 시크릿이 전달되지 않은 것" if keyless else ""))
