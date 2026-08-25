@@ -310,6 +310,43 @@ def _kipris_checks() -> None:
             check("XML" in str(e), f"포털 HTML 응답이 오류로 드러난다 ({e})")
         finally:
             urllib.request.urlopen = saved_open
+
+        # 접두당 상한 판정. 예전에는 '접두별 totalCount 의 합 > 상한' 으로 짐작해
+        # 두 방향으로 다 틀릴 수 있었다. 두 경우를 실제로 돌려 확인한다.
+        saved_cap = cfg.KIPRIS_PER_CAT
+        try:
+            cfg.KIPRIS_PER_CAT = 6
+            three = {"ipc": ["A", "B", "C"], "cpc": ["A"], "key": "renew",
+                     "name": "테스트", "emoji": "x"}
+
+            # ① 접두마다 2건씩(합 6, 상한과 같음) — 아무것도 잘리지 않았다.
+            seq = [0]
+            def small(op, params, timeout=None):
+                seq[0] += 1
+                base = seq[0] * 100
+                return ET.fromstring(_kipris_page(
+                    [(base + k, "한국전력공사", params["ipcNumber"])
+                     for k in range(2)], 900))     # totalCount 는 크게 900
+            ks._get = small
+            _, _, hit = ks._sweep_category(three, "20260101~20260301")
+            check(not hit,
+                  "접두별 합계가 커도 실제로 안 잘렸으면 상한 경고가 없다"
+                  " (옛 방식이면 거짓 경고)")
+
+            # ② 한 접두가 상한까지 차오른다 — 잘렸다.
+            seq2 = [0]
+            def big(op, params, timeout=None):
+                seq2[0] += 1
+                base = seq2[0] * 1000
+                return ET.fromstring(_kipris_page(
+                    [(base + k, "한국전력공사", params["ipcNumber"])
+                     for k in range(cfg.KIPRIS_ROWS)], 900))
+            ks._get = big
+            _, _, hit2 = ks._sweep_category(three, "20260101~20260301")
+            check(hit2, "접두 하나가 상한에 닿으면 잘린 것으로 보고한다")
+        finally:
+            cfg.KIPRIS_PER_CAT = saved_cap
+            ks._get = orig_get
     finally:
         ks._get, cfg.KIPRIS_KEY = orig_get, orig_key
         cfg.KIPRIS_CPC_LIMIT = orig_lim

@@ -227,16 +227,23 @@ def _window(today: datetime) -> str:
     return f"{start.strftime('%Y%m%d')}~{end.strftime('%Y%m%d')}"
 
 
-def _sweep_category(cat: dict, window: str) -> tuple[list[dict], int]:
-    """한 분야를 훑는다. (항목, 그 분야 전체 건수).
+def _sweep_category(cat: dict, window: str) -> tuple[list[dict], int, bool]:
+    """한 분야를 훑는다. (항목, 그 분야 전체 건수, 상한에 걸렸는지).
 
     분야마다 IPC 접두가 여러 개일 수 있어 접두별로 조회하고 공개번호로 합친다.
     전체 건수는 접두별 totalCount 의 합이라 겹치는 문서만큼 부풀 수 있다 —
     같은 특허가 H02G 와 H01F27 을 동시에 갖고 있으면 두 번 세어진다. 목록은
     dedup 하지만 합계는 그럴 수 없으므로, 접두가 하나인 분야에서만 정확하다.
+
+    상한 여부를 여기서 돌려주는 이유: 상한은 **접두마다** 걸리는데 예전에는
+    바깥에서 '접두별 합계 > 상한' 으로 짐작했다. 그 합계는 위 주석대로 겹치는
+    만큼 부풀어 있어서, 접두 셋이 각각 1,300건이면(아무것도 안 잘렸는데) 합이
+    3,900 이라 거짓 경고가 나고, 반대로 접두 하나가 딱 상한에 닿아도 합이 상한
+    아래면 잘린 걸 놓친다. 짐작하지 말고 자른 자리에서 표시한다.
     """
     got: dict[str, dict] = {}
     total = 0
+    capped = False
     for pref in cat.get("ipc") or cat["cpc"]:
         page, taken = 1, 0
         while taken < cfg.KIPRIS_PER_CAT:
@@ -268,7 +275,9 @@ def _sweep_category(cat: dict, window: str) -> tuple[list[dict], int]:
             page += 1
             if cfg.KIPRIS_DELAY:
                 time.sleep(cfg.KIPRIS_DELAY)
-    return list(got.values()), total
+        if taken >= cfg.KIPRIS_PER_CAT:
+            capped = True
+    return list(got.values()), total, capped
 
 
 # ── CPC 보강 ─────────────────────────────────────────────────────
@@ -336,10 +345,13 @@ def _live_collect(today: datetime) -> tuple[list[dict], dict]:
     collected: list[dict] = []
     seen: set[str] = set()
     cat_totals: dict[str, int] = {}
+    capped: list[str] = []
 
     for cat in cfg.CATEGORIES:
-        items, total = _sweep_category(cat, window)
+        items, total, hit_cap = _sweep_category(cat, window)
         cat_totals[cat["key"]] = total
+        if hit_cap:
+            capped.append(cat["name"])
         added = 0
         for it in items:
             if it["number"] in seen:
@@ -373,9 +385,9 @@ def _live_collect(today: datetime) -> tuple[list[dict], dict]:
         totals[it["applicant"]] = totals.get(it["applicant"], 0) + 1
 
     # 다만 상한에 걸려 잘린 분야가 있으면 그 분야의 총계는 전수가 아니다.
-    # 조용히 넘어가면 '전부 봤다'로 읽히므로 반드시 남긴다.
-    short = [c["name"] for c in cfg.CATEGORIES
-             if cat_totals.get(c["key"], 0) > cfg.KIPRIS_PER_CAT]
+    # 조용히 넘어가면 '전부 봤다'로 읽히므로 반드시 남긴다. 짐작이 아니라
+    # 실제로 자른 자리에서 올라온 표시를 쓴다(_sweep_category 주석 참고).
+    short = capped
     if short:
         print(f"  ⚠️ 상한({cfg.KIPRIS_PER_CAT}건)에 걸린 분야: {', '.join(short)}"
               " — 이 분야의 출원인 총계는 전수가 아니다(KIPRIS_PER_CAT 를 올릴 것)")

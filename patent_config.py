@@ -247,11 +247,14 @@ KIPRIS_BASE = os.getenv("KIPRIS_BASE", "http://plus.kipris.or.kr/kipo-api/kipi")
 KIPRIS_SERVICE = os.getenv("KIPRIS_SERVICE", "patUtiModInfoSearchSevice")
 KIPRIS_KEYPARAM = os.getenv("KIPRIS_KEYPARAM", "ServiceKey")
 KIPRIS_ROWS = int(os.getenv("KIPRIS_ROWS", "100"))       # 한 요청에 받을 건수
-# 분야당 상한. OPS 때와 달리 '표본'이 아니라 **모집단 전수**를 받는 것이 목표다
-# (그래야 출원인 총계를 세기만 하면 되고, 표본 편향이 아예 생기지 않는다).
-# 실측: H02M × 최근 90일 = 595건. 분야당 2천이면 8대 분야가 넉넉히 들어온다.
-# 상한에 걸리면 수집기가 어느 분야가 잘렸는지 로그와 stats 에 남긴다.
-KIPRIS_PER_CAT = int(os.getenv("KIPRIS_PER_CAT", "2000"))
+# IPC 접두당 상한. OPS 때와 달리 '표본'이 아니라 **모집단 전수**를 받는 것이
+# 목표다 (그래야 출원인 총계를 세기만 하면 되고, 표본 편향이 아예 생기지 않는다).
+# 실측: H02M × 최근 90일 = 595건. 2천이면 넉넉하다고 봤는데 실전에서 재생에너지·
+# 저장이 잘렸다 — 그 분야에 배터리(H01M10)가 들어 있고, 배터리는 다른 어떤 전력
+# 접두보다 출원이 많다. 잘리면 그 분야의 출원인 총계만 전수가 아니게 되어 한 표
+# 안에서 성격이 다른 수치가 섞이므로, 배터리가 들어와도 남는 값으로 올린다.
+# 접두 하나가 5천을 넘으면 다시 잘리고, 그때는 로그가 어느 분야인지 말해 준다.
+KIPRIS_PER_CAT = int(os.getenv("KIPRIS_PER_CAT", "5000"))
 KIPRIS_DELAY = float(os.getenv("KIPRIS_DELAY", "0.3"))
 
 # ── CPC 보강 ─────────────────────────────────────────────────────
