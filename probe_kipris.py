@@ -642,15 +642,22 @@ def main() -> int:
             # 국내 서지상세가 그랬다 — 청구항 26개가 앞을 다 먹어, 출원인 블록이
             # 4천 자 밖으로 밀렸다. 머리 길이를 키우면 로그만 커지고 읽기는 더
             # 어려워지므로, 볼 태그를 찍어서 그 블록만 뽑는다(KIPRIS_PICK).
+            # 먼저 태그 '이름'을 전부 훑는다. 값을 짝지어 뽑으려고
+            # <(\w+)>(.*?)</\1> 를 쓰면 바깥 <response> 가 문서 전체를 한 번에
+            # 삼켜 결과가 늘 한 개다 — 처음에 그렇게 짜서 '그런 태그가 없다'는
+            # 정반대 결론을 낼 뻔했다. 이름은 여는 태그만 세고, 값은 이름별로 따로 뽑는다.
             if PICK:
-                hit = [f"<{t}>{_squash(v, 300)}</{t}>"
-                       for t, v in re.findall(r"<(\w+)>(.*?)</\1>", body, re.S)
-                       if re.search(PICK, t, re.I)]
-                print(f"    ── 고른 태그 /{PICK}/ — {len(hit)}개 " + "-" * 24)
-                for h in hit[:40]:
-                    print("      " + h[:300])
+                names = sorted(set(re.findall(r"<(\w+)[\s/>]", body)))
+                hit = [n for n in names if re.search(PICK, n, re.I)]
+                print(f"    ── 태그 이름 {len(names)}종 · /{PICK}/ 에 걸린 것 "
+                      f"{len(hit)}종 " + "-" * 12)
+                print("      [전체] " + " ".join(names))
+                for n in hit[:20]:
+                    vals = re.findall(rf"<{n}>(.*?)</{n}>", body, re.S)
+                    show = " | ".join(_squash(v, 120) or "(빈값)" for v in vals[:4])
+                    print(f"      <{n}> ×{len(vals)}: {show[:300]}")
                 if not hit:
-                    print("      (없음 — 그런 이름의 태그가 응답에 없다)")
+                    print("      (걸린 이름 없음 — 위 [전체] 목록에서 직접 고르세요)")
             print("    ── 응답 앞부분 " + "-" * 40)
             print("    " + _squash(body, HEAD))
         rows.append((mark, verdict, label, path))
