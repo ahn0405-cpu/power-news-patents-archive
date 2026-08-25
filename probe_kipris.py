@@ -90,26 +90,38 @@ DISCOVERY_PARAMS = {"word": "센서", "year": "0"}
 # 섞어 두면 실패했을 때 '없는 이름이라 그런지, 승인이 없어 그런지'를 또 헷갈린다.
 _KR = "patUtiModInfoSearchSevice"          # 국내 공보 (kipo-api/kipi)
 _FG = "ForeignPatentGeneralSearchService"  # 해외특허 (openapi/rest)
+# 항목은 (설명, 경로, 질의) 또는 (설명, 경로, 질의, 키질의이름).
+# 키 질의 이름이 계열마다 다르다 — kipo-api 는 ServiceKey 로 열렸고, openapi/rest
+# 는 같은 키를 ServiceKey 로 보내자 'Invalid AccessKey Error'(30) 를 돌려줬다.
 PROBES = [
-    # ── 국내 공보 — 명세서 샘플 그대로 ──────────────────────────────
+    # ── 살아 있는지 확인 (회귀 감시) ────────────────────────────────
     ("[문서] 국내 공보 단어검색 (샘플 그대로)", f"{_KR}/getWordSearch",
      {"word": "센서", "year": "0"}),
-    ("[문서] 국내 공보 단어검색 — 전력변환", f"{_KR}/getWordSearch",
-     {"word": "전력변환", "year": "0", "patent": "true", "utility": "false",
-      "numOfRows": "3", "pageNo": "1"}),
-    # ── 해외특허 — 명세서 샘플 그대로 (경로 계열이 다르다) ──────────
-    ("[문서] 해외특허 단어검색 · 미국",
+
+    # ── 수집 설계의 갈림길 — 항목별검색으로 무엇이 되는가 ───────────
+    # 지금 OPS 가 하는 일은 '분야(CPC) × 출원인 × 최근 기간'이다. 그 세 축이
+    # 이 API 로 옮겨지는지가 설계를 가르므로 축을 하나씩 떼어 확인한다.
+    ("[실측] 분류로 찾기 — IPC (H02M 전력변환)", f"{_KR}/getAdvancedSearch",
+     {"ipcNumber": "H02M", "patent": "true", "numOfRows": "3", "pageNo": "1"}),
+    # Y04S(스마트그리드)·Y02E 는 CPC 에만 있고 IPC 에는 없다. cpcNumber 가 먹으면
+    # 우리 8대 분야 분류를 그대로 옮길 수 있고, 안 먹으면 분류 체계를 손봐야 한다.
+    ("[실측] 분류로 찾기 — CPC 파라미터가 있나 (Y04S)", f"{_KR}/getAdvancedSearch",
+     {"cpcNumber": "Y04S", "patent": "true", "numOfRows": "3", "pageNo": "1"}),
+    ("[실측] 출원인으로 찾기 (한국전력공사)", f"{_KR}/getAdvancedSearch",
+     {"applicant": "한국전력공사", "patent": "true", "numOfRows": "3", "pageNo": "1"}),
+    # 최근 N 일치만 받아야 주간 수집이 가볍다. 날짜 범위 표기를 확인한다.
+    ("[실측] 기간으로 자르기 (공개일 20260101~)", f"{_KR}/getAdvancedSearch",
+     {"ipcNumber": "H02M", "openDate": "20260101~20260825",
+      "patent": "true", "numOfRows": "3", "pageNo": "1"}),
+    ("[실측] 분야 × 출원인 (한전 × H02J)", f"{_KR}/getAdvancedSearch",
+     {"applicant": "한국전력공사", "ipcNumber": "H02J",
+      "patent": "true", "numOfRows": "3", "pageNo": "1"}),
+
+    # ── 해외특허 — 계열이 달라 키 질의 이름도 다르다 ────────────────
+    ("[실측] 해외특허 · 미국 (키질의=accessKey)",
      f"http://plus.kipris.or.kr/openapi/rest/{_FG}/wordSearch",
      {"searchWord": "power converter", "searchWordRange": "10",
-      "currentPage": "1", "collectionValues": "US"}),
-    # ── 아직 이름을 모르는 것들 ─────────────────────────────────────
-    # 우리 분야 분류(CATEGORIES)는 CPC 접두다. 국내 공보 응답에는 ipcNumber 만
-    # 있으므로(명세 2/3쪽), Y04S·Y02E 처럼 IPC 에 없는 코드는 이 서비스로는
-    # 잡히지 않는다 → 분류 전용 상품(견적서 13번 '분류코드')이 따로 필요하다.
-    ("[추측] 항목별검색(분류·출원인·기간)", f"{_KR}/getAdvancedSearch",
-     {"inventionTitle": "전력", "patent": "true", "numOfRows": "3", "pageNo": "1"}),
-    ("[추측] 권리자 변동 이력 (견적서 26번)", "rightHolderInfoSearchSevice/getRightHolder",
-     {"applicationNumber": "1020200000001"}),
+      "currentPage": "1", "collectionValues": "US"}, "accessKey"),
 ]
 
 
@@ -442,8 +454,11 @@ def main() -> int:
 
     rows: list[tuple[str, str, str, str]] = []
     print("\n③ 서비스별 — 이 키로 승인돼 있는가")
-    for label, path, params in _paths(svc):
-        code, body, err = _fetch(_url(base, path, params, kp))
+    for entry in _paths(svc):
+        # 항목이 키 질의 이름을 따로 지정할 수 있다(계열마다 다르다).
+        label, path, params = entry[0], entry[1], entry[2]
+        use_kp = entry[3] if len(entry) > 3 else kp
+        code, body, err = _fetch(_url(base, path, params, use_kp))
         verdict, why = _verdict(code, body, err)
         # 키가 없을 때의 '인증 오류'는 실패가 아니라 **경로가 맞다는 증거**다.
         if keyless and verdict == "미승인/키오류":
