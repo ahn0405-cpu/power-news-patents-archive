@@ -18,6 +18,18 @@ on:
         description: "키 질의 이름 고정 (accessKey / ServiceKey, 비우면 자동 탐색)"
         required: false
         default: ""
+      keytail:
+        description: "포털에 보이는 인증키의 끝 몇 자 (시크릿과 같은 키인지 대조용)"
+        required: false
+        default: ""
+      base:
+        description: "기준 경로 고정 (예: http://plus.kipris.or.kr/openapi/rest)"
+        required: false
+        default: ""
+      service:
+        description: "서비스 이름 고정 (예: patUtiModelInfoSearchSevice)"
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -53,4 +65,9 @@ jobs:
           KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}
           KIPRIS_PATHS: ${{ inputs.paths }}
           KIPRIS_KEYPARAM: ${{ inputs.keyparam }}
+          # 시크릿 값은 로그에 찍지 않는다. 대조는 러너 안에서 하고 결과만 받는다
+          # (러너 마스킹은 '전체 문자열'에만 걸려, 일부만 찍으면 그대로 새어 나간다).
+          KIPRIS_KEY_TAIL: ${{ inputs.keytail }}
+          KIPRIS_BASE: ${{ inputs.base }}
+          KIPRIS_SERVICE: ${{ inputs.service }}
         run: python probe_kipris.py

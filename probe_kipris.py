@@ -244,13 +244,41 @@ def _shape(k: str) -> str:
 
     이중 인코딩·복사 오류는 생김새로 드러난다: base64 키에 '%' 가 섞여 있으면
     퍼센트 인코딩된 문자열을 그대로 넣은 것이고, 공백이 있으면 붙여넣기 사고다.
+
+    '=' 는 위치까지 본다(문자는 안 찍고 자리만). base64 패딩은 끝에만 오므로,
+    중간에 '=' 가 있으면 'ServiceKey=…' 같은 걸 통째로 붙여넣은 사고다.
+    실측 1회차: 44자에 '=' 가 셋 — 패딩치고는 많아 자리를 확인할 값어치가 있다.
     """
     marks = {c: k.count(c) for c in "=+/-_%" if c in k}
     extra = " ".join(f"'{c}'×{n}" for c, n in marks.items()) or "특수문자 없음"
     ws = sum(c.isspace() for c in k)
+    eq = [i for i, c in enumerate(k) if c == "="]
+    where = f" · '=' 자리 {eq} (끝은 {len(k) - 1})" if eq else ""
     return (f"{len(k)}자 · 영문 {sum(c.isalpha() for c in k)} "
-            f"숫자 {sum(c.isdigit() for c in k)} · {extra}"
+            f"숫자 {sum(c.isdigit() for c in k)} · {extra}{where}"
             + (f" · ⚠️ 공백 {ws}자 포함" if ws else ""))
+
+
+def _tail_check() -> None:
+    """포털에 보이는 키 꼬리와 시크릿이 같은 키인지 확인한다.
+
+    시크릿 값을 로그에 찍으면 안 되고(러너 마스킹은 '전체 문자열'에만 걸려
+    일부만 찍으면 그대로 새어 나간다), 그렇다고 대조를 안 하면 '포털에서 본 것과
+    시크릿이 같은 키인가'를 영원히 확인할 수 없다. 비교를 러너 안에서 시키고
+    결과(일치/불일치)만 받는다.
+    """
+    want = (os.getenv("KIPRIS_KEY_TAIL") or "").strip()
+    if not want:
+        return
+    print(f"\n   포털 키와 대조 — 끝 {len(want)}자 (값은 찍지 않는다)")
+    for label, val in (("있는 그대로", KEY),
+                       ("공백 제거", KEY.strip()),
+                       ("퍼센트 디코딩", urllib.parse.unquote(KEY))):
+        ok = val.endswith(want)
+        print(f"     · {label:12s} {'✅ 일치' if ok else '❌ 불일치'}")
+    if not KEY.endswith(want):
+        print("     → 시크릿에 든 키가 포털에서 보신 그 키가 아닙니다. "
+              "다른 서비스의 키이거나, 붙여넣을 때 잘린 것입니다.")
 
 
 def _key_diagnosis(base: str, svc: str, kp: str) -> None:
@@ -272,6 +300,7 @@ def _key_diagnosis(base: str, svc: str, kp: str) -> None:
     op, dparams = DISCOVERY
     print("\n   키 진단 — '기간 문제'인지 '키 문제'인지 가른다")
     print(f"     키 생김새: {_shape(KEY)}")
+    _tail_check()
 
     variants = [("있는 그대로", KEY), ("일부러 틀린 키", KEY + "ZZ")]
     un = urllib.parse.unquote(KEY)
