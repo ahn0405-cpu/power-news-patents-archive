@@ -118,10 +118,31 @@ PROBES = [
       "patent": "true", "numOfRows": "3", "pageNo": "1"}),
 
     # ── 해외특허 — 계열이 달라 키 질의 이름도 다르다 ────────────────
-    ("[실측] 해외특허 · 미국 (키질의=accessKey)",
+    ("[문서] 해외특허 단어검색 · 미국 (키질의=accessKey)",
      f"http://plus.kipris.or.kr/openapi/rest/{_FG}/wordSearch",
      {"searchWord": "power converter", "searchWordRange": "10",
       "currentPage": "1", "collectionValues": "US"}, "accessKey"),
+
+    # ── 해외 '항목별검색' 오퍼레이션 이름 찾기 ──────────────────────
+    # 단어검색은 검색어 하나만 받는다. 8대 분야 매트릭스를 세계 축으로 되살리려면
+    # 분류(IPC/CPC)로 조회해야 하는데, 그건 명세의 '항목별검색' 탭에 있다
+    # (목록에서 '30. CPC 검색'을 봤지만 오퍼레이션 이름·파라미터는 못 봤다).
+    # 없는 이름이면 포털 HTML 이 와서 '경로없음'으로 갈리므로, 후보를 훑어도
+    # 판정이 오염되지 않는다.
+    *[(f"[탐색] 해외 항목별검색 후보 — {op}",
+       f"http://plus.kipris.or.kr/openapi/rest/{_FG}/{op}",
+       {"ipcNumber": "H02M", "currentPage": "1", "collectionValues": "US"},
+       "accessKey")
+      for op in ("advancedSearch", "itemSearch", "freeSearch", "allSearch",
+                 "ipcSearch", "cpcSearch", "getAdvancedSearch")],
+    # 서비스 이름 자체가 다를 수도 있다(일반검색만 General 인 구조).
+    *[(f"[탐색] 해외 항목별검색 서비스 후보 — {svc}",
+       f"http://plus.kipris.or.kr/openapi/rest/{svc}/ipcSearch",
+       {"ipcNumber": "H02M", "currentPage": "1", "collectionValues": "US"},
+       "accessKey")
+      for svc in ("ForeignPatentItemSearchService",
+                  "ForeignPatentAdvancedSearchService",
+                  "ForeignPatentDetailSearchService")],
 ]
 
 
