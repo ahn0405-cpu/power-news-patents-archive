@@ -156,17 +156,24 @@ APPLICANTS = [
     # 히타치제작소(Hitachi, Ltd.). 그냥 "Hitachi" 로 두면 위 Hitachi Energy 까지 걸려
     # 총계가 부풀려지므로 어구로 묶어 분리한다(목록 중복은 공개번호 dedup 이 막지만
     # stats 의 총계는 출원인별 독립 질의라 겹치면 그대로 부푼다).
-    {"name": "Hitachi", "region": "JP", "flag": "🇯🇵", "q": "Hitachi Ltd"},
+    {"name": "Hitachi", "region": "JP", "flag": "🇯🇵",
+     "q": ["Hitachi Ltd", "日立製作所"]},
     {"name": "Mitsubishi Electric", "region": "JP", "flag": "🇯🇵",
-     "q": ["Mitsubishi Electric", "미쓰비시덴키", "미쓰비시 전기"]},# ✔
-    {"name": "Toshiba", "region": "JP", "flag": "🇯🇵", "q": ["Toshiba", "도시바"]},                        # ✔
-    {"name": "Panasonic", "region": "JP", "flag": "🇯🇵", "q": ["Panasonic", "파나소닉"]},                    # ✔
-    {"name": "Kyocera", "region": "JP", "flag": "🇯🇵", "q": "Kyocera"},
-    {"name": "Toyota", "region": "JP", "flag": "🇯🇵", "q": ["Toyota", "도요타"]},
+     "q": ["Mitsubishi Electric", "미쓰비시덴키", "미쓰비시 전기",
+           "三菱電機"]},
+    {"name": "Toshiba", "region": "JP", "flag": "🇯🇵",
+     "q": ["Toshiba", "도시바", "東芝"]},
+    {"name": "Panasonic", "region": "JP", "flag": "🇯🇵",
+     "q": ["Panasonic", "파나소닉", "パナソニック"]},
+    {"name": "Kyocera", "region": "JP", "flag": "🇯🇵",
+     "q": ["Kyocera", "京セラ"]},
+    {"name": "Toyota", "region": "JP", "flag": "🇯🇵",
+     "q": ["Toyota", "도요타", "トヨタ"]},
     {"name": "Sumitomo Electric", "region": "JP", "flag": "🇯🇵",
-     "q": ["Sumitomo Electric", "스미토모"]},    # ✔
+     "q": ["Sumitomo Electric", "스미토모", "住友電気"]},
     {"name": "Furukawa Electric", "region": "JP", "flag": "🇯🇵", "q": "Furukawa Electric"},
-    {"name": "Fuji Electric", "region": "JP", "flag": "🇯🇵", "q": "Fuji Electric"},   # 전력반도체·인버터
+    {"name": "Fuji Electric", "region": "JP", "flag": "🇯🇵",
+     "q": ["Fuji Electric", "富士電機"]},   # 전력반도체·인버터
     {"name": "Meidensha", "region": "JP", "flag": "🇯🇵", "q": "Meidensha"},
     # 🇪🇺 유럽
     # Siemens 계열은 구체적인 쪽을 먼저 둔다. 목록에서 앞선 항목이 공개번호 dedup 으로

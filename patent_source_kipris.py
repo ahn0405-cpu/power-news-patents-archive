@@ -33,6 +33,7 @@ CPC 와 IPC 가 같은 코드라 영향이 없다.
 """
 from __future__ import annotations
 
+import html
 import re
 import time
 import urllib.error
@@ -84,7 +85,25 @@ def _total(root: ET.Element) -> int:
 
 # ── 응답 파싱 ────────────────────────────────────────────────────
 def _text(node: ET.Element, tag: str) -> str:
-    return (node.findtext(tag) or "").strip()
+    return _unescape((node.findtext(tag) or "").strip())
+
+
+def _unescape(s: str) -> str:
+    """남은 HTML 실체참조를 푼다.
+
+    KIPRIS 는 실체참조를 **두 번** 감싸 준다. XML 파서가 한 번 풀고 나면 아직
+    '&apos;' 나 '&#x26;' 가 글자로 남아, 화면에 XI&apos;AN JIAOTONG UNIVERSITY 로
+    나온다(실측). 안정될 때까지 풀되 두 번까지만 — 회사 이름에 '&amp;' 라는
+    글자가 진짜로 들어 있는 경우까지 먹어 치우면 안 된다.
+    """
+    for _ in range(2):
+        if "&" not in s:
+            break
+        once = html.unescape(s)
+        if once == s:
+            break
+        s = once
+    return s
 
 
 def _date(v: str) -> str | None:

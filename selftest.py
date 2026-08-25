@@ -349,6 +349,7 @@ def _foreign_checks() -> None:
     from datetime import datetime
 
     import patent_source_foreign as fg
+    import patent_source_kipris as kr
 
     print("\n[해외 백엔드]")
     orig_get, orig_key = fg._get, cfg.KIPRIS_KEY
@@ -445,6 +446,25 @@ def _foreign_checks() -> None:
         n2, r2, _ = fg._identify_foreign("Siemens Energy AG")
         check(r2 and r2 != "KR",
               f"큐레이션에 있으면 그 국적을 쓴다 ({n2} → {r2})")
+
+        # 일본 공보는 회사 이름이 일본어로 온다. 영문 별칭만 두면 같은 회사가
+        # 둘로 갈린다 — 실측에서 Toyota 가 영문 245 + 일본어 222 로 쪼개져
+        # 랭킹이 절반만 반영됐다(국내에서 겪은 '엘지 ≠ LG' 와 같은 문제).
+        for jp, want in (("トヨタ自動車株式会社", "Toyota"),
+                         ("株式会社東芝", "Toshiba"),
+                         ("パナソニックIPマネジメント株式会社", "Panasonic"),
+                         ("三菱電機株式会社", "Mitsubishi Electric"),
+                         ("株式会社日立製作所", "Hitachi")):
+            got = kr._identify(jp)[0]
+            check(got == want, f"일본어 표기가 붙는다: {jp} → {got}")
+
+        # KIPRIS 는 실체참조를 두 번 감싼다. 한 번만 풀면 화면에 글자로 남는다.
+        check(kr._unescape("XI&apos;AN JIAOTONG") == "XI'AN JIAOTONG",
+              "남은 &apos; 를 푼다")
+        check(kr._unescape("Fitch &amp;#x26; Flannery") == "Fitch & Flannery",
+              "두 번 감싼 &#x26; 도 푼다")
+        check(kr._unescape("정상 이름 & 회사") == "정상 이름 & 회사",
+              "이미 정상인 글자는 건드리지 않는다")
 
         # 국내 수집이 살아 있는데 해외가 죽으면, 국내까지 잃으면 안 된다
         import patent_source_kipris as ks
