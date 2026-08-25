@@ -261,11 +261,12 @@ def _lazy_checks(sr) -> None:
           or "추적 중인 주요 출원인" not in js,
           "'추적 중인 N곳 안에서의 분포' 라는 옛 단서가 남아 있지 않다")
 
-    check("const unknown = uniq - known" in js,
-          "국적 미상 출원인 수를 센다")
+    check("function regionSplit(" in js, "국적 미상 출원인 수를 따로 센다")
     check("국적미상 " in js, "KPI 에 '국적미상 N' 을 함께 보인다")
-    check("국적을 알 수 없는" in js,
+    check("국적을 아직 확인하지 못한" in js,
           "국적별 랭킹이 '빠진 곳이 있다'고 밝힌다")
+    check("서지상세를 출원인당 한 번씩" in js,
+          "국적을 어떻게 채우는지 화면에서 밝힌다")
     check("uniq.toLocaleString()" in js,
           "출원인 수도 천 단위로 끊는다 (옆의 미상 수와 표기가 어긋나지 않게)")
 
@@ -524,6 +525,103 @@ def _fg_page(rows: list[tuple[str, str, str]], total: int) -> str:
             f"<body><items>{body}<colString>US</colString>"
             f"<totalSearchCount>{total}</totalSearchCount>"
             "</items></body></response>")
+
+
+def _origin_checks() -> None:
+    """출원인 국적 보강(patent_origin). 요청은 흉내 내고 고르는 규칙만 실측한다.
+
+    지키는 것 넷:
+      · 국적을 이미 아는 항목은 다시 두드리지 않는다 (요청이 곧 비용이다)
+      · 출원인당 한 번만 두드린다 (국적은 출원인의 성질이지 문서의 성질이 아니다)
+      · 건수 많은 곳부터 (며칠에 걸쳐 채우는 동안 화면이 빨리 정확해진다)
+      · 실패가 쌓인 곳은 그만둔다 (번호 표기가 안 맞는 문헌이 상한을 다 먹는다)
+    그리고 성공/실패 판정이 국내와 뒤집혀 있다 — resultCode 가 **비어야** 성공이다.
+    """
+    print("\n· 출원인 국적 보강")
+    import patent_archive as pa
+    import patent_config as pcfg
+    import patent_origin as po
+
+    def pat(name, lit, office, country=""):
+        return {"applicant": name, "ltrtno": lit, "office": office,
+                "country": country, "number": lit}
+
+    weeks = {"2026-08-24": {"week": "2026-08-24", "patents": [
+        pat("CN University", "L1", "CN"),
+        pat("CN University", "L2", "CN"),          # 같은 곳 — 한 번만
+        pat("CN University", "L3", "CN"),
+        pat("JP Corp", "L4", "JP"),
+        pat("Siemens", "L5", "EP", "EU"),          # 이미 안다 — 건너뛴다
+        pat("No Key Co", "", "US"),                # ltrtno 가 없다(OPS 시절)
+        pat("Tried Out", "L6", "US"),              # 실패가 쌓였다
+    ]}}
+    store = {"origins": {}, "originTry": {"Tried Out": pcfg.ORIGIN_MAX_TRY}}
+    got = po.targets(weeks, store)
+    names = [t[0] for t in got]
+    check(names == ["CN University", "JP Corp"],
+          f"두드릴 곳을 제대로 고른다 (받은 목록 {names})")
+    check(got and got[0][3] == 3 and got[0][1] == "L1",
+          "출원인당 한 번만 두드리고 건수 많은 곳을 앞에 둔다")
+    check("Siemens" not in names, "이미 아는 국적은 다시 두드리지 않는다")
+    check("No Key Co" not in names, "문헌번호가 없는 옛 항목은 건너뛴다")
+    check("Tried Out" not in names, "실패가 쌓인 곳은 그만 두드린다")
+
+    # 응답 파싱 — 성공은 resultCode 가 비어 있다(국내와 반대).
+    ok = ('<response><header><resultCode></resultCode></header><body><items>'
+          '<bibliographicInfo><applicantInfo><applicantName>Tsinghua University'
+          '</applicantName><applicantCountry>CN</applicantCountry></applicantInfo>'
+          '</bibliographicInfo></items></body></response>')
+    bad = ('<response><header><resultCode>11</resultCode>'
+           '<resultMsg>No Mandatory</resultMsg></header><body></body></response>')
+    import io
+    import urllib.request as ur
+
+    class _R:
+        def __init__(self, b): self.b = b
+        def read(self): return self.b.encode()
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    seen = []
+    orig_open, orig_key = ur.urlopen, pcfg.KIPRIS_KEY
+    pcfg.KIPRIS_KEY = "x"
+    try:
+        ur.urlopen = lambda req, timeout=None: (seen.append(req.full_url), _R(ok))[1]
+        check(po._fetch("L1", "CN") == "CN", "정상 응답에서 출원인 국적을 뽑는다")
+        check(seen and "literatureNumber=L1" in seen[0]
+              and "countryCode=CN" in seen[0]
+              and pcfg.ORIGIN_KEYPARAM + "=" in seen[0],
+              "문헌번호·공개국·키 질의를 제대로 싣는다")
+        ur.urlopen = lambda req, timeout=None: _R(bad)
+        check(po._fetch("L1", "CN") is None,
+              "resultCode 가 **채워져** 있으면 실패로 읽는다 (국내와 반대다)")
+
+        def boom(req, timeout=None):
+            raise TimeoutError("timed out")
+        ur.urlopen = boom
+        check(po._fetch("L1", "CN") is None, "타임아웃은 삼키고 None 을 돌려준다")
+    finally:
+        ur.urlopen, pcfg.KIPRIS_KEY = orig_open, orig_key
+    del io
+
+    # 병합 — 통째로 대입하면 지난 실행이 채운 것이 지워진다.
+    st = {"totals": {}, "offices": {}, "updated": {},
+          "origins": {"A": "JP"}, "originTry": {"B": 1}}
+    pa.merge_stats(st, {"origins": {"B": "CN"}, "originTry": {"C": 1}}, "2026-08-25")
+    check(st["origins"] == {"A": "JP", "B": "CN"},
+          f"국적은 병합된다 (받은 값 {st['origins']})")
+    check("B" not in st["originTry"] and st["originTry"].get("C") == 1,
+          "채워진 곳의 실패 기록은 지운다")
+
+    # 나라 코드 접기 — 화면의 국적 축은 다섯 갈래인데 서지상세는 실제 나라를 준다.
+    check(pcfg.region_of("DK") == "EU" and pcfg.region_of("DE") == "EU",
+          "유럽 나라는 유럽으로 접는다")
+    check(pcfg.region_of("TW") == "TW" and pcfg.region_of("CA") == "CA",
+          "유럽 밖의 나라는 접지 않는다 (모른다고 하지 않는다)")
+    check(pcfg.region_of("") == "", "빈 값은 빈 값 그대로 둔다")
+    check(pcfg.flag_of("DK") == "\U0001F1E9\U0001F1F0",
+          "표에 없는 나라도 국기(지역표시자)를 만들어 준다")
+    check(pcfg.flag_of("KR") == "🇰🇷", "표에 있는 나라는 그대로 쓴다")
 
 
 def _foreign_checks() -> None:
@@ -1106,6 +1204,7 @@ def main() -> int:
 
     _kipris_checks()
     _foreign_checks()
+    _origin_checks()
 
     print(f"\n{'실패 ' + str(len(FAILS)) + '건' if FAILS else '전부 통과'}")
     return 1 if FAILS else 0

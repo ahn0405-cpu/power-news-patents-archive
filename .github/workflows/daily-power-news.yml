@@ -55,10 +55,14 @@ jobs:
           NEWS_PREV_DIR: _prev     # 이전 뉴스·특허 아카이브 로드
           NEWS_SITE_DIR: site      # 전체 사이트 재생성 대상
           NEWS_MOCK: "off"         # 뉴스 실데이터 강제 (러너는 외부망 정상)
-          # 특허 목록은 주간 워크플로가 담당한다. 여기서 도는 것은 collect_offices
-          # (출원인×공개 특허청 정확 집계)뿐인데, KIPRIS 백엔드는 국내 공보만 다뤄
-          # 특허청 축을 만들지 않으므로 빈 dict 을 돌려준다 → 매일 실행이 특허 API 를
-          # 아예 두드리지 않는다. 백엔드를 명시해 기본값에 기대지 않는다.
+          # 특허 목록은 주간 워크플로가 담당한다. 여기서 도는 것은 두 가지다.
+          #   collect_offices — 출원인×공개 특허청 정확 집계. KIPRIS 백엔드는 국내
+          #     공보만 다뤄 특허청 축을 만들지 않으므로 빈 dict 을 돌려준다.
+          #   patent_origin  — 해외 출원인 국적 보강. 해외 검색 응답에는 국적 칸이
+          #     없어 4천여 곳이 미상으로 남았다 → 서지상세를 출원인당 한 번씩 조회해
+          #     하루 상한만큼 채우고 stats.json 에 누적한다(며칠이면 다 찬다).
+          #     실측 건당 약 5초, 여섯 갈래 동시라 상한 800곳이면 10분 남짓이다.
+          # 백엔드를 명시해 기본값에 기대지 않는다.
           PATENT_MOCK: "off"
           PATENT_BACKEND: ${{ vars.PATENT_BACKEND || 'kipris' }}
           KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}

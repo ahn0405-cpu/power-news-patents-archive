@@ -114,6 +114,9 @@ def load_stats(source_dir: Path) -> dict:
     obj.setdefault("totals", {})
     obj.setdefault("offices", {})
     obj.setdefault("updated", {})
+    # 해외 출원인 국적(서지상세로 하루에 일부씩 채운다) — patent_origin 참조.
+    obj.setdefault("origins", {})
+    obj.setdefault("originTry", {})
     return obj
 
 
@@ -166,6 +169,15 @@ def merge_stats(store: dict, fresh: dict | None, today: str = "") -> int:
         n += 1
     for name, per in (fresh.get("offices") or {}).items():
         store["offices"].setdefault(name, {}).update(per)
+    # 국적은 언제나 병합이다. 한 실행이 상한만큼만 채우는 설계라 통째로 대입하면
+    # 지난 실행이 채운 것이 지워진다(OPS 공개국 집계에서 실제로 겪은 실수다).
+    store.setdefault("origins", {}).update(fresh.get("origins") or {})
+    tries = store.setdefault("originTry", {})
+    for name, cnt in (fresh.get("originTry") or {}).items():
+        tries[name] = cnt
+        # 채워진 곳의 실패 기록은 지운다(다음 실행에서 헷갈리지 않게).
+    for name in (fresh.get("origins") or {}):
+        tries.pop(name, None)
     return n
 
 

@@ -32,6 +32,42 @@ REGION_LABEL = {
 COUNTRIES = REGIONS
 COUNTRY_LABEL = REGION_LABEL
 
+# 서지상세가 주는 applicantCountry 는 실제 나라 코드(DE·DK·TW·CA…)다. 화면의
+# 국적 축은 다섯 갈래(미국·한국·중국·일본·유럽)로 잡혀 있고, 큐레이션 별칭도
+# 이미 그렇게 쓰고 있었다 — Vestas 는 국기 🇩🇰 에 지역 EU 다. 같은 규칙으로 접는다.
+# 유럽 밖의 나라(대만·캐나다·인도…)는 접지 않고 그 코드 그대로 둔다. 다섯 갈래에
+# 없다고 '미상'으로 만들면 아는 것을 모른다고 하는 셈이다.
+EUROPE = {
+    "AT", "BE", "BG", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR",
+    "GB", "GR", "HR", "HU", "IE", "IS", "IT", "LI", "LT", "LU", "LV", "MC",
+    "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "SE", "SI", "SK", "SM",
+    "TR", "UA",
+}
+
+
+def region_of(cc: str) -> str:
+    """나라 코드 → 화면의 국적 축 값. 빈 값은 빈 값 그대로(모르는 것은 모른다)."""
+    cc = (cc or "").strip().upper()
+    if not cc:
+        return ""
+    if cc in REGION_LABEL:
+        return cc
+    return "EU" if cc in EUROPE else cc
+
+
+def flag_of(cc: str) -> str:
+    """나라 코드 → 국기 이모지. 표에 없는 나라도 지역표시자로 만들어 준다.
+
+    화면의 flg() 가 지역표시자 쌍을 받으면 우리가 그린 국기로 바꾸고, 안 그린
+    나라는 두 글자 배지로 보인다 — 그러라고 만든 장치라 여기서 표를 늘리지 않는다.
+    """
+    cc = (cc or "").strip().upper()
+    if cc in REGION_LABEL:
+        return REGION_LABEL[cc][0]
+    if len(cc) == 2 and cc.isalpha():
+        return "".join(chr(0x1F1E6 + ord(c) - 65) for c in cc)
+    return ""
+
 # ── 공개 특허청(시장) ─────────────────────────────────────────────
 # "어느 시장에 출원했나" 축. 출원인 국적(REGIONS)과는 다른 개념이며, 같은 발명이
 # 여러 특허청에 공개되므로 특허청별 합계는 출원인 총계를 넘을 수 있다.
@@ -281,6 +317,35 @@ FOREIGN_COUNTRIES = [s for s in os.getenv(
 # 한 요청에 받을 건수. docsCount=50 이 먹는 것을 확인했다(기본은 30).
 FOREIGN_ROWS = int(os.getenv("FOREIGN_ROWS", "50"))
 FOREIGN_PER_CAT = int(os.getenv("FOREIGN_PER_CAT", "3000"))
+
+# ── 해외 출원인 국적 보강 ────────────────────────────────────────
+# 해외 **검색** 응답에는 출원인 국적이 없다. 그래서 큐레이션 별칭에 걸리는 곳만
+# 국적이 붙고 나머지는 비어 있었다 — 실측 출원인 5,471곳 중 4,256곳이 미상이고,
+# 그 대부분이 중국 대학·국유기업이다. 공개국으로 대신 채우면 'US 에 낸 일본
+# 회사'가 미국 기업이 되므로 그것은 하지 않는다.
+#
+# **서지상세**에는 applicantCountry 가 있다(실측 2026-08-25):
+#   US 공개 202600213551A1 → Panasonic … / JP
+#   US 공개 202600221299A1 → Tsinghua University / CN
+# 공개국과 출원인 국적이 실제로 갈리는 것까지 확인됐다.
+#
+# 다만 건당 1요청이고 응답이 무겁다(청구항·초록까지 실려 온다). 그래서
+#   · **출원인당 1회**만 부른다. 국적은 출원인의 성질이지 문서의 성질이 아니다.
+#   · 한 실행에 상한을 두고 stats.json 에 누적한다(OPS 시절 offices 와 같은 방식).
+#   · 몇 갈래로 나눠 동시에 부른다. 하나가 느리다고 줄 전체가 서지는 않게.
+ORIGIN = os.getenv("KIPRIS_ORIGIN", "on").lower() not in ("0", "off", "false")
+ORIGIN_BASE = os.getenv("ORIGIN_BASE", "http://plus.kipris.or.kr/openapi/rest")
+ORIGIN_SERVICE = os.getenv("ORIGIN_SERVICE", "ForeignPatentBibliographicService")
+ORIGIN_OP = os.getenv("ORIGIN_OP", "bibliographicInfo")
+ORIGIN_KEYPARAM = os.getenv("ORIGIN_KEYPARAM", "accessKey")
+# 실측: 건당 약 5초. 여섯 갈래 동시면 800곳에 10분 남짓이고, 4천여 곳이 엿새면
+# 다 찬다. 매일 실행에 얹기에 그 정도가 한계다.
+ORIGIN_PER_RUN = int(os.getenv("ORIGIN_PER_RUN", "800"))   # 0 이면 끔
+ORIGIN_WORKERS = int(os.getenv("ORIGIN_WORKERS", "6"))
+ORIGIN_TIMEOUT = int(os.getenv("ORIGIN_TIMEOUT", "20"))
+# 몇 번 연달아 실패하면 그만 시도한다. 번호 표기가 안 맞는 문헌이 섞여 있으면
+# 매 실행 같은 것을 다시 두드리며 상한을 다 써 버린다.
+ORIGIN_MAX_TRY = int(os.getenv("ORIGIN_MAX_TRY", "3"))
 
 # ── CPC 보강 ─────────────────────────────────────────────────────
 # 검색은 IPC 로만 되지만(cpcNumber 파라미터 없음), **출원번호를 주면 그 특허의

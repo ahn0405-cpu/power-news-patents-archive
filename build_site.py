@@ -9,6 +9,7 @@
   python build_site.py --collect news  # 뉴스 + 특허 공개국 집계 일부 (매일 워크플로)
   python build_site.py --collect patents  # 특허 목록만 수집 (매주 워크플로)
   python build_site.py --collect offices  # 특허 공개국 집계만 (수동 보충)
+  python build_site.py --collect origins  # 해외 출원인 국적만 (수동 보충)
   python build_site.py --collect none  # 수집 없이 기존 데이터로 재빌드만
 
 환경변수:
@@ -112,6 +113,18 @@ def main() -> None:
         if n:
             print(f"  공개국 집계 갱신 {n}곳 "
                   f"(누적 {len(pstats_store.get('offices', {}))}곳)")
+
+    # ── 해외 출원인 국적 보강 (매일 일부만) ──
+    # 해외 검색 응답에는 출원인 국적이 없어 4천여 곳이 '미상'으로 남는다. 서지상세에는
+    # 있지만 건당 1요청이라 한 번에 다 못 받는다 → 출원인당 1회, 하루 상한만큼,
+    # stats 에 누적. 공개국 집계와 같은 자리에서 같은 방식으로 돈다.
+    if what in ("news", "origins", "offices", "both"):
+        import patent_origin
+        got, fail = patent_origin.collect(patent_weeks, pstats_store)
+        if got or fail:
+            patent_archive.merge_stats(
+                pstats_store, {"origins": got, "originTry": fail}, today)
+            print(f"    누적 확인 {len(pstats_store.get('origins', {})):,}곳")
 
     # ── 저장 + 전체 사이트 재생성 ──
     news_archive.save(ncfg.SITE_DIR, news_days, generated)

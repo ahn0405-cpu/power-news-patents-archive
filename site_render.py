@@ -310,6 +310,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
     # 대비 실제로 그 회사 것이었던 수(q_own). OPS 총계는 이 비율만큼 부풀려져 있다.
     q_all: dict[str, int] = {}
     q_own: dict[str, int] = {}
+    origins: dict[str, str] = (stats or {}).get("origins") or {}
     for wk in sorted(patent_weeks):
         pats = patent_weeks[wk].get("patents", [])
         per_week[wk] = len(pats)
@@ -323,7 +324,15 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
             aname = ap or _canon_assignee(_plain(p.get("assignee", "")))
             region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
-            flag = p.get("flag") or (pcfg.REGION_LABEL.get(region, ("", ""))[0])
+            # 해외 목록에는 출원인 국적이 없어 비어 있는 것이 많다. 서지상세로
+            # 따로 채워 둔 값(stats.origins)이 있으면 그리기 직전에 붙인다 —
+            # 저장된 항목을 고치지 않으므로 옛 자료도 한 번에 맞아진다.
+            if not region and aname:
+                cc = origins.get(aname) or ""
+                if cc:
+                    region = pcfg.region_of(cc)
+                    p = dict(p, flag=pcfg.flag_of(cc))
+            flag = p.get("flag") or pcfg.flag_of(region)
             # 페이로드 절약: 원문 assignee 는 정규화명(aName)과 다를 때만, snippet 은
             # 있을 때만 담는다. cpc 는 카드에 분류 근거로 보여주므로 상위 3개만.
             raw = _plain(p.get("assignee", ""))
@@ -399,6 +408,9 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "totals": totals,
         "totalsAdjusted": adjusted,   # 표본 구성비로 깎은 총계(화면에서 근거를 밝힌다)
         "officeCounts": offices,
+        # 서지상세로 국적을 채운 출원인 수. 화면에서 '몇 곳까지 확인됐는지'를
+        # 밝히는 데 쓴다 — 며칠에 걸쳐 채우는 동안 진행 상황이 보여야 한다.
+        "originsFilled": len(origins),
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
         "lookbackDays": pcfg.LOOKBACK_DAYS,
@@ -1515,11 +1527,11 @@ function kpiHTML(){
   // 특허 요약 지표(출원인 수·국적 내역·최다 출원인)는 통계 탭까지 안 들어가도 보이게 홈에.
   const ranked = p.items.length? _rankApplicants(p.items) : [];
   const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
-  const known = p.countries.reduce((s2,rg)=> s2 + (regCnt[rg.code]||0), 0);
-  const unknown = ranked.length - known;
+  const split = regionSplit(ranked), unknown = split.unknown;
   // 통계 탭과 같은 이유로 여기서도 '모른다'를 숨기지 않는다(renderStats 주석 참고).
   const regChips = p.countries.map(rg=>regCnt[rg.code]
       ? '<span class="rgc">'+flg(rg.emoji)+regCnt[rg.code]+'</span>' : '').filter(Boolean).join('')
+    + (split.other? '<span class="rgc">🌐'+split.other.toLocaleString()+'</span>' : '')
     + (unknown? '<span class="rgc unk">미상 '+unknown.toLocaleString()+'</span>' : '');
   const top = ranked[0];
   const lookback = p.lookbackDays||90;
@@ -1535,8 +1547,8 @@ function kpiHTML(){
         + '<small class="rgs">'+regChips+'</small>',
         '최근 '+lookback+'일 공개분에 문헌이 있는 출원인이 '
         + (ranked.length||0).toLocaleString()+'곳입니다. 국기 옆 숫자는 국적별 출원인 수이고, '
-        + '해외 공보에는 출원인 국적이 없어 큐레이션한 주요 기업 밖은 '
-        + unknown.toLocaleString()+'곳이 미상입니다.')
+        + '🌐 는 다섯 갈래 밖의 나라입니다. '
+        + (unknown? originNote(unknown) : '국적은 모두 확인됐습니다.'))
     + tile('🏆 최다 출원인', top
         ? '<span class="topap">'+flg(top.flag)+' '+esc(top.name)+'</span><small>'
           + top.total.toLocaleString()+'건 · 최근 '+lookback+'일 국내·해외 공개</small>'
@@ -2151,6 +2163,27 @@ function render(){
   syncHash();
 }
 
+// '국적을 모른다' 와 '국적 축 다섯 갈래 밖이다' 는 다르다. 서지상세로 국적을
+// 채우기 시작하면서 대만·캐나다·인도 같은 나라가 실제로 들어온다 — 그것까지 미상에
+// 넣으면 아는 것을 모른다고 말하는 셈이다. 세는 자리가 둘이라 여기서 한 번만 센다.
+function regionSplit(ranked){
+  const known = new Set((FEED.patents.countries||[]).map(c=>c.code));
+  let unknown=0, other=0;
+  (ranked||[]).forEach(r=>{ if(!r.region) unknown++; else if(!known.has(r.region)) other++; });
+  return {unknown:unknown, other:other};
+}
+// 국적을 어떻게 알아내고 있는지 — 두 자리(홈 타일·통계 탭)에서 같은 말을 해야 한다.
+function originNote(unknown){
+  const done = (FEED.patents.originsFilled||0);
+  return '해외 공보 목록에는 출원인 국적 칸이 없습니다. 그래서 문헌마다 있는 '
+    + '서지상세를 출원인당 한 번씩 조회해 채우고 있습니다'
+    + (done? ' — 지금까지 '+done.toLocaleString()+'곳을 확인했고 '
+             + unknown.toLocaleString()+'곳이 남았습니다(매일 조금씩 채웁니다).'
+           : ' (아직 시작 단계라 '+unknown.toLocaleString()+'곳이 미상입니다).')
+    + ' 공개국으로 대신 채우지는 않습니다 — 미국에 공개한 일본 기업이 미국 기업으로 '
+    + '둔갑합니다(실측: US 공개 문헌의 출원인이 파나소닉(JP)·칭화대(CN)였습니다).';
+}
+
 // 출원인 집계(표본 내 건수 + 분야 그리드), 건수 내림차순
 function _rankApplicants(list){
   const T=FEED.patents.totals||{};
@@ -2521,14 +2554,15 @@ function renderStats(list){
   // 처럼 보여, 미국 기업이 여덟 곳뿐인 것으로 읽힌다 — 실제로 그렇게 보였다
   // (전체 5,403곳 중 국적을 아는 곳이 1,186곳뿐이었다).
   // 모르는 것은 모른다고 두되, **모른다는 사실도 화면에 남긴다**.
-  const known = regions.reduce((s,rg)=> s + (regCnt[rg.code]||0), 0);
-  const unknown = uniq - known;
+  const split = regionSplit(ranked), unknown = split.unknown;
+  const known = uniq - unknown;
   const regChips=regions.map(rg=>regCnt[rg.code]?(flg(rg.emoji)+regCnt[rg.code]):'').filter(Boolean).join(' ')
+    + (split.other? ' <span title="'+esc('국적 축 다섯 갈래(미국·한국·중국·일본·유럽) '
+        + '밖의 나라입니다. 아래 매트릭스의 [기타] 묶음에서 나라별로 볼 수 있습니다.')
+        + '">🌐'+split.other.toLocaleString()+'</span>' : '')
     + (unknown? ' <span class="unk" title="'
-        + esc('해외 공보에는 출원인 국적이 없습니다. 큐레이션한 주요 기업은 국적을 '
-              + '알지만 그 밖은 알 수 없어 비워 둡니다 — 공개국으로 대신 채우면 '
-              + '미국에 출원한 일본 기업이 미국 기업으로 둔갑합니다. '
-              + '국적별 랭킹에는 국적을 아는 ' + known.toLocaleString() + '곳만 들어갑니다.')
+        + esc(originNote(unknown)
+              + ' 국적별 랭킹에는 국적을 아는 ' + known.toLocaleString() + '곳만 들어갑니다.')
         + '">국적미상 '+unknown.toLocaleString()+'</span>' : '');
   const catLeadRows = concRowsHTML(concentration(list));
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
@@ -2543,8 +2577,8 @@ function renderStats(list){
         + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '')
         // 이 표는 국적을 아는 곳만 담는다. 그 사실을 적지 않으면 빠진 곳이
         // '해당 나라에 없는 것'으로 읽힌다.
-        + (unknown? ' 국적을 알 수 없는 '+unknown.toLocaleString()
-            + '곳은 이 표에 넣지 않았습니다(해외 공보에 출원인 국적이 없습니다) — '
+        + (unknown? ' 국적을 아직 확인하지 못한 '+unknown.toLocaleString()
+            + '곳은 이 표에 넣지 않았습니다(서지상세로 매일 채우는 중입니다) — '
             + '전체를 보려면 위 [전체] 또는 [공개국별]로 보세요.' : '')
     : rankMode==='office'
       ? '<b>공개 특허청(시장)별</b> — 그 특허청에 많이 공개한 기업(국적 무관, 상위 5). '
