@@ -300,7 +300,8 @@ def _quad_checks(sr) -> None:
         return
 
     cs, ce = js.find("const CONC_MID"), js.find("function concentration")
-    qs, qe = js.find("const QW=680"), js.find("const STAOWN_HEAD")
+    # 읽는 법(quadGuideHTML)까지 함께 떼어낸다 — 차트가 그 함수를 부른다.
+    qs, qe = js.find("function quadGuideHTML"), js.find("const STAOWN_HEAD")
     check(cs >= 0 < ce - cs and qs >= 0 < qe - qs, "분야 지도 블록을 떼어낼 수 있다")
     if not (0 <= cs < ce and 0 <= qs < qe):
         return
@@ -326,6 +327,8 @@ def _quad_checks(sr) -> None:
         prog = (js[cs:ce] + "\n" + js[qs:qe]
                 + "\nfunction esc(s){return String(s).replace(/[&<>\"]/g,"
                   "c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}\n"
+                + "const FEED={trade:{quadLead:'앞말',"
+                  "quadGuide:[['가로','설명1'],['세로','설명2']]}};\n"
                 + f"const ROWS={json.dumps(data, ensure_ascii=False)};\n"
                 + "ROWS.forEach(d=>d.lv=concLevel(d.r.neff));\n"
                   "console.log(JSON.stringify({html:quadChartHTML(ROWS),"
@@ -352,6 +355,8 @@ def _quad_checks(sr) -> None:
     if res is None:
         return
 
+    check(res["html"].count("<dt>") == 2 and "이 그림 읽는 법" in res["html"],
+          "그림 아래에 읽는 법이 함께 나온다")
     check(len(set(res["lv"])) >= 2,
           "집중도 등급이 실측 분포에서 갈린다 "
           f"(받은 등급 {sorted(set(res['lv']))})")

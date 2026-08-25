@@ -175,6 +175,23 @@ def _plain(s: str) -> str:
     return s
 
 
+def _lead(name: str) -> str:
+    """공동출원인('|' 로 이어진 이름)에서 대표(첫) 출원인만 남긴다 — 표시 직전에.
+
+    수집기(patent_source_kipris._split_applicants)가 이미 쪼개지만, _plain 과 같은
+    이유로 그것만으로는 모자란다: 아카이브가 누적이라 쪼개기 전에 저장된 항목은
+    그대로 남는다. 실측으로 252건이 남아 있었고, 그중 하나가
+    '애빌린 크리스천 유니버시티|조지아 테크 리서치 코포레이션|더 텍사스 에이 앤드
+    엠 유니버시티 시스템|보드 오브 리전츠, 더 유니버시티 오브 텍사스 시스템'
+    이었다. 이런 이름 하나가 매트릭스의 이름 칸을 통째로 늘려 표를 오른쪽으로
+    밀어낸다. 게다가 그 조합 자체가 하나의 '출원인'으로 잡혀 랭킹도 어긋난다.
+
+    공동출원인 전체가 필요한 곳(공급자 표의 참여 집계)은 원문 assignee 를 쓴다 —
+    여기서 버리는 것이 아니라 대표만 골라 두는 것이다.
+    """
+    return (name or "").split("|")[0].strip() or (name or "").strip()
+
+
 def _canon_assignee(name: str) -> str:
     s = (name or "").strip().strip(",.")
     if not s:
@@ -302,7 +319,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
             # 옛 데이터(applicant 없음)는 이름 정규화로 대체(하위호환).
             # 실체참조는 별칭을 맞추기 **전에** 푼다 — 'XI&apos;AN' 상태로는
             # 별칭·정규화가 어긋나고, 화면에도 그대로 새어 나간다.
-            ap = _plain(p.get("applicant") or "")
+            ap = _lead(_plain(p.get("applicant") or ""))
             aname = ap or _canon_assignee(_plain(p.get("assignee", "")))
             region = p.get("country", "") if ap else \
                 _assignee_country(_canon_assignee(p.get("assignee", "")), p.get("assignee", ""))
@@ -457,6 +474,8 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
                   "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE,
+                  "quadLead": ip_guide.QUAD_GUIDE_LEAD,
+                  "quadGuide": ip_guide.QUAD_GUIDE,
                   "concShort": ip_guide.READ_SHORT,
                   "newsShort": ip_guide.NEWS_SHORT,
                   "gen": ip_guide.READ_GEN, "genKr": ip_guide.READ_GEN_KR,
@@ -645,6 +664,23 @@ a{color:inherit}
 .qlegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .qlegend .s1 i{background:var(--q1)} .qlegend .s2 i{background:var(--q2)} .qlegend .s3 i{background:var(--q3)}
 .qlegend .soff i{background:none;border:1.2px dashed var(--muted)}
+/* 읽는 법. 그림과 표 사이에 끼므로 배경 없이 왼쪽 선 하나로만 묶는다 — 카드가
+   하나 더 생기면 표(진짜 내용)와 위계가 헷갈린다. */
+.qguide{margin:10px 2px 0;border-left:2px solid var(--line);padding:2px 0 2px 12px}
+.qguide>summary{font-size:12px;font-weight:800;color:var(--muted);cursor:pointer;
+  list-style:none;display:flex;align-items:center;gap:6px}
+.qguide>summary::-webkit-details-marker{display:none}
+.qguide>summary::before{content:'▾';font-size:10px;transition:transform .15s}
+.qguide:not([open])>summary::before{transform:rotate(-90deg)}
+.qguide .qgl{margin:8px 0 0;font-size:12px;font-weight:700;color:var(--ink)}
+.qguide dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;
+  font-size:12px;line-height:1.6}
+.qguide dt{font-weight:800;color:var(--ink);white-space:nowrap}
+.qguide dd{margin:0;color:var(--muted);font-weight:600;word-break:keep-all}
+@media (max-width:560px){
+  .qguide dl{grid-template-columns:1fr;gap:2px}
+  .qguide dd{margin:0 0 6px}
+}
 /* 분야별 상세 = 위 그림의 표 대응물(값을 그림에만 두지 않는다).
    ④ 왼쪽 색 띠로 집중도 단계를 표시해 스크롤 스캔이 되게 한다 */
 .trow{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
@@ -934,7 +970,13 @@ a{color:inherit}
 .pmx th.cth{font-size:10.5px;font-weight:600;line-height:1.25;white-space:normal;word-break:keep-all;
   max-width:80px;vertical-align:bottom}
 .pmx th.cth .seg{white-space:nowrap}
-.pmx td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px;font-size:12px}
+/* 이름 칸은 폭을 묶는다. 출원인 이름은 길이가 정해져 있지 않아서(실측 216자짜리
+   중국 연구소, 그리고 공동출원인이 통째로 붙은 이름) 한 줄이 표 전체를 오른쪽으로
+   밀어낸다 — 숫자 칸이 화면 밖으로 나가면 표를 볼 수가 없다. 잘린 이름 전체는
+   title 로 준다(칸에 이미 title 이 있으므로 이름 칸에도 붙인다). */
+.pmx td.lab{text-align:left;white-space:nowrap;font-weight:600;padding-right:8px;font-size:12px;
+  max-width:15em;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:560px){ .pmx td.lab{max-width:9.5em} }
 .pmx td.c{text-align:center;border-radius:5px;font-variant-numeric:tabular-nums;min-width:34px;
   padding:5px 4px;color:var(--muted);background:var(--bg)}
 .pmx td.c.has{color:var(--ink);cursor:pointer}
@@ -1723,6 +1765,18 @@ function tradeRows(){
   });
 }
 
+// 그림 읽는 법. 축 이름과 범례만으로는 '실질 경쟁자 수'가 무엇인지 알 수 없다.
+// 접어 두되 첫 화면에서는 펼쳐 둔다 — 접어 놓으면 아무도 열지 않고, 늘 펼쳐 두면
+// 이미 아는 사람에게는 표가 그만큼 밀린다. 문구는 ip_guide 에 있다(한 곳에서 고친다).
+function quadGuideHTML(){
+  const T=FEED.trade||{}, G=T.quadGuide||[];
+  if(!G.length) return '';
+  return '<details class="qguide" open><summary>이 그림 읽는 법</summary>'
+    + '<p class="qgl">'+esc(T.quadLead||'')+'</p><dl>'
+    + G.map(g=>'<dt>'+esc(g[0])+'</dt><dd>'+esc(g[1])+'</dd>').join('')
+    + '</dl></details>';
+}
+
 // 분야 지도. x=뉴스 비중 배율(log2, 가운데가 '변화 없음'), y=실질 경쟁자 수(위가 집중),
 // 원 크기=그 분야 추정 규모. 값은 전부 아래 표에도 있다(그림에만 두지 않는다).
 // 두 축 모두 범위를 고정해 둔다 — 주마다 축이 움직이면 지난주 그림과 겹쳐 볼 수 없다.
@@ -1833,7 +1887,8 @@ function quadChartHTML(rows){
     + '<span class="s1"><i></i>'+CONC_NAME.lo+'</span>'
     + '<span>원 크기 = 그 분야 추정 공개 규모</span>'
     + (nodes.some(n=>n.out)? '<span class="soff"><i></i>축 범위 밖 — 가장자리에 붙였습니다</span>' : '')
-    + '</div>';
+    + '</div>'
+    + quadGuideHTML();
 }
 
 // ② 뉴스 비중 추이. '비중 98%' 는 한 시점의 값이라 늘고 있는지 줄고 있는지가
@@ -2133,7 +2188,7 @@ function matrixTableHTML(ranked, opts){
       const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
       const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
       return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
-    return '<tr><td class="lab">'+flg(r.flag)+' '+esc(r.name)+'</td>'+cells
+    return '<tr><td class="lab" title="'+esc(r.name)+'">'+flg(r.flag)+' '+esc(r.name)+'</td>'+cells
       +(opts.total?'<td class="c tot">'+r.cnt+'</td>':'')+'</tr>';
   }).join('');
   return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
@@ -2374,7 +2429,10 @@ function suppliers(list){
   const cats = FEED.patents.categories||[];
   const byCat = {}, filedIn = {};
   (list||[]).forEach(it=>{
-    const raw = it.aName||''; if(!raw || raw==='(미상)') return;
+    // 공동출원인 전체는 원문(assignee)에만 남아 있다. aName 은 대표(첫) 출원인
+    // 하나로 정리된 이름이다 — 수집기가 쪼개고 화면도 표시 직전에 한 번 더 쪼갠다.
+    // 여기서 aName 을 쓰면 공동출원의 둘째·셋째가 통째로 빠진다.
+    const raw = it.assignee || it.aName || ''; if(!raw || raw==='(미상)') return;
     if((it.aCountry||'') !== 'KR') return;          // 국내 주체만
     // 공동출원은 '|' 로 이어져 있다. 대표(첫) 출원인만 세면 칩의 숫자와 칩을
     // 눌렀을 때 열리는 목록이 어긋난다 — 목록 검색은 이름이 어느 자리에 있든
