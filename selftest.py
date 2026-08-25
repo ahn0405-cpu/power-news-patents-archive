@@ -215,6 +215,17 @@ def _lazy_checks(sr) -> None:
           "건수는 total 로 읽는다 (items.length 는 로딩 중 작다)")
     check("_shareCache = null" in js,
           "다 받은 뒤 항목 기반 캐시를 버린다 (안 버리면 최근분으로 계산한 값이 남는다)")
+    # 국적을 모르는 출원인을 화면에서 빼기만 하면 '🇺🇸8곳' 으로 보여 미국 기업이
+    # 여덟 곳뿐인 것으로 읽힌다(실측: 5,403곳 중 국적을 아는 곳이 1,186곳뿐).
+    # 모르는 것은 모른다고 두되, 모른다는 사실도 화면에 남아야 한다.
+    check("const unknown = uniq - known" in js,
+          "국적 미상 출원인 수를 센다")
+    check("국적미상 " in js, "KPI 에 '국적미상 N' 을 함께 보인다")
+    check("국적을 알 수 없는" in js,
+          "국적별 랭킹이 '빠진 곳이 있다'고 밝힌다")
+    check("uniq.toLocaleString()" in js,
+          "출원인 수도 천 단위로 끊는다 (옆의 미상 수와 표기가 어긋나지 않게)")
+
     for name, guard in (("공급자 표", "FULL ? supplierHTML"),
                         ("경쟁 구도", "if(!FULL) return '<div class=\"sec\" id=\"sec-analysis\">"),
                         ("통계 뷰", "FULL ? renderStats")):

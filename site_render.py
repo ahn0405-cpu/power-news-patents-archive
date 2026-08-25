@@ -971,6 +971,10 @@ a{color:inherit}
 .hyd{font-size:11px;font-weight:600;color:var(--muted);margin-left:6px}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
+/* '국적미상 N' — 국기 칩과 나란히 서지만 나라가 아니므로 점선 테두리로 구분한다.
+   숨기지 않는 것이 요점이라 눈에는 띄되, 국기들보다 앞서 읽히면 안 된다. */
+.statkpi .unk{border:1px dashed var(--line);border-radius:999px;padding:0 6px;
+  margin-left:4px;cursor:help;white-space:nowrap}
 .statkpi .v{font-size:19px;font-weight:800}
 .unknown{color:var(--muted);font-size:12px;margin-top:8px}
 .homehint{color:var(--muted);font-size:12.5px;margin:2px 0 0}
@@ -2318,7 +2322,23 @@ function renderStats(list){
   const ranked=_rankApplicants(list);
   const uniq=ranked.length, topA=ranked[0];
   const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
-  const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ');
+  // 국적을 모르는 출원인을 세어 함께 밝힌다.
+  //
+  // 해외 목록에는 출원인 국적이 없다. 큐레이션 목록에 있는 곳(Siemens·Toyota…)은
+  // 알지만 나머지는 모르고, 공개국으로 대신 채우면 'US 에 낸 일본 회사'가 미국
+  // 기업이 되므로 비워 둔다. 그런데 비워 둔 것을 화면에서 빼기만 하면 '🇺🇸8곳'
+  // 처럼 보여, 미국 기업이 여덟 곳뿐인 것으로 읽힌다 — 실제로 그렇게 보였다
+  // (전체 5,403곳 중 국적을 아는 곳이 1,186곳뿐이었다).
+  // 모르는 것은 모른다고 두되, **모른다는 사실도 화면에 남긴다**.
+  const known = regions.reduce((s,rg)=> s + (regCnt[rg.code]||0), 0);
+  const unknown = uniq - known;
+  const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ')
+    + (unknown? ' <span class="unk" title="'
+        + esc('해외 공보에는 출원인 국적이 없습니다. 큐레이션한 주요 기업은 국적을 '
+              + '알지만 그 밖은 알 수 없어 비워 둡니다 — 공개국으로 대신 채우면 '
+              + '미국에 출원한 일본 기업이 미국 기업으로 둔갑합니다. '
+              + '국적별 랭킹에는 국적을 아는 ' + known.toLocaleString() + '곳만 들어갑니다.')
+        + '">국적미상 '+unknown.toLocaleString()+'</span>' : '');
   const catLeadRows = concRowsHTML(concentration(list));
   // 랭킹(전 지역 통합). 수집 상한에 걸린 곳은 실제 건수가 그 이상이라 '50+' 로 표기하고
   // 막대도 구분한다 — 상한 동점끼리 순위를 매기면 정렬 우연을 실력처럼 보여주게 된다.
@@ -2330,6 +2350,11 @@ function renderStats(list){
   const rankSub = rankMode==='region'
       ? '<b>출원인 국적별</b> — 그 나라 기업 중 다출원 순서(지역별 상위 5) · 실제 공개 건수 기준.'
         + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '')
+        // 이 표는 국적을 아는 곳만 담는다. 그 사실을 적지 않으면 빠진 곳이
+        // '해당 나라에 없는 것'으로 읽힌다.
+        + (unknown? ' 국적을 알 수 없는 '+unknown.toLocaleString()
+            + '곳은 이 표에 넣지 않았습니다(해외 공보에 출원인 국적이 없습니다) — '
+            + '전체를 보려면 위 [전체] 또는 [공개국별]로 보세요.' : '')
     : rankMode==='office'
       ? '<b>공개 특허청(시장)별</b> — 그 특허청에 많이 공개한 기업(국적 무관, 상위 5). '
         + (exactOffice? '실제 공개 건수 기준.' : '표본 기반 근사치(다음 수집부터 정확).')
@@ -2338,7 +2363,7 @@ function renderStats(list){
 
   return '<div class="stats">'
     + '<div class="panel wide"><div class="statkpi">'
-      + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq
+      + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq.toLocaleString()
         + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
       + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
