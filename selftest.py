@@ -224,6 +224,22 @@ def _lazy_checks(sr) -> None:
     check("EPO OPS" not in js,
           "화면 문구에 EPO OPS 가 남아 있지 않다 (지금 쓰는 것은 KIPRISplus)")
     check("KIPRISplus" in js, "푸터가 실제 출처(KIPRISplus)를 밝힌다")
+    # 국기 — 윈도우에는 국기 이모지 글꼴이 없어 지역표시자 두 글자가 그대로 찍힌다
+    # (실측: 화면이 'US8KR1143CN11JP11EU13' 이 됐다). 표시 직전에 우리가 그린
+    # 것으로 바꾸므로, 국기가 나오는 자리는 전부 flg() 를 거쳐야 한다.
+    check("function flg(" in js, "국기를 그려 주는 헬퍼가 있다")
+    check("0x1F1E6" in js,
+          "지역표시자에서 나라 코드를 되돌린다 (표를 따로 두지 않는다)")
+    for sym in ("f-KR", "f-US", "f-CN", "f-JP", "f-EU"):
+        check('id="' + sym + '"' in sr._PAGE, f"{sym} 국기를 그려 둔다")
+    # 이모지가 flg() 를 거치지 않고 그대로 붙는 자리가 남아 있으면 안 된다.
+    import re as _re3
+    raw = _re3.findall(r"\+\s*\(?(?:it|p|r|rg|off|top|topA)\.(?:aFlag|flag|emoji)\s*\|\|", js)
+    check(not raw, f"국기를 flg() 없이 그대로 붙이는 자리가 없다 (발견 {len(raw)}곳)")
+    check("EPO" not in js and "전력 CPC" not in js,
+          "홈 타일 설명에도 EPO·전력 CPC 라는 옛 근거가 남아 있지 않다")
+    check("전 세계 공개" not in js,
+          "'전 세계 공개' 라고 하지 않는다 (국내 + 미국·유럽·일본·중국 넷이다)")
     check("칸의 수는 표본 건수" not in js and "출원인마다 수집 상한이 있어" not in js,
           "매트릭스 안내가 '칸은 표본' 이라고 하지 않는다 (지금은 전수라 실제 건수다)")
     check("규모를 실제 총계로 되돌린" not in js,

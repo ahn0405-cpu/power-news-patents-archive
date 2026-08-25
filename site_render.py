@@ -722,7 +722,11 @@ a{color:inherit}
 .homekpi .tile .v{font-size:21px;line-height:1.25}
 .homekpi .tile small{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-top:3px}
 .homekpi .rgs{display:flex;gap:7px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
-.homekpi .rgc{font-size:12px;font-weight:700;color:var(--ink)}
+.homekpi .rgc{font-size:12px;font-weight:700;color:var(--ink);
+  display:inline-flex;align-items:center;gap:3px;margin-right:6px}
+/* 국적을 모르는 곳 — 국기 칩과 나란히 서지만 나라가 아니므로 점선으로 구분한다 */
+.homekpi .rgc.unk{color:var(--muted);font-weight:600;
+  border:1px dashed var(--line);border-radius:999px;padding:0 6px}
 .homekpi .topap{font-size:15.5px;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile .k{display:flex;align-items:center;gap:4px}
 .tile .tq{font-size:11px;color:var(--muted);cursor:help;font-weight:700}
@@ -971,6 +975,14 @@ a{color:inherit}
 .hyd{font-size:11px;font-weight:600;color:var(--muted);margin-left:6px}
 .statkpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px}
 .statkpi .k{color:var(--muted);font-size:11.5px}
+/* 우리가 그린 국기. 글자 옆에 서므로 글자 크기를 따라가고, 밑선을 글자에 맞춘다.
+   가는 테두리는 흰 바탕 국기(일본·한국)가 밝은 배경에 묻히지 않게 하는 것이다. */
+.fl{width:1.15em;height:.86em;vertical-align:-.08em;border-radius:1.5px;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.22);flex:none}
+/* 우리가 안 그린 나라 — 두 글자로 보인다(윈도우가 하던 것과 같지만 의도된 모양). */
+.fl.code{display:inline-block;width:auto;height:auto;font-size:.72em;font-weight:700;
+  letter-spacing:.02em;padding:0 3px;border-radius:3px;box-shadow:none;
+  border:1px solid var(--line);color:var(--muted);vertical-align:.05em}
 /* '국적미상 N' — 국기 칩과 나란히 서지만 나라가 아니므로 점선 테두리로 구분한다.
    숨기지 않는 것이 요점이라 눈에는 띄되, 국기들보다 앞서 읽히면 안 된다. */
 .statkpi .unk{border:1px dashed var(--line);border-radius:999px;padding:0 6px;
@@ -1009,6 +1021,38 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>__CSS__</style></head>
 <body>
+<!-- 국기 — 이모지로 두면 윈도우에서 안 보인다.
+     윈도우의 시스템 이모지 글꼴에는 국기가 없어서, 지역표시자 두 글자를 그대로
+     찍는다: 🇰🇷 → 'KR', 🇺🇸 → 'US'. 실제 화면이 'US8KR1143CN11JP11EU13' 이 됐다.
+     글꼴 문제라 CSS 로는 못 고치고, 국기가 든 웹폰트를 불러오는 것도 답이 아니다
+     (수 MB짜리 이모지 글꼴 하나가 우리가 줄여 놓은 전송량을 통째로 되돌린다).
+     그래서 직접 그린다. 16px 에서 나라가 구분되는 최소한만 담았다 —
+     별 개수·괘 같은 세부는 그 크기에서 어차피 보이지 않는다. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="f-KR" viewBox="0 0 12 9"><rect width="12" height="9" fill="#fff"/>
+    <circle cx="6" cy="4.5" r="2" fill="#CD2E3A"/>
+    <path d="M4 4.5a2 2 0 004 0 1 1 0 00-2 0 1 1 0 01-2 0z" fill="#0047A0"/>
+    <g fill="#111"><rect x="1.1" y="1.5" width="2" height=".5"/>
+      <rect x="8.9" y="1.5" width="2" height=".5"/>
+      <rect x="1.1" y="7" width="2" height=".5"/>
+      <rect x="8.9" y="7" width="2" height=".5"/></g></symbol>
+  <symbol id="f-US" viewBox="0 0 12 9"><rect width="12" height="9" fill="#fff"/>
+    <g fill="#B22234"><rect width="12" height="1"/><rect y="2" width="12" height="1"/>
+      <rect y="4" width="12" height="1"/><rect y="6" width="12" height="1"/>
+      <rect y="8" width="12" height="1"/></g>
+    <rect width="5.5" height="5" fill="#3C3B6E"/></symbol>
+  <symbol id="f-CN" viewBox="0 0 12 9"><rect width="12" height="9" fill="#DE2910"/>
+    <circle cx="2.6" cy="2.6" r="1.2" fill="#FFDE00"/>
+    <g fill="#FFDE00"><circle cx="5.1" cy="1.2" r=".45"/><circle cx="6.1" cy="2.4" r=".45"/>
+      <circle cx="5.9" cy="4" r=".45"/><circle cx="4.7" cy="5" r=".45"/></g></symbol>
+  <symbol id="f-JP" viewBox="0 0 12 9"><rect width="12" height="9" fill="#fff"/>
+    <circle cx="6" cy="4.5" r="2.4" fill="#BC002D"/></symbol>
+  <symbol id="f-EU" viewBox="0 0 12 9"><rect width="12" height="9" fill="#039"/>
+    <g fill="#FC0"><circle cx="6" cy="1.9" r=".5"/><circle cx="8.2" cy="2.8" r=".5"/>
+      <circle cx="9.1" cy="4.5" r=".5"/><circle cx="8.2" cy="6.2" r=".5"/>
+      <circle cx="6" cy="7.1" r=".5"/><circle cx="3.8" cy="6.2" r=".5"/>
+      <circle cx="2.9" cy="4.5" r=".5"/><circle cx="3.8" cy="2.8" r=".5"/></g></symbol>
+</svg>
 <div class="wrap">
   <header class="mast">
     <div class="masttext">
@@ -1149,6 +1193,26 @@ const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<
 // 링크 주소는 http(s) 만 허용한다. 제목·요약은 esc 로 막히지만 href 는 esc 를 통과해도
 // javascript: 스킴이 그대로 남아 클릭 한 번으로 실행된다(RSS·OPS 응답은 외부 입력이다).
 const safeUrl = u => { const s=String(u==null?'':u).trim(); return /^https?:\/\//i.test(s) ? s : ''; };
+
+// ── 국기 ────────────────────────────────────────────────────────
+// 자료에는 국기가 이모지로 들어 있다(🇰🇷). 그런데 윈도우는 국기 이모지를
+// 그리지 않고 지역표시자 두 글자를 그대로 찍는다 — 화면이
+// 'US8KR1143CN11JP11EU13' 이 됐다(실측). 그래서 표시 직전에 우리가 그린 것으로
+// 바꾼다. 자료는 그대로 두므로 저장 형식도 옛 아카이브도 건드리지 않는다.
+//
+// 이모지에서 나라 코드를 되돌리는 방법: 국기 이모지는 지역표시자(U+1F1E6~FF)
+// 두 개이고, 각각이 A~Z 한 글자에 대응한다. 표를 따로 두지 않아도 되고,
+// 우리가 안 그린 나라도 두 글자 배지로 알아볼 수 있게 된다.
+const FLAG_DRAWN = {KR:1, US:1, CN:1, JP:1, EU:1};
+function flg(e){
+  const cps = [...String(e==null?'':e)];
+  const RI = c => { const v=c.codePointAt(0); return v>=0x1F1E6 && v<=0x1F1FF; };
+  if(cps.length!==2 || !cps.every(RI)) return String(e==null?'':e);  // 🌐 등은 그대로
+  const code = cps.map(c=>String.fromCharCode(c.codePointAt(0)-0x1F1E6+65)).join('');
+  return FLAG_DRAWN[code]
+    ? '<svg class="fl" viewBox="0 0 12 9" role="img" aria-label="'+code+'"><use href="#f-'+code+'"/></svg>'
+    : '<span class="fl code">'+code+'</span>';
+}
 const LS_KEY = 'pnp_lastVisit';
 const lastVisit = Number(localStorage.getItem(LS_KEY) || 0);
 
@@ -1228,7 +1292,7 @@ function card(it, cm){
   } else {
     // 출원인은 매트릭스·랭킹과 같은 정규화명(aName)으로 통일. 원문이 다르면 툴팁으로.
     if(it.aName) bits.push('<span class="src" title="'+esc(it.assignee||it.aName)+'">'
-      + (it.aFlag||'') + ' ' + esc(it.aName)+'</span>');
+      + flg(it.aFlag) + ' ' + esc(it.aName)+'</span>');
     if(it.office) bits.push('<span class="off" title="공개 특허청">'+esc(it.office)+' 공보</span>');
     if(it.number) bits.push('<span class="num">'+esc(it.number)+'</span>');
     if(it.cpc && it.cpc.length) bits.push('<span class="cpc" title="CPC 분류(분야 판정 근거)">'
@@ -1355,7 +1419,7 @@ function patentPickPanelHTML(){
     // 국기는 매트릭스와 같은 출원인 국적(aFlag)으로 통일 — 같은 화면에서 달라 보이지 않게.
     const who = p.aName ? '<span class="who">'+esc(p.aName)+'</span>' : '';
     return '<a class="pk" href="'+esc(safeUrl(p.url))+'" target="_blank" rel="noopener" title="'+esc(p.title)+'">'
-      +'<span class="pf">'+(p.aFlag||'📄')+'</span>'
+      +'<span class="pf">'+(p.aFlag? flg(p.aFlag) : '📄')+'</span>'
       +'<span class="pt2">'+esc(p.title||'(제목 없음)')+who+'</span></a>';
   }).join('');
   return '<div class="homepanel"><h3>📄 이번 주 공개 특허</h3>'
@@ -1405,11 +1469,14 @@ function kpiHTML(){
   // 특허 요약 지표(출원인 수·국적 내역·최다 출원인)는 통계 탭까지 안 들어가도 보이게 홈에.
   const ranked = p.items.length? _rankApplicants(p.items) : [];
   const regCnt={}; ranked.forEach(r=>{ regCnt[r.region]=(regCnt[r.region]||0)+1; });
+  const known = p.countries.reduce((s2,rg)=> s2 + (regCnt[rg.code]||0), 0);
+  const unknown = ranked.length - known;
+  // 통계 탭과 같은 이유로 여기서도 '모른다'를 숨기지 않는다(renderStats 주석 참고).
   const regChips = p.countries.map(rg=>regCnt[rg.code]
-      ? '<span class="rgc">'+rg.emoji+regCnt[rg.code]+'</span>' : '').filter(Boolean).join('');
+      ? '<span class="rgc">'+flg(rg.emoji)+regCnt[rg.code]+'</span>' : '').filter(Boolean).join('')
+    + (unknown? '<span class="rgc unk">미상 '+unknown.toLocaleString()+'</span>' : '');
   const top = ranked[0];
   const lookback = p.lookbackDays||90;
-  const nAp = p.applicants||0;      // 설정에 등록된 출원인 수(수집 대상)
   return '<div class="homekpi">'
     + tile('📰 뉴스 누적', n.items.length.toLocaleString()
         + '<small>건 · 최근 '+esc(nL.x)+' '+nL.y+'건</small>',
@@ -1418,27 +1485,30 @@ function kpiHTML(){
         + (p.pubRange? '<small>건 · 공개 '+esc(p.pubRange.from)+' ~ '+esc(p.pubRange.to)+'</small>':'건'),
         '아카이브에 저장된 특허 문헌 수입니다. 매주 최근 '+lookback+'일 공개분을 조회해 새 것만 더하며, '
         + '출원인당 저장 상한이 있어 대형 출원인은 전수가 아니라 표본입니다.')
-    + tile('🏢 분석 출원인', (ranked.length||0)
+    + tile('🏢 분석 출원인', (ranked.length||0).toLocaleString()
         + '<small class="rgs">'+regChips+'</small>',
-        '수집 대상으로 등록한 출원인은 '+nAp+'곳이고, 그중 지금 아카이브에 문헌이 있는 곳이 '
-        + (ranked.length||0)+'곳입니다. 국기 옆 숫자는 국적별 출원인 수입니다.')
+        '최근 '+lookback+'일 공개분에 문헌이 있는 출원인이 '
+        + (ranked.length||0).toLocaleString()+'곳입니다. 국기 옆 숫자는 국적별 출원인 수이고, '
+        + '해외 공보에는 출원인 국적이 없어 큐레이션한 주요 기업 밖은 '
+        + unknown.toLocaleString()+'곳이 미상입니다.')
     + tile('🏆 최다 출원인', top
-        ? '<span class="topap">'+(top.flag||'')+' '+esc(top.name)+'</span><small>'
-          + top.total.toLocaleString()+'건 · 최근 '+lookback+'일 전 세계 공개</small>'
+        ? '<span class="topap">'+flg(top.flag)+' '+esc(top.name)+'</span><small>'
+          + top.total.toLocaleString()+'건 · 최근 '+lookback+'일 국내·해외 공개</small>'
         : '—',
-        '산출 근거: 등록한 출원인 '+nAp+'곳 가운데, 최근 '+lookback+'일 사이 전력 CPC 로 공개된 문헌이 '
-        + '가장 많은 곳입니다. 유럽특허청(EPO)이 90여 개 관할 구역에서 모아 수록한 서지 데이터를 '
-        + '조회하며, IP5 나 국내(KR) 로 한정하지 않습니다. 다만 관청마다 수록 범위·시점이 달라 최근 공개분에는 '
-        + '시차가 있을 수 있고, 출원인 이름 표기가 다르면 누락될 수 있습니다. 같은 발명이 여러 나라에 '
-        + '공개되면 각각 세므로 특허 패밀리 수가 아니라 공개 문헌 수이고, 조회 조건이 전력 CPC 라 '
-        + '배터리처럼 해당 CPC 에 출원이 몰리는 분야가 크게 잡힙니다. 기업의 기술력이나 시장 점유율을 '
-        + '뜻하지 않습니다.')
+        '산출 근거: 최근 '+lookback+'일 사이 전력 8대 분야(IPC)로 공개된 문헌이 가장 많은 곳입니다. '
+        + '지식재산처 KIPRISplus 로 국내 공보와 해외(미국·유럽·일본·중국) 공보를 조회하며, 출원인을 '
+        + '미리 정해 두지 않고 분야와 기간에 맞는 것을 모두 담습니다. 다만 관청마다 수록 범위·시점이 '
+        + '달라 최근 공개분에는 시차가 있을 수 있고, 출원인 이름 표기가 다르면 따로 세어질 수 있습니다 '
+        + '(같은 회사의 한글·영문·일본어 표기는 맞춰 두었습니다). 같은 발명이 여러 나라에 공개되면 '
+        + '각각 세므로 특허 패밀리 수가 아니라 공개 문헌 수이고, 조회 조건이 전력 IPC 라 배터리처럼 '
+        + '그 코드에 출원이 몰리는 분야가 크게 잡힙니다. 기업의 기술력이나 시장 점유율을 뜻하지 않습니다.')
     + '</div>'
     // 툴팁은 모바일에서 뜨지 않는다 → 특허 수치의 산출 근거는 한 줄로도 항상 보이게.
     // 출원인 범위(40곳)는 바로 옆 '분석 출원인' 타일과 ⓘ 툴팁에 있어 여기선 뺀다.
-    + '<p class="kpinote">특허 수치는 <b>90여 개 관할 구역의 공개 데이터</b>(유럽특허청 수록 기준)입니다. '
-    + '최근 '+lookback+'일 공개분을 전력 CPC 로 조회한 값입니다. 같은 발명이 여러 나라에 공개되면 각각 '
-    + '세므로 특허 패밀리 수가 아니라 공개 문헌 수입니다.</p>';
+    + '<p class="kpinote">특허 수치는 <b>국내 공보와 해외(미국·유럽·일본·중국) 공보</b>'
+    + '(지식재산처 KIPRISplus 수록 기준)입니다. 최근 '+lookback+'일 공개분을 전력 8대 분야(IPC)로 '
+    + '조회한 값입니다. 같은 발명이 여러 나라에 공개되면 각각 세므로 특허 패밀리 수가 아니라 '
+    + '공개 문헌 수입니다.</p>';
 }
 
 
@@ -1626,7 +1696,7 @@ function tradeRows(){
   // 해외 출원인이 국내(KR)에 공개한 건 — 국내에서 실제로 부딪힐 수 있는 권리다.
   const kr={};
   (FEED.patents.items||[]).forEach(it=>{ if(it.office!=='KR'||it.aCountry==='KR') return;
-    const s=kr[it.category]||(kr[it.category]=new Set()); s.add((it.aFlag||'')+' '+it.aName); });
+    const s=kr[it.category]||(kr[it.category]=new Set()); s.add(flg(it.aFlag)+' '+it.aName); });
   const cmp=FEED.insights.comparable;
   // 분야는 전부 싣는다. 뉴스 쪽에 짝이 없는 분야(계량·스마트그리드)는 뉴스 칸만
   // 비우고 권리 구조는 그대로 보인다 — 한전·State Grid·LS일렉트릭이 있는 분야라
@@ -2015,7 +2085,7 @@ function matrixTableHTML(ranked, opts){
       const st=v?('background:rgba(58,111,176,'+a+');color:'+(v/maxCell>0.55?'#fff':'inherit')):'';
       const attr=v?(' class="c has" data-ap="'+esc(r.name)+'" data-cat="'+c.key+'" title="'+esc(r.name)+' · '+esc(c.name)+' '+v+'건"'):' class="c"';
       return '<td'+attr+' style="'+st+'">'+(v||'·')+'</td>'; }).join('');
-    return '<tr><td class="lab">'+(r.flag||'')+' '+esc(r.name)+'</td>'+cells
+    return '<tr><td class="lab">'+flg(r.flag)+' '+esc(r.name)+'</td>'+cells
       +(opts.total?'<td class="c tot">'+r.cnt+'</td>':'')+'</tr>';
   }).join('');
   return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
@@ -2034,7 +2104,7 @@ function regionMatrixHTML(list, opts){
     const all=_rankApplicants(sub);
     const ranked=opts.top? all.slice(0,opts.top) : all;
     const more=all.length-ranked.length;
-    return '<div class="rgsec"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
+    return '<div class="rgsec"><div class="rghead">'+flg(rg.emoji)+' <b>'+esc(rg.name)+'</b>'
       + ' <span class="rgn">'+sub.length+'건 · 출원인 '+all.length
       + (more>0? ' (상위 '+ranked.length+')':'') + '</span></div>'
       + matrixTableHTML(ranked, opts)+'</div>';
@@ -2053,7 +2123,7 @@ function rankRowsHTML(rows, maxOverride){
     const tip = r.exact ? (r.sampled? ' — 실제 '+r.total+'건 중 '+r.cnt+'건 저장':'')
       : (r.sampled? ' — 수집 상한까지 저장돼 실제는 '+r.cnt+'건 이상(정확 집계 대기)':'');
     return '<div class="row"><div class="nm" title="'+esc(r.name)+tip+'">'
-      + '<span class="rk">'+(i+1)+'</span>'+(r.flag||'')+' '+esc(r.name)+'</div>'
+      + '<span class="rk">'+(i+1)+'</span>'+flg(r.flag)+' '+esc(r.name)+'</div>'
       + '<div class="bar'+(r.sampled?' cap':'')+'" style="width:'+w.toFixed(1)+'%"></div>'
       + '<div class="val">'+r.total+(r.exact?'':(r.sampled?'+':''))+'</div></div>'; }).join('');
 }
@@ -2063,7 +2133,7 @@ function regionRankHTML(ranked){
   const out = FEED.patents.countries.map(rg=>{
     const sub = ranked.filter(r=>r.region===rg.code);
     if(!sub.length) return '';
-    return '<div class="rgrank"><div class="rghead">'+rg.emoji+' <b>'+esc(rg.name)+'</b>'
+    return '<div class="rgrank"><div class="rghead">'+flg(rg.emoji)+' <b>'+esc(rg.name)+'</b>'
       + ' <span class="rgn">'+sub.length+'곳</span></div>'
       + rankRowsHTML(sub.slice(0,5)) + '</div>';
   }).filter(Boolean).join('');
@@ -2090,7 +2160,7 @@ function officeRankHTML(ranked){
       return n? {name:nm, flag:base.flag, total:n, cnt:n, sampled:false} : null;
     }).filter(Boolean).sort((a,b)=> b.total-a.total || a.name.localeCompare(b.name));
     if(!rows.length) return '';
-    return '<div class="rgrank"><div class="rghead">'+off.emoji+' <b>'+esc(off.name)+'</b>'
+    return '<div class="rgrank"><div class="rghead">'+flg(off.emoji)+' <b>'+esc(off.name)+'</b>'
       + ' <span class="rgn">'+rows.length+'곳</span></div>'
       + rankRowsHTML(rows.slice(0,5)) + '</div>';
   }).filter(Boolean).join('');
@@ -2336,7 +2406,7 @@ function renderStats(list){
   // 모르는 것은 모른다고 두되, **모른다는 사실도 화면에 남긴다**.
   const known = regions.reduce((s,rg)=> s + (regCnt[rg.code]||0), 0);
   const unknown = uniq - known;
-  const regChips=regions.map(rg=>regCnt[rg.code]?(rg.emoji+regCnt[rg.code]):'').filter(Boolean).join(' ')
+  const regChips=regions.map(rg=>regCnt[rg.code]?(flg(rg.emoji)+regCnt[rg.code]):'').filter(Boolean).join(' ')
     + (unknown? ' <span class="unk" title="'
         + esc('해외 공보에는 출원인 국적이 없습니다. 큐레이션한 주요 기업은 국적을 '
               + '알지만 그 밖은 알 수 없어 비워 둡니다 — 공개국으로 대신 채우면 '
@@ -2370,7 +2440,7 @@ function renderStats(list){
       + '<div><div class="k">분석 출원인</div><div class="v mono">'+uniq.toLocaleString()
         + ' <span style="font-size:12px;color:var(--muted)">'+regChips+'</span></div></div>'
       + '<div><div class="k">수집 특허(표본)</div><div class="v mono">'+list.length.toLocaleString()+'</div></div>'
-      + '<div><div class="k">최다 출원인</div><div class="v">'+(topA.flag||'')+' '+esc(topA.name)
+      + '<div><div class="k">최다 출원인</div><div class="v">'+flg(topA.flag)+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.total+'건</span></div></div>'
       + '</div></div>'
     + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
