@@ -236,6 +236,17 @@ def _lazy_checks(sr) -> None:
     import re as _re3
     raw = _re3.findall(r"\+\s*\(?(?:it|p|r|rg|off|top|topA)\.(?:aFlag|flag|emoji)\s*\|\|", js)
     check(not raw, f"국기를 flg() 없이 그대로 붙이는 자리가 없다 (발견 {len(raw)}곳)")
+    # 반대쪽 실수도 있다 — flg() 가 돌려준 SVG 를 문자열에 담아 두었다가 나중에
+    # esc() 로 흘려보내면 '<svg class="fl" …>' 가 글자 그대로 화면에 찍힌다
+    # (실측: 거래·지원 '국내 권리 N곳' 칩과 판정 문장 양쪽에서 났다).
+    # 그리는 자리에서 바로 부르면 안전하다. 위험한 것은 '데이터에 담아 두는' 자리다
+    # — 담아 둔 문자열은 나중에 esc() 를 지나며 마크업이 글자로 찍힌다. 거래·지원의
+    # '국내 권리 N곳' 이 실제로 그랬다. 그 자리를 이름·국기 따로 담게 고쳤고,
+    # 되돌아가면 여기서 걸린다.
+    check("m.set(it.aName, it.aFlag)" in js,
+          "국내 권리 목록은 이름과 국기를 따로 담는다")
+    check("s.add(flg(" not in js and "add(flg(" not in js,
+          "국내 권리 목록에 flg() 결과(SVG)를 담아 두지 않는다")
     check("EPO" not in js and "전력 CPC" not in js,
           "홈 타일 설명에도 EPO·전력 CPC 라는 옛 근거가 남아 있지 않다")
     check("전 세계 공개" not in js,
@@ -262,6 +273,130 @@ def _lazy_checks(sr) -> None:
                         ("경쟁 구도", "if(!FULL) return '<div class=\"sec\" id=\"sec-analysis\">"),
                         ("통계 뷰", "FULL ? renderStats")):
         check(guard in js, f"{name}는 다 받기 전에는 그리지 않는다")
+
+
+def _quad_checks(sr) -> None:
+    """분야 지도(quadChartHTML)를 실제 값 분포로 그려 보고 눈으로 볼 것을 대신 센다.
+
+    왜 필요한가: 축 범위를 코드에 고정해 두었는데, 수집 방식이 바뀌면서 값의
+    자릿수가 통째로 달라졌다. y 축은 실질 경쟁자 2~12곳 기준이었는데 실측이
+    10~239곳이 되어 여덟 중 일곱이 바닥에 눌어붙었고, 등급 경계(5곳/8곳)도 같은
+    시절 값이라 여덟 분야가 전부 한 등급으로 나와 색이 아무것도 구분하지 못했다.
+    둘 다 '그려 놓고 보면' 바로 보이지만 코드만 읽으면 안 보인다 → 실제 분포를
+    넣고 (ⓐ 점이 축에 퍼지는가 ⓑ 등급이 갈리는가 ⓒ 원이 판 안에 있는가
+    ⓓ 이름표가 겹치지 않는가) 를 센다.
+    """
+    import json
+    import re as _re
+    import shutil
+    import subprocess
+    import tempfile
+
+    js = sr._JS
+    check("constNEF=[8,256]" in js.replace(" ", ""),
+          "y 축 고정 범위가 실측 분포(10~239곳)를 담는다")
+    if not shutil.which("node"):
+        check(True, "(node 없음 — 분야 지도 실행 검사는 건너뛴다)")
+        return
+
+    cs, ce = js.find("const CONC_MID"), js.find("function concentration")
+    qs, qe = js.find("const QW=680"), js.find("const STAOWN_HEAD")
+    check(cs >= 0 < ce - cs and qs >= 0 < qe - qs, "분야 지도 블록을 떼어낼 수 있다")
+    if not (0 <= cs < ce and 0 <= qs < qe):
+        return
+
+    # 2026-08-25 실측값(전수 수집 뒤). 축·등급이 이 분포를 못 담으면 실패한다.
+    rows = [("계량·스마트그리드", 10.0, 216, 0.37, 1.00),
+            ("원전·SMR", 42.0, 382, 0.20, 1.04),
+            ("재생에너지·저장", 43.0, 8013, 0.23, 1.00),
+            ("전력수급·수요관리", 43.2, 2217, 0.18, 0.86),
+            ("전력설비·기기", 52.8, 461, 0.18, 1.12),
+            ("송·변전·전력망", 62.9, 1679, 0.18, 1.36),
+            ("데이터센터·무정전전원", 106.6, 249, 0.11, 0.95),
+            ("전력반도체·전력변환", 239.3, 1658, 0.06, 0.23)]
+    # 이름표가 몰리는 경우. 실질 경쟁자 수가 거의 같은 분야가 나란히 서면 위·아래
+    # 자리를 서로 뺏는다 — 실제로 재생에너지(43.0곳)와 원전(42.0곳)이 그랬다.
+    # 네 곳까지는 오른쪽·왼쪽·위·아래 네 자리로 덮이므로 여섯 곳으로 민다.
+    crowd = [(f"긴이름분야{i}", 43.0 + i * 0.1, 1200, 0.2, 0.98 + i * 0.02)
+             for i in range(6)]
+
+    def render(rs):
+        data = [{"r": {"cat": {"name": n}, "neff": ne, "tot": t, "cr3": c, "n": 50},
+                 "ratio": ra} for n, ne, t, c, ra in rs]
+        prog = (js[cs:ce] + "\n" + js[qs:qe]
+                + "\nfunction esc(s){return String(s).replace(/[&<>\"]/g,"
+                  "c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}\n"
+                + f"const ROWS={json.dumps(data, ensure_ascii=False)};\n"
+                + "ROWS.forEach(d=>d.lv=concLevel(d.r.neff));\n"
+                  "console.log(JSON.stringify({html:quadChartHTML(ROWS),"
+                  "lv:ROWS.map(d=>d.lv),pad:QPAD,w:QW,h:QH}));")
+        prog = prog.replace("\\\\", "\\")
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(prog)
+            path = f.name
+        try:
+            out = subprocess.run(["node", path], capture_output=True, text=True,
+                                 timeout=30)
+            if out.returncode != 0:
+                check(False, f"분야 지도 JS 가 실행된다 ({out.stderr.strip()[:160]})")
+                return None
+            return json.loads(out.stdout)
+        finally:
+            try:
+                __import__("os").unlink(path)
+            except OSError:
+                pass
+
+    res = render(rows)
+    if res is None:
+        return
+
+    check(len(set(res["lv"])) >= 2,
+          "집중도 등급이 실측 분포에서 갈린다 "
+          f"(받은 등급 {sorted(set(res['lv']))})")
+
+    pad, x0, y0 = res["pad"], res["pad"]["l"], res["pad"]["t"]
+    x1, y1 = res["w"] - pad["r"], res["h"] - pad["b"]
+    dots = [tuple(map(float, m)) for m in _re.findall(
+        r'<circle class="dot" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"', res["html"])]
+    check(len(dots) == len(rows), f"분야 수만큼 원이 그려진다 ({len(dots)}/{len(rows)})")
+    ys = [c[1] for c in dots]
+    span = (max(ys) - min(ys)) / (y1 - y0) if dots else 0
+    check(span >= 0.55,
+          f"점이 y 축에 퍼진다 (세로로 판의 {span:.0%} 를 쓴다, 기준 55% 이상)")
+    check(all(x0 <= cx - r and cx + r <= x1 and y0 <= cy - r and cy + r <= y1
+              for cx, cy, r in dots),
+          "원이 그림판 밖으로 삐져나가지 않는다 (사분면 설명 글자를 덮었었다)")
+
+    # 이름표 겹침. 글자 폭은 그리는 쪽과 같은 어림(한글 10.5 / 그 밖 6)으로 잰다.
+    def overlaps(html):
+        labs = _re.findall(
+            r'<text class="ql" x="([\d.]+)" y="([\d.]+)" text-anchor="(\w+)">([^<]+)</text>',
+            html)
+        boxes = []
+        for sx, sy, anc, txt in labs:
+            w = sum(10.5 if ord(ch) > 0x1100 else 6 for ch in txt)
+            lx = float(sx) if anc == "start" else float(sx) - (w if anc == "end" else w / 2)
+            boxes.append((lx, float(sy) - 10, w, 13))
+        return labs, [(labs[i][3], labs[j][3])
+                      for i in range(len(boxes)) for j in range(i + 1, len(boxes))
+                      if boxes[i][0] < boxes[j][0] + boxes[j][2]
+                      and boxes[j][0] < boxes[i][0] + boxes[i][2]
+                      and boxes[i][1] < boxes[j][1] + boxes[j][3]
+                      and boxes[j][1] < boxes[i][1] + boxes[i][3]]
+
+    labs, over = overlaps(res["html"])
+    check(len(labs) == len(rows) and not over,
+          f"이름표가 서로 겹치지 않는다 ({'겹침: ' + str(over[:2]) if over else '겹침 없음'})")
+
+    res2 = render(crowd)
+    if res2 is None:
+        return
+    labs2, over2 = overlaps(res2["html"])
+    check(len(labs2) == len(crowd) and not over2,
+          "실질 경쟁자 수가 거의 같은 분야가 몰려도 이름표가 겹치지 않는다 "
+          f"({'겹침: ' + str(over2[:2]) if over2 else '겹침 없음'})")
 
 
 def _supplier_checks(sr) -> None:
@@ -928,6 +1063,9 @@ def main() -> int:
 
         print("· 분야별 국내 공급자 (site_render 안의 JS)")
         _supplier_checks(sr)
+
+        print("· 분야 지도 (축·등급·이름표 배치)")
+        _quad_checks(sr)
 
         print("· 지연 로딩 (목록 분할)")
         _lazy_checks(sr)

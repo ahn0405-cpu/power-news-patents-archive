@@ -632,6 +632,9 @@ a{color:inherit}
 .qwrap{overflow-x:auto}
 .qchart{display:block;width:100%;min-width:480px;height:auto}
 .qchart .ax{stroke:var(--line);stroke-width:1}
+.qchart .qg{stroke:var(--line);stroke-width:1;stroke-dasharray:2 5;opacity:.55}
+.qchart .qa.qm{fill:var(--ink);opacity:.75}
+.qchart .qoff{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-dasharray:3 3;opacity:.7}
 .qchart .qz{fill:var(--muted);font-size:9.5px;font-weight:700;opacity:.65}
 .qchart .qa{fill:var(--muted);font-size:10px;font-weight:700}
 .qchart .ql{fill:var(--ink);font-size:10.5px;font-weight:700}
@@ -641,6 +644,7 @@ a{color:inherit}
   font-size:11px;font-weight:700;color:var(--muted)}
 .qlegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .qlegend .s1 i{background:var(--q1)} .qlegend .s2 i{background:var(--q2)} .qlegend .s3 i{background:var(--q3)}
+.qlegend .soff i{background:none;border:1.2px dashed var(--muted)}
 /* 분야별 상세 = 위 그림의 표 대응물(값을 그림에만 두지 않는다).
    ④ 왼쪽 색 띠로 집중도 단계를 표시해 스크롤 스캔이 되게 한다 */
 .trow{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
@@ -1694,9 +1698,13 @@ function tradeRows(){
   const conc=concentration(FEED.patents.items||[]);
   const ct={}; (FEED.insights.catTrend||[]).forEach(c=>ct[c.key]=c);
   // 해외 출원인이 국내(KR)에 공개한 건 — 국내에서 실제로 부딪힐 수 있는 권리다.
+  // 국기와 이름은 따로 담는다. 예전엔 flg(국기)+이름 을 한 문자열로 붙여 뒀는데,
+  // 국기를 이모지에서 직접 그린 SVG 로 바꾼 뒤 이 문자열이 esc() 를 지나며
+  // '<svg class="fl" …>' 가 글자 그대로 화면에 찍혔다(칩과 판정 문장 양쪽에서).
+  // 그리는 시점에 flg() 를 부르고 이름만 esc() 한다.
   const kr={};
   (FEED.patents.items||[]).forEach(it=>{ if(it.office!=='KR'||it.aCountry==='KR') return;
-    const s=kr[it.category]||(kr[it.category]=new Set()); s.add(flg(it.aFlag)+' '+it.aName); });
+    const m=kr[it.category]||(kr[it.category]=new Map()); m.set(it.aName, it.aFlag); });
   const cmp=FEED.insights.comparable;
   // 분야는 전부 싣는다. 뉴스 쪽에 짝이 없는 분야(계량·스마트그리드)는 뉴스 칸만
   // 비우고 권리 구조는 그대로 보인다 — 한전·State Grid·LS일렉트릭이 있는 분야라
@@ -1707,50 +1715,75 @@ function tradeRows(){
     const ratio=(c&&c.ratio!=null)?c.ratio:null;
     const dir = (!cmp||ratio==null) ? 'flat'
       : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
-    const lv = r.n<CONC_MIN ? null : (r.neff<5?'hi':r.neff<8?'mid':'lo');
+    const lv = r.n<CONC_MIN ? null : concLevel(r.neff);
     return {r, news:c||null, ratio, dir, lv, paired,
-            kr:[...(kr[r.cat.key]||[])].sort(),
+            kr:[...(kr[r.cat.key]||new Map())].map(([name,flag])=>({name,flag}))
+                 .sort((a,b)=>a.name.localeCompare(b.name)),
             note: MAP[r.cat.key]||''};
   });
 }
 
 // 분야 지도. x=뉴스 비중 배율(log2, 가운데가 '변화 없음'), y=실질 경쟁자 수(위가 집중),
 // 원 크기=그 분야 추정 규모. 값은 전부 아래 표에도 있다(그림에만 두지 않는다).
-const QW=680, QH=340, QPAD={l:52,r:18,t:16,b:40}, QCLAMP=1.6;
+// 두 축 모두 범위를 고정해 둔다 — 주마다 축이 움직이면 지난주 그림과 겹쳐 볼 수 없다.
+// 다만 고정값은 데이터를 보고 정해야 한다. 옛 값(y=2~12곳 선형, x=±1.6옥타브)은
+// 큐레이션 65곳 시절에 맞춘 것이라, 전수 수집 뒤 실측하니 y 는 여덟 중 일곱이 바닥에
+// 눌어붙고(실제 10~239곳) x 는 여섯이 가운데 5분의 1 폭에 뭉쳤다.
+//   y : 10곳과 239곳을 한 화면에 두려면 로그다. 8~256곳(5옥타브) 고정.
+//   x : 주 단위 비중 변화는 대개 ±40% 안이다 → ±0.6옥타브(0.66~1.5배) 고정.
+// 범위를 벗어난 분야는 가장자리에 붙이고 점선 테두리로 '축 밖' 임을 밝힌다(값은
+// 툴팁과 아래 표에 그대로 있다).
+// 사분면 설명은 그림판 '밖'(위·아래 여백)에 둔다. 안쪽 네 귀퉁이에 두었더니 축
+// 끝에 붙은 분야의 원이 글자를 덮어 '관심 ↓ · 권리 분산 — 관망' 이 반쯤 잘렸다.
+const QW=680, QH=356, QPAD={l:48,r:18,t:32,b:56}, QCLAMP=0.6;
+const NEF=[8,256], NEG=[16,128];
 function quadChartHTML(rows){
   const pts=rows.filter(d=>d.lv && d.ratio!=null);
   if(pts.length<3) return '';
   const x0=QPAD.l, x1=QW-QPAD.r, y0=QPAD.t, y1=QH-QPAD.b;
   const lg=v=>Math.max(-QCLAMP, Math.min(QCLAMP, Math.log2(v)));
   const px=v=>x0+(lg(v)+QCLAMP)/(QCLAMP*2)*(x1-x0);
-  const NEF=[2,12];                          // 실질 경쟁자 수 축(고정 → 주마다 비교 가능)
-  const py=v=>y0+(Math.max(NEF[0],Math.min(NEF[1],v))-NEF[0])/(NEF[1]-NEF[0])*(y1-y0);
+  const ny0=Math.log2(NEF[0]), nyr=Math.log2(NEF[1])-ny0;
+  const py=v=>y0+(Math.log2(Math.max(NEF[0],Math.min(NEF[1],v)))-ny0)/nyr*(y1-y0);
   const maxTot=Math.max(...pts.map(d=>d.r.tot));
   const pr=t=>9+Math.sqrt(t/maxTot)*13;
   const col=lv=>lv==='hi'?'var(--q3)':lv==='mid'?'var(--q2)':'var(--q1)';
-  const xm=px(1), ym=py(6);
+  const xm=px(1), ym=py(CONC_MID);
   let s='<svg class="qchart" viewBox="0 0 '+QW+' '+QH+'" role="img" '
     + 'aria-label="분야별 뉴스 비중 변화와 권리 집중도 지도">';
-  // 사분면 안내(눈금선은 실선 헤어라인 하나씩만)
+  // 사분면 안내(실선 헤어라인)와 로그 눈금선(점선, 더 옅게). 로그 축은 눈금이 없으면
+  // 위아래 간격이 무슨 뜻인지 읽히지 않는다.
   s+='<line class="ax" x1="'+xm+'" y1="'+y0+'" x2="'+xm+'" y2="'+y1+'"/>'
+   + NEG.map(v=>'<line class="qg" x1="'+x0+'" y1="'+py(v).toFixed(1)+'" x2="'+x1
+       + '" y2="'+py(v).toFixed(1)+'"/>').join('')
    + '<line class="ax" x1="'+x0+'" y1="'+ym+'" x2="'+x1+'" y2="'+ym+'"/>'
    + '<line class="ax" x1="'+x0+'" y1="'+y1+'" x2="'+x1+'" y2="'+y1+'"/>';
   const zone=(tx,ty,t,anc)=>'<text class="qz" x="'+tx+'" y="'+ty+'" text-anchor="'+anc+'">'+t+'</text>';
-  s+=zone(x0+6,y0+13,'관심 ↓ · 권리 집중 — 성숙·고착','start')
-   + zone(x1-6,y0+13,'관심 ↑ · 권리 집중 — 회피설계·라이선스 먼저','end')
-   + zone(x0+6,y1-8,'관심 ↓ · 권리 분산 — 관망','start')
-   + zone(x1-6,y1-8,'관심 ↑ · 권리 분산 — 자체 출원 여지','end');
-  // 축 이름·눈금
+  s+=zone(x0,y0-9,'관심 ↓ · 권리 집중 — 성숙·고착','start')
+   + zone(x1,y0-9,'관심 ↑ · 권리 집중 — 회피설계·라이선스 먼저','end')
+   + zone(x0,y1+18,'관심 ↓ · 권리 분산 — 관망','start')
+   + zone(x1,y1+18,'관심 ↑ · 권리 분산 — 자체 출원 여지','end');
+  // 축 이름·눈금. y 는 숫자 눈금만 왼쪽 여백에 두고, 축이 무엇인지는 세로 캡션이 진다
+  // ('집중'·'분산' 두 글자만으로는 값이 몇인지 알 수 없었다).
+  const ytick=(v,cls)=>'<text class="qa'+(cls?' '+cls:'')+'" x="'+(x0-6)+'" y="'
+    + (py(v)+3.5).toFixed(1)+'" text-anchor="end">'+v+'</text>';
   s+='<text class="qa" x="'+((x0+x1)/2)+'" y="'+(QH-8)+'" text-anchor="middle">'
    + '← 뉴스 비중 줄어듦   |   늘어남 →</text>'
-   + '<text class="qa" x="'+(x0-8)+'" y="'+(y0+10)+'" text-anchor="end">집중</text>'
-   + '<text class="qa" x="'+(x0-8)+'" y="'+(y1-2)+'" text-anchor="end">분산</text>'
-   + '<text class="qa" x="'+(x0-8)+'" y="'+(ym+4)+'" text-anchor="end">실질 6곳</text>';
+   + '<text class="qa" transform="translate(11,'+((y0+y1)/2)+') rotate(-90)" '
+   + 'text-anchor="middle">실질 경쟁자 수(곳) — 위가 집중</text>'
+   + ytick(NEF[0]) + NEG.map(v=>ytick(v)).join('') + ytick(NEF[1]) + ytick(CONC_MID,'qm');
   // 라벨은 원마다 붙는다(값이 아니라 이름이므로 전부 붙어도 된다). 다만 점이 몰리면
   // 라벨이 옆 원을 덮는다 → 오른쪽·왼쪽·위·아래 순으로 비어 있는 자리를 찾아 놓고,
   // 넷 다 막히면 원 위쪽에 얹는다. 글자 폭은 한글 기준으로 어림한다(측정 API 없이 그린다).
-  const nodes=pts.map(d=>({d, cx:px(d.ratio), cy:py(d.r.neff), r:pr(d.r.tot),
-                           t:d.r.cat.name}));
+  // 축 밖으로 벗어난 분야는 원이 여백으로 반쯤 튀어나가지 않도록 반지름만큼 들여
+  // 붙인다(눈금 숫자를 덮는다). 벗어났다는 사실은 점선 테두리로 밝힌다.
+  const nodes=pts.map(d=>{
+    const r=pr(d.r.tot);
+    const out = Math.abs(Math.log2(d.ratio))>QCLAMP || d.r.neff<NEF[0] || d.r.neff>NEF[1];
+    return {d, cx:Math.max(x0+r, Math.min(x1-r, px(d.ratio))),
+            cy:Math.max(y0+r, Math.min(y1-r, py(d.r.neff))), r,
+            out, t:d.r.cat.name};
+  });
   const tw=t=>{ let w=0; for(const ch of t) w += ch.charCodeAt(0)>0x1100 ? 10.5 : 6; return w; };
   const hitCircle=(bx,by,bw,bh,c)=>{
     const nx=Math.max(bx,Math.min(c.cx,bx+bw)), ny=Math.max(by,Math.min(c.cy,by+bh));
@@ -1764,6 +1797,13 @@ function quadChartHTML(rows){
       {x:n.cx-n.r-6-w,    y:n.cy-h/2, anchor:'end'},
       {x:n.cx-w/2,        y:n.cy-n.r-6-h, anchor:'middle'},
       {x:n.cx-w/2,        y:n.cy+n.r+6, anchor:'middle'},
+      // 넷 다 막히는 경우가 실제로 나온다 — 실질 경쟁자 수가 거의 같은 두 분야가
+      // (재생에너지 43.0곳, 원전 42.0곳) 나란히 서면 위쪽 자리를 서로 뺏는다.
+      // 예전엔 그때 그냥 '위' 로 겹쳐 찍어 두 이름이 붙어 버렸다 → 한 줄씩 더 물려 본다.
+      {x:n.cx-w/2,        y:n.cy-n.r-6-h*2-4, anchor:'middle'},
+      {x:n.cx-w/2,        y:n.cy+n.r+6+h+4, anchor:'middle'},
+      {x:n.cx+n.r+6,      y:n.cy-h/2-h-4, anchor:'start'},
+      {x:n.cx-n.r-6-w,    y:n.cy-h/2-h-4, anchor:'end'},
     ];
     let pick=cand.find(c=> c.x>=x0-40 && c.x+w<=x1+16 && c.y>=y0 && c.y+h<=y1
       && !nodes.some(o=> o!==n && hitCircle(c.x,c.y,w,h,o))
@@ -1775,8 +1815,11 @@ function quadChartHTML(rows){
   nodes.forEach(n=>{
     const d=n.d;
     const tip=d.r.cat.name+' — 뉴스 비중 '+Math.round(d.ratio*100)+'%(이전=100), '
-      + '실질 경쟁자 '+d.r.neff.toFixed(1)+'곳, 상위 3곳 '+Math.round(d.r.cr3*100)+'%';
+      + '실질 경쟁자 '+d.r.neff.toFixed(1)+'곳, 상위 3곳 '+Math.round(d.r.cr3*100)+'%'
+      + (n.out? ' (축 범위를 벗어나 가장자리에 표시)' : '');
     s+='<g><title>'+esc(tip)+'</title>'
+      + (n.out? '<circle class="qoff" cx="'+n.cx.toFixed(1)+'" cy="'+n.cy.toFixed(1)
+          + '" r="'+(n.r+3.5).toFixed(1)+'"/>' : '')
       + '<circle class="dot" cx="'+n.cx.toFixed(1)+'" cy="'+n.cy.toFixed(1)+'" r="'+n.r.toFixed(1)
       + '" fill="'+col(d.lv)+'"/>'
       + '<circle class="hit" cx="'+n.cx.toFixed(1)+'" cy="'+n.cy.toFixed(1)+'" r="'+Math.max(n.r,13)+'"/>'
@@ -1784,9 +1827,13 @@ function quadChartHTML(rows){
       + n.anchor+'">'+esc(n.t)+'</text></g>';
   });
   return '<div class="qwrap">'+s+'</svg></div>'
-    + '<div class="qlegend"><span>권리 집중도</span>'
-    + '<span class="s3"><i></i>소수 집중</span><span class="s2"><i></i>중간</span>'
-    + '<span class="s1"><i></i>경쟁 분산</span><span>원 크기 = 그 분야 추정 공개 규모</span></div>';
+    + '<div class="qlegend"><span>권리 집중도(분야끼리 견준 상대 등급)</span>'
+    + '<span class="s3"><i></i>'+CONC_NAME.hi+'</span>'
+    + '<span class="s2"><i></i>'+CONC_NAME.mid+'</span>'
+    + '<span class="s1"><i></i>'+CONC_NAME.lo+'</span>'
+    + '<span>원 크기 = 그 분야 추정 공개 규모</span>'
+    + (nodes.some(n=>n.out)? '<span class="soff"><i></i>축 범위 밖 — 가장자리에 붙였습니다</span>' : '')
+    + '</div>';
 }
 
 // ② 뉴스 비중 추이. '비중 98%' 는 한 시점의 값이라 늘고 있는지 줄고 있는지가
@@ -1852,7 +1899,8 @@ function tradeSectionHTML(){
     // ③ 국내 공개는 '누가 갖고 있나' 와 성격이 다르다 — 한국에서 실제로 부딪히는
     //   권리라는 경고다. 모양을 달리하고, 없는 분야에서는 아예 나오지 않게 한다.
     const krc=d.kr.length? '<div class="tkr"><b>🇰🇷 국내 권리 '+d.kr.length+'곳</b> '
-      + d.kr.map(k=>esc(k)).join(' <span aria-hidden="true">·</span> ')+'</div>' : '';
+      + d.kr.map(k=>flg(k.flag)+' '+esc(k.name)).join(' <span aria-hidden="true">·</span> ')
+      + '</div>' : '';
     // ④ 판정 문장. 어느 분야에나 붙는 일반론("권리가 소수에 몰려 있습니다")은
     //   일곱 번 반복되면 배경이 된다 → 그 분야의 실제 수치와 회사 이름을 넣어
     //   만든다. 이름은 손으로 적지 않고 이 행의 데이터에서 뽑는다(순위가 바뀌면
@@ -1862,7 +1910,7 @@ function tradeSectionHTML(){
       .replace('{neff}', r.neff.toFixed(1)).replace('{n}', r.n)
       .replace('{top3}', names3).replace('{top1}', (r.top[0]||{}).name||'')
       .replace('{krn}', d.kr.length)
-      .replace('{krs}', d.kr.map(k=>k.replace(/^\S+\s/,'')).join('·'))
+      .replace('{krs}', d.kr.map(k=>k.name).join('·'))
       .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '')
       .replace('{krshare}', Math.round(r.krShare*100))
       .replace('{domn}', r.krN).replace('{domtop}', r.krTop||'');
@@ -2212,6 +2260,17 @@ function krEntryHTML(list){
 //   실질 N: 1/HHI(지분 제곱합의 역수). 규모 차이를 반영한 '실질 경쟁자 수'로,
 //           출원인이 35곳이어도 셋이 다 가져가면 4곳 수준으로 나온다.
 const CONC_MIN = 4;          // 등장 출원인이 이보다 적으면 CR3 가 항상 100% 라 무의미
+// 집중도 등급의 경계. 처음엔 실질 5곳/8곳이었는데, 그때 표본은 미리 골라 둔 대기업
+// 65곳뿐이라 실질 경쟁자 수가 한 자릿수로 나왔다. 지금은 분야+기간 전수(출원인
+// 5천여 곳)라 실측이 10~239곳이다 → 옛 경계로는 여덟 분야가 전부 한 칸에 들어가
+// 색도 축도 아무것도 구분하지 못했다(실측으로 확인). 그래서 지금 분포에 맞춰 다시
+// 잡는다. 반독점 HHI 같은 절대 기준이 아니라 '여기 여덟 분야를 서로 견준' 상대
+// 등급이라는 점을 화면에도 적는다.
+const CONC_MID = 50, CONC_WIDE = 100;
+const CONC_NAME = {hi:'상위권 쏠림', mid:'중간', lo:'고르게 분산'};
+function concLevel(ne){ return ne<CONC_MID ? 'hi' : ne<CONC_WIDE ? 'mid' : 'lo'; }
+const CONC_REL = '등급(상위권 쏠림·중간·고르게 분산)은 절대 기준이 아니라 이 아카이브의 '
+  + '여덟 분야를 서로 견준 상대 값입니다.';
 function concentration(list){
   const ranked = _rankApplicants(list).filter(r=>r.name!=='(미상)');
   return (FEED.patents.categories||[]).map(c=>{
@@ -2262,11 +2321,11 @@ function concRowsHTML(rows){
         + '출원인 '+r.n+'곳</span>';
     } else {
       const pct = Math.round(r.cr3*100), ne = r.neff;
-      const lv = ne<5 ? ['소수 집중','hi'] : ne<8 ? ['중간','mid'] : ['경쟁 분산','lo'];
+      const key = concLevel(ne), lv = [CONC_NAME[key], key];
       const tip = '상위 3곳이 이 분야의 '+pct+'%를 차지합니다. 등장 출원인은 '+r.n
         + '곳이지만 규모 차이를 반영하면 실질 경쟁자는 '+ne.toFixed(1)+'곳 수준입니다. '
         + '표본을 그대로 세면 '+Math.round(r.rawCr3*100)+'%지만, 출원인당 수집 상한 때문에 '
-        + '큰 기업이 잘려 있어 실제 공개 총계로 규모를 되돌려 계산한 값입니다.';
+        + '큰 기업이 잘려 있어 실제 공개 총계로 규모를 되돌려 계산한 값입니다. ' + CONC_REL;
       metric = '<span class="conc '+lv[1]+'" title="'+esc(tip)+'">'
         + '<span class="cbar"><i style="width:'+pct+'%"></i></span>'
         + '<span class="cpct mono">'+pct+'%</span><span class="clv">'+lv[0]+'</span>'
