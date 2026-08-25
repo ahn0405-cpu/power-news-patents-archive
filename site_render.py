@@ -847,7 +847,8 @@ a{color:inherit}
 /* 칸 안 이름과 그 칩은 같은 것을 두 번 말한다 → 넓을 때는 칸 안이, 좁을 때는
    칩이 맡는다. 칸 폭은 퍼센트라 화면이 좁아지면 그대로 줄어드는데 글자는 안 줄어
    잘린다(실측 430px). 서버는 둘 다 내보내고 여기서 하나를 고른다. */
-.shns .inb{display:none}
+.shns .sbn.inb, .shns .shn.inb{display:none}   /* .shns .sbn 보다 세게 —
+   같은 세기면 뒤에 오는 .shns .sbn{display:inline-flex} 가 이겨 둘 다 보였다 */
 @media (max-width:700px){
   .trow .shbar i b, .trow .shbar i em,
   .trow .shbar i .sbc, .trow .shbar i .fl{display:none}
@@ -870,6 +871,10 @@ a{color:inherit}
   border:1px solid var(--line);border-left:3px solid var(--accent);
   font-size:11.5px;line-height:1.6;color:var(--muted);word-break:keep-all}
 .tkr b{color:var(--ink);font-weight:800}
+.tkr .krn{color:var(--muted);font-weight:600;font-size:11px;margin-left:4px;
+  font-variant-numeric:tabular-nums}
+.tkr .krmore{color:var(--muted);font-weight:700;cursor:help;
+  border-bottom:1px dotted var(--muted)}
 .trow .nonews{color:var(--muted);opacity:.8}
 .golink{font:inherit;font-size:12px;font-weight:700;color:var(--accent2);background:none;
   border:0;padding:0;cursor:pointer;text-decoration:underline}
@@ -1906,9 +1911,15 @@ function tradeRows(){
   // 국기를 이모지에서 직접 그린 SVG 로 바꾼 뒤 이 문자열이 esc() 를 지나며
   // '<svg class="fl" …>' 가 글자 그대로 화면에 찍혔다(칩과 판정 문장 양쪽에서).
   // 그리는 시점에 flg() 를 부르고 이름만 esc() 한다.
+  // 건수까지 센다. 예전에는 이름만 모아 가나다순으로 늘어놓았는데, 국내 공보
+  // 출원인의 국적을 서지상세로 바로잡은 뒤 이 목록이 8곳에서 **132곳**이 됐다
+  // (전에는 대부분 KR 로 잘못 적혀 있어 아예 들어오지 않았다). 132개 이름을
+  // 가나다순으로 늘어놓으면 아무것도 읽히지 않는다 → 많이 낸 곳부터 세운다.
   const kr={};
   (FEED.patents.items||[]).forEach(it=>{ if(it.office!=='KR'||it.aCountry==='KR') return;
-    const m=kr[it.category]||(kr[it.category]=new Map()); m.set(it.aName, it.aFlag); });
+    const m=kr[it.category]||(kr[it.category]=new Map());
+    const e=m.get(it.aName);
+    if(e) e.n++; else m.set(it.aName, {flag:it.aFlag, n:1}); });
   const cmp=FEED.insights.comparable;
   // 분야는 전부 싣는다. 뉴스 쪽에 짝이 없는 분야(계량·스마트그리드)는 뉴스 칸만
   // 비우고 권리 구조는 그대로 보인다 — 한전·State Grid·LS일렉트릭이 있는 분야라
@@ -1921,8 +1932,8 @@ function tradeRows(){
       : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
     const lv = r.n<CONC_MIN ? null : concLevel(r.neff);
     return {r, news:c||null, ratio, dir, lv, paired,
-            kr:[...(kr[r.cat.key]||new Map())].map(([name,flag])=>({name,flag}))
-                 .sort((a,b)=>a.name.localeCompare(b.name)),
+            kr:[...(kr[r.cat.key]||new Map())].map(([name,v])=>({name, flag:v.flag, n:v.n}))
+                 .sort((a,b)=> b.n-a.n || a.name.localeCompare(b.name)),
             note: MAP[r.cat.key]||''};
   });
 }
@@ -2057,6 +2068,26 @@ function quadChartHTML(rows){
 // 안 보인다 → 분야별 일자 비중을 작은 선으로 붙인다. 새 수집 없이 지금 피드
 // (기사마다 date·category)로 계산된다. 세로축은 그 분야의 최대치 기준이라
 // 분야끼리 높이를 비교하는 용도가 아니다 — 오르내림만 본다.
+// 국내 권리 줄. 이름은 **많이 낸 세 곳까지만** 세운다.
+// 전에는 전부 늘어놓았다. 국내 공보 출원인의 국적을 서지상세로 바로잡자
+// 재생에너지·저장이 8곳에서 **132곳**이 됐고(전에는 대부분 KR 로 잘못 적혀 있어
+// 아예 들어오지 않았다), 카드 한 장이 이름 목록으로 덮였다. 게다가 그 목록은
+// '서로 다른 출원인' 이라 1건짜리와 100건짜리가 같은 크기로 놓여, 필립모리스
+// (전자담배 배터리 1건)가 CATL 옆에 나란히 섰다. 곳 수는 머리에 그대로 밝히고,
+// 이름은 건수 순 세 곳만, 나머지는 툴팁으로 돌린다.
+const KR_HEAD=3;
+function krLineHTML(kr){
+  if(!kr || !kr.length) return '';
+  const top=kr.slice(0, KR_HEAD), more=kr.length-top.length;
+  return '<div class="tkr"><b>🇰🇷 국내 권리 '+kr.length+'곳</b> '
+    + top.map(k=>flg(k.flag)+' '+esc(k.name)
+        + '<span class="krn">'+k.n+'건</span>').join(' <span aria-hidden="true">·</span> ')
+    + (more>0? ' <span class="krmore" title="'
+        + esc(kr.slice(KR_HEAD, KR_HEAD+25).map(k=>k.name+' '+k.n+'건').join(' · ')
+              + (kr.length>KR_HEAD+25? ' … 외 '+(kr.length-KR_HEAD-25)+'곳' : ''))
+        + '">외 '+more+'곳</span>' : '')
+    + '</div>';
+}
 const STAOWN_HEAD=6;        // 처음에 보일 국유특허 건수
 let staownAll=false;
 let _shareCache=null;
@@ -2129,9 +2160,7 @@ function tradeSectionHTML(){
       + (rest>0.005? '<span class="shn rest">나머지<b>'+Math.round(rest*100)+'%</b></span>':'');
     // ③ 국내 공개는 '누가 갖고 있나' 와 성격이 다르다 — 한국에서 실제로 부딪히는
     //   권리라는 경고다. 모양을 달리하고, 없는 분야에서는 아예 나오지 않게 한다.
-    const krc=d.kr.length? '<div class="tkr"><b>🇰🇷 국내 권리 '+d.kr.length+'곳</b> '
-      + d.kr.map(k=>flg(k.flag)+' '+esc(k.name)).join(' <span aria-hidden="true">·</span> ')
-      + '</div>' : '';
+    const krc=krLineHTML(d.kr);
     // ④ 판정 문장. 어느 분야에나 붙는 일반론("권리가 소수에 몰려 있습니다")은
     //   일곱 번 반복되면 배경이 된다 → 그 분야의 실제 수치와 회사 이름을 넣어
     //   만든다. 이름은 손으로 적지 않고 이 행의 데이터에서 뽑는다(순위가 바뀌면
@@ -2141,7 +2170,7 @@ function tradeSectionHTML(){
       .replace('{neff}', r.neff.toFixed(1)).replace('{n}', r.n)
       .replace('{top3}', names3).replace('{top1}', (r.top[0]||{}).name||'')
       .replace('{krn}', d.kr.length)
-      .replace('{krs}', d.kr.map(k=>k.name).join('·'))
+      .replace('{krs}', d.kr.slice(0, KR_HEAD).map(k=>k.name).join('·'))
       .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '')
       .replace('{krshare}', Math.round(r.krShare*100))
       .replace('{domn}', r.krN).replace('{domtop}', r.krTop||'');

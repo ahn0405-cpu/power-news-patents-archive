@@ -243,8 +243,11 @@ def _lazy_checks(sr) -> None:
     # — 담아 둔 문자열은 나중에 esc() 를 지나며 마크업이 글자로 찍힌다. 거래·지원의
     # '국내 권리 N곳' 이 실제로 그랬다. 그 자리를 이름·국기 따로 담게 고쳤고,
     # 되돌아가면 여기서 걸린다.
-    check("m.set(it.aName, it.aFlag)" in js,
-          "국내 권리 목록은 이름과 국기를 따로 담는다")
+    # 담아 두는 값이 **국기 코드**여야 한다. 문자열을 정확히 박아 두면 옆의 다른
+    # 이유(건수 세기)로 모양이 바뀔 때 같이 깨진다 — 실제로 한 번 그랬다.
+    # 그래서 '무엇을 담는가' 만 본다.
+    check("{flag:it.aFlag" in js.replace(" ", ""),
+          "국내 권리 목록은 국기 '코드' 를 담는다 (그린 SVG 가 아니라)")
     check("s.add(flg(" not in js and "add(flg(" not in js,
           "국내 권리 목록에 flg() 결과(SVG)를 담아 두지 않는다")
     check("EPO" not in js and "전력 CPC" not in js,
@@ -589,8 +592,59 @@ def _subs_checks(sr) -> None:
     check(not clash,
           "새 클래스 이름이 이미 있는 전역 클래스와 겹치지 않는다 "
           + (f"(겹침: {clash})" if clash else "(겹침 없음)"))
+    # 같은 이름 충돌이 아니라 **세기·순서** 로 지는 경우도 있다. 칸 안 이름과
+    # 겹치는 칩을 '.shns .inb{display:none}' 으로 숨겼는데, 뒤에 오는
+    # '.shns .sbn{display:inline-flex}' 가 세기가 같아 이겨서 둘 다 보였다.
+    # 숨기는 쪽이 .sbn 을 함께 물고 있어야 한다.
+    flat = _re.sub(r"\s+", "", css)
+    check(".shns.sbn.inb,.shns.shn.inb{display:none}" in flat,
+          "칸 안 이름과 겹치는 칩은 .sbn 규칙보다 센 선택자로 숨긴다")
     check(res["empty"] == "",
           "그 분야에 셀 것이 없으면 토막을 통째로 뺀다 (빈 막대를 그리지 않는다)")
+
+    # 국내 권리 줄. 여기서 한 번 크게 물렸다 — 출원인 국적을 바로잡자 이 목록이
+    # 8곳에서 132곳이 되어 카드가 이름 목록으로 덮였고, '서로 다른 출원인' 목록이라
+    # 1건짜리(필립모리스, 전자담배 배터리)가 100건짜리(CATL) 옆에 같은 크기로 섰다.
+    ks, ke = js.find("const KR_HEAD="), js.find("const STAOWN_HEAD=")
+    check(ks >= 0 < ke - ks, "국내 권리 줄 블록을 떼어낼 수 있다")
+    if 0 <= ks < ke:
+        kr = [{"name": f"많은곳{i}", "flag": "🇨🇳", "n": 100 - i} for i in range(30)]
+        prog2 = (js[ks:ke]
+                 + "\nfunction esc(s){return String(s).replace(/[&<>\"]/g,"
+                   "c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}\n"
+                 + "function flg(f){return '<svg class=\"fl\"></svg>';}\n"
+                 + f"const KR={json.dumps(kr, ensure_ascii=False)};\n"
+                 + "console.log(JSON.stringify({many:krLineHTML(KR),"
+                   "few:krLineHTML(KR.slice(0,2)),none:krLineHTML([])}));")
+        prog2 = prog2.replace("\\\\", "\\")
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(prog2)
+            path2 = f.name
+        try:
+            out2 = subprocess.run(["node", path2], capture_output=True, text=True,
+                                  timeout=30)
+            if out2.returncode != 0:
+                check(False, f"국내 권리 JS 가 실행된다 ({out2.stderr.strip()[:200]})")
+                return
+            r2 = json.loads(out2.stdout)
+        finally:
+            try:
+                __import__("os").unlink(path2)
+            except OSError:
+                pass
+        shown = _re.findall(r'<svg class="fl"></svg> ([^<]+)<span class="krn">',
+                            r2["many"])
+        check(len(shown) == 3 and shown == ["많은곳0", "많은곳1", "많은곳2"],
+              f"이름은 건수 많은 세 곳까지만 세운다 (받은 값 {shown})")
+        check("국내 권리 30곳" in r2["many"] and "외 27곳" in r2["many"],
+              "곳 수는 줄이지 않고 그대로 밝힌다 (30곳 · 외 27곳)")
+        check(r2["many"].count("많은곳") <= 3 + 25 + 25,
+              "나머지 이름은 툴팁으로 돌리고 본문에 늘어놓지 않는다")
+        check('<span class="krmore"' not in r2["few"]
+              and r2["few"].count('class="krn"') == 2,
+              "세 곳 이하면 '외 N곳' 을 붙이지 않는다")
+        check(r2["none"] == "", "국내 권리가 없는 분야는 줄을 통째로 뺀다")
 
 
 def _supplier_checks(sr) -> None:
