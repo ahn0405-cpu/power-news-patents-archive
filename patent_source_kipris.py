@@ -168,6 +168,8 @@ def _normalize(item: ET.Element, cat_key: str) -> dict | None:
         "filing_date": _date(_text(item, "applicationDate")),
         "snippet": snippet[:180] + ("…" if len(snippet) > 180 else ""),
         "office": "KR",
+        # CPC 보강은 공개번호가 아니라 **출원번호**로 조회한다 → 따로 들고 있는다.
+        "filing_no": _text(item, "applicationNumber"),
         "cpc": ipcs[:6],
         "category": _classify(ipcs, cat_key),
         "applicant": name,
@@ -233,6 +235,63 @@ def _sweep_category(cat: dict, window: str) -> tuple[list[dict], int]:
     return list(got.values()), total
 
 
+# ── CPC 보강 ─────────────────────────────────────────────────────
+# IPC 로 대체한 분야(계량·스마트그리드)는 원래 Y04S 로 정의돼 있었다. 그 코드는
+# IPC 에 없어 검색으로는 못 잡지만, 출원번호로 CPC 를 되받아 분류를 바로잡을 수는
+# 있다. '대체 접두로 잡힌 건'이 분류가 바뀔 여지가 가장 크므로 그것부터 채운다.
+_SUBSTITUTE = ("G01R21", "G01R22", "H02J13")
+
+
+def _cpc_of(application_no: str) -> list[str]:
+    """출원번호 하나의 CPC 목록. 실패하면 빈 목록(보강은 '있으면 좋은' 것)."""
+    q = {"applicationNumber": application_no,
+         cfg.KIPRIS_CPC_KEYPARAM: cfg.KIPRIS_KEY}
+    url = (f"{cfg.KIPRIS_CPC_BASE}/{cfg.KIPRIS_SERVICE}/patentCpcInfo?"
+           + urllib.parse.urlencode(q))
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "ip-power/1.0", "Accept": "application/xml"})
+    try:
+        with urllib.request.urlopen(req, timeout=cfg.OFFICE_TIMEOUT) as r:
+            root = ET.fromstring(r.read())
+    except Exception:
+        return []
+    out: list[str] = []
+    for node in root.iter("CooperativepatentclassificationNumber"):
+        for code in _ipcs(node.text or ""):
+            if code not in out:
+                out.append(code)
+    return out
+
+
+def _enrich_cpc(items: list[dict]) -> int:
+    """상한 안에서 CPC 를 받아 분야를 다시 정한다. 반환: 분류가 바뀐 건수."""
+    if cfg.KIPRIS_CPC_LIMIT <= 0 or not items:
+        return 0
+    # 대체 접두로 잡힌 것 먼저, 그다음 최신순.
+    def _pri(it: dict) -> tuple[int, str]:
+        sub = any(c.startswith(p) for c in it["cpc"] for p in _SUBSTITUTE)
+        return (0 if sub else 1, it.get("pub_date") or "")
+    order = sorted(items, key=_pri)[:cfg.KIPRIS_CPC_LIMIT]
+    changed = 0
+    for it in order:
+        appno = (it.get("filing_no") or "").strip() or it["number"]
+        cpc = _cpc_of(appno)
+        if not cpc:
+            continue
+        merged = cpc + [c for c in it["cpc"] if c not in cpc]
+        before = it["category"]
+        it["cpc"] = merged[:6]
+        it["category"] = _classify(merged, before)
+        if it["category"] != before:
+            changed += 1
+        if cfg.KIPRIS_DELAY:
+            time.sleep(cfg.KIPRIS_DELAY)
+    skipped = len(items) - len(order)
+    print(f"  CPC 보강 {len(order)}건 · 분류 정정 {changed}건"
+          + (f" · 상한으로 건너뜀 {skipped}건" if skipped else ""))
+    return changed
+
+
 def _live_collect(today: datetime) -> tuple[list[dict], dict]:
     if not cfg.KIPRIS_KEY:
         raise RuntimeError("KIPRIS 키 없음(KIPRIS_KEY)")
@@ -259,6 +318,9 @@ def _live_collect(today: datetime) -> tuple[list[dict], dict]:
 
     if not collected:
         raise RuntimeError("KIPRIS 수집 0건 — 질의나 기간을 확인해야 한다")
+
+    # 총계를 세기 전에 보강한다 — 분류가 바뀌면 분야 분포도 따라 바뀌어야 한다.
+    _enrich_cpc(collected)
 
     # 출원인 총계는 따로 조회하지 않고 **모은 것을 센다**.
     #

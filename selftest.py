@@ -86,11 +86,33 @@ def _kipris_checks() -> None:
     from datetime import datetime
     import patent_source_kipris as ks
 
+    import urllib.request
+
     print("\n[KIPRIS 백엔드]")
     orig_get, orig_key = ks._get, cfg.KIPRIS_KEY
+    orig_lim, orig_open = cfg.KIPRIS_CPC_LIMIT, urllib.request.urlopen
     cfg.KIPRIS_KEY = "TEST"
     calls: list[dict] = []
+    cpc_calls: list[str] = []
     try:
+        # CPC 보강은 urlopen 을 직접 쓴다 → 여기서도 막지 않으면 스모크 테스트가
+        # 네트워크를 탄다(러너에서 수집 전에 도는 검사라 절대 나가면 안 된다).
+        cfg.KIPRIS_CPC_LIMIT = 5
+        _CPC = ('<?xml version="1.0"?><response><body><items><patentCpcInfo>'
+                "<CooperativepatentclassificationNumber>Y04S 10/50"
+                "</CooperativepatentclassificationNumber></patentCpcInfo>"
+                "</items></body></response>")
+
+        class _CpcResp:
+            def read(self): return _CPC.encode()
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def _fake_open(req, *a, **k):
+            cpc_calls.append(getattr(req, "full_url", str(req)))
+            return _CpcResp()
+        urllib.request.urlopen = _fake_open
+
         def fake(op, params, timeout=None):
             calls.append(dict(params, _op=op))
             who = ["한국전력공사", "인천대학교 산학협력단", "주식회사 현대케피코"]
@@ -129,6 +151,19 @@ def _kipris_checks() -> None:
         check(not any("cpcNumber" in p for p in calls),
               "cpcNumber 를 보내지 않는다 (이 API 에 없는 파라미터 — 실측)")
 
+        # CPC 보강: 검색으로는 못 잡는 Y04S 를 출원번호로 되받아 분류에 반영한다.
+        check(len(cpc_calls) == cfg.KIPRIS_CPC_LIMIT,
+              f"CPC 보강이 상한만큼만 돈다 ({len(cpc_calls)}건)")
+        check(all("patentCpcInfo" in u and "applicationNumber=" in u
+                  for u in cpc_calls),
+              "CPC 는 출원번호로 조회한다 (공개번호가 아니다)")
+        check(all(cfg.KIPRIS_CPC_KEYPARAM + "=" in u for u in cpc_calls),
+              f"CPC 조회의 키 질의 이름이 {cfg.KIPRIS_CPC_KEYPARAM} 다 (계열이 다르다)")
+        enriched = [i for i in items if any(c.startswith("Y04S") for c in i["cpc"])]
+        check(bool(enriched), f"보강된 건에 CPC 가 들어간다 ({len(enriched)}건)")
+        check(all(i["category"] == "meter" for i in enriched),
+              "Y04S 가 붙으면 계량·스마트그리드로 분류된다 (IPC 로는 못 잡는 코드)")
+
         # 국내 전용이라 특허청 축은 만들지 않는다. 빈 dict 이어야 기존 stats 가
         # 덮이지 않는다(merge_stats 계약).
         check(ks.collect_offices(datetime(2026, 8, 25)) == {},
@@ -137,13 +172,11 @@ def _kipris_checks() -> None:
         # 경로가 틀리면 KIPRIS 는 HTTP 200 + 포털 HTML 을 준다. 그때 XML 파싱이
         # 깨지는데, 사람이 읽을 수 있는 오류로 바뀌는지 확인한다(실측으로 물렸던 함정).
         ks._get = orig_get
-        import urllib.request
-
         class _Fake:
             def read(self): return b"<!doctype html><html>\xed\x8e\x98\xec\x9d\xb4\xec\xa7\x80"
             def __enter__(self): return self
             def __exit__(self, *a): return False
-        real_open = urllib.request.urlopen
+        saved_open = urllib.request.urlopen
         urllib.request.urlopen = lambda *a, **k: _Fake()
         try:
             ks._get("getAdvancedSearch", {"ipcNumber": "H02M"})
@@ -151,9 +184,11 @@ def _kipris_checks() -> None:
         except RuntimeError as e:
             check("XML" in str(e), f"포털 HTML 응답이 오류로 드러난다 ({e})")
         finally:
-            urllib.request.urlopen = real_open
+            urllib.request.urlopen = saved_open
     finally:
         ks._get, cfg.KIPRIS_KEY = orig_get, orig_key
+        cfg.KIPRIS_CPC_LIMIT = orig_lim
+        urllib.request.urlopen = orig_open
 
 
 def main() -> int:

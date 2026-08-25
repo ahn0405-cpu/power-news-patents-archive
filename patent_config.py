@@ -242,6 +242,21 @@ KIPRIS_ROWS = int(os.getenv("KIPRIS_ROWS", "100"))       # 한 요청에 받을 
 KIPRIS_PER_CAT = int(os.getenv("KIPRIS_PER_CAT", "2000"))
 KIPRIS_DELAY = float(os.getenv("KIPRIS_DELAY", "0.3"))
 
+# ── CPC 보강 ─────────────────────────────────────────────────────
+# 검색은 IPC 로만 되지만(cpcNumber 파라미터 없음), **출원번호를 주면 그 특허의
+# CPC 를 받을 수 있다**(명세서 실측):
+#   http://plus.kipris.or.kr/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo
+#     ?applicationNumber=1020060118886&accessKey=…
+# 같은 서비스가 /openapi/rest 에도 있고 거기서는 키 이름이 accessKey 다.
+#
+# 이걸로 Y04S 처럼 CPC 에만 있는 코드를 되찾아 8대 분야 분류를 원래 정의대로
+# 맞출 수 있다. 다만 건당 1요청이라 전수 보강은 비싸다 → 상한을 두고, 분류가
+# 바뀔 여지가 큰 것부터 채운다(무엇을 몇 건 보강했는지는 로그에 남긴다).
+KIPRIS_CPC_BASE = os.getenv("KIPRIS_CPC_BASE",
+                            "http://plus.kipris.or.kr/openapi/rest")
+KIPRIS_CPC_KEYPARAM = os.getenv("KIPRIS_CPC_KEYPARAM", "accessKey")
+KIPRIS_CPC_LIMIT = int(os.getenv("KIPRIS_CPC_LIMIT", "400"))   # 0 이면 끔
+
 CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
 APPLICANT_BY_NAME = {a["name"]: a for a in APPLICANTS}
 
