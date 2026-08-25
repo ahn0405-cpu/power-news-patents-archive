@@ -90,7 +90,9 @@ DISCOVERY_PARAMS = {"word": "센서", "year": "0"}
 # 섞어 두면 실패했을 때 '없는 이름이라 그런지, 승인이 없어 그런지'를 또 헷갈린다.
 _KR = "patUtiModInfoSearchSevice"          # 국내 공보 (kipo-api/kipi)
 _FG = "ForeignPatentGeneralSearchService"   # 해외 일반검색 (openapi/rest)
-_FGA = "ForeignPatentAdvancedSearchService" # 해외 항목별검색 — 분류·출원인·기간
+# 명세서 표기가 Adv**e**nced 다 — 오타지만 그게 실제 이름이다(Service→Sevice 와
+# 같은 계열). 눈으로 읽으면 무의식적으로 교정하게 되므로 확대해 확인했다.
+_FGA = "ForeignPatentAdvencedSearchService" # 해외 항목별검색 — 분류·출원인·기간
 # 항목은 (설명, 경로, 질의) 또는 (설명, 경로, 질의, 키질의이름).
 # 키 질의 이름이 계열마다 다르다 — kipo-api 는 ServiceKey 로 열렸고, openapi/rest
 # 는 같은 키를 ServiceKey 로 보내자 'Invalid AccessKey Error'(30) 를 돌려줬다.
@@ -142,6 +144,10 @@ PROBES = [
      f"http://plus.kipris.or.kr/openapi/rest/{_FGA}/advancedSearch",
      {"applicant": "Siemens", "collectionValues": "EP", "currentPage": "1"},
      "accessKey"),
+    ("[대조] 해외 항목별검색 — 철자를 고친 이름(Advanced)",
+     "http://plus.kipris.or.kr/openapi/rest/"
+     "ForeignPatentAdvancedSearchService/advancedSearch",
+     {"ipc": "H02M", "collectionValues": "US", "currentPage": "1"}, "accessKey"),
     # 해외 서지정보: 문헌번호+국가코드로 CPC·패밀리·청구항·인용까지 받는다.
     # 국내 CPC 보강(patentCpcInfo)에 대응하는 자리다.
     ("[문서] 해외 서지상세 (문헌번호+국가코드)",
