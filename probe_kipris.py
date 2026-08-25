@@ -533,7 +533,33 @@ def _fetch_doc(url: str) -> int:
     return 0
 
 
+def _check_links(urls: list[str]) -> int:
+    """바깥 링크가 실제로 열리는지 한 줄씩 확인한다(카드의 '원문 보기' 검증용).
+
+    개발 환경은 patents.google.com 도 프록시 정책에 막혀 있어(게이트웨이 403)
+    링크 형식을 여기서 맞출 수 없다. 러너는 열린다 → 후보 주소를 한꺼번에 열어
+    보고 제목이 실려 오는지로 판정한다. 없는 문서도 HTTP 200 을 주는 사이트가
+    있으므로 코드만 보지 않고 **제목**을 본다(KIPRIS 에서 한 번 당한 방식이다).
+    """
+    print(f"바깥 링크 확인 — {len(urls)}개\n" + "=" * 66)
+    bad = 0
+    for u in urls:
+        code, body, err = _fetch(u)
+        m = re.search(r"(?is)<title[^>]*>(.*?)</title>", body or "")
+        title = re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
+        ok = code == 200 and title and "404" not in title
+        print(f"  [{'열림' if ok else '안 열림'}] HTTP {code} · {len(body or '')}자 · {u}")
+        print(f"      제목: {title[:120] or '(없음)'}" + (f" · {err}" if err else ""))
+        if not ok:
+            bad += 1
+    print(f"\n요약: {len(urls) - bad}개 열림 / {len(urls)}개")
+    return 0
+
+
 def main() -> int:
+    links = (os.getenv("PROBE_LINKS") or "").split()
+    if links:
+        return _check_links(links)
     doc = (os.getenv("KIPRIS_DOC_URL") or "").strip()
     if doc:
         return _fetch_doc(doc)

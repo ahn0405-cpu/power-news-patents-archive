@@ -38,6 +38,10 @@ on:
         description: "응답 본문을 몇 자까지 찍을지 (해외는 한 건에 필드가 스무 개 넘는다)"
         required: false
         default: ""
+      links:
+        description: "바깥 링크 확인 — 공백으로 구분한 URL 들. 열리는지 제목으로 판정한다"
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -82,4 +86,5 @@ jobs:
           # 러너는 열리므로 여기서 받아 로그로 읽는다(요청 URL·파라미터를 문서에서 가져온다).
           KIPRIS_DOC_URL: ${{ inputs.docurl }}
           KIPRIS_HEAD: ${{ inputs.head }}
+          PROBE_LINKS: ${{ inputs.links }}
         run: python probe_kipris.py
