@@ -2067,7 +2067,11 @@ function tradeRows(){
     const dir = (!cmp||ratio==null) ? 'flat'
       : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
     const lv = r.n<CONC_MIN ? null : concLevel(r.neff);
+    // 짝이 **있는데 아직 0건**인 상태를 따로 알린다. 뉴스 분류를 새로 만들면
+    // 다음 수집 전까지는 기사가 없는데, 그대로 '0%' 로 찍으면 '뉴스가 이 기술을
+    // 안 다룬다' 로 읽힌다 — 사실은 '우리가 아직 안 모았다' 다.
     return {r, news:c||null, ratio, dir, lv, paired, newsKeys:keys,
+            fresh: paired && rows.length===0,
             kr:[...(kr[r.cat.key]||new Map())].map(([name,v])=>({name, flag:v.flag, n:v.n}))
                  .sort((a,b)=> b.n-a.n || a.name.localeCompare(b.name)),
             note: MAP[r.cat.key]||''};
@@ -2274,10 +2278,13 @@ function catSummaryHTML(rows){
         + '>'+esc(r.cat.cpc)+'</span>' : '';
     // 뉴스 흐름은 '짝이 있는 분야만' 그린다. 짝이 없는데 빈 자리를 두면 값이
     // 0인 것처럼 읽힌다 → 그 자리에 이유를 적는다.
-    const spark = d.paired
-      ? '<span class="cspk">'+sparkShare(catShareSeries(d.newsKeys||[], 14))
-        + '<b>'+Math.round((d.news&&d.news.share||0)*100)+'%</b></span>'
-      : '<span class="cspk none" title="이 분야에 대응하는 뉴스 분류가 없습니다">뉴스 짝 없음</span>';
+    const spark = !d.paired
+      ? '<span class="cspk none" title="이 분야에 대응하는 뉴스 분류가 없습니다">뉴스 짝 없음</span>'
+      : d.fresh
+      ? '<span class="cspk none" title="'+esc('뉴스 분류를 새로 만든 자리입니다 — 다음 수집부터 채워집니다')
+        + '">수집 시작 전</span>'
+      : '<span class="cspk">'+sparkShare(catShareSeries(d.newsKeys||[], 14))
+        + '<b>'+Math.round((d.news&&d.news.share||0)*100)+'%</b></span>';
     return '<button type="button" class="crow2 lv-'+(d.lv||'na')+'" data-catgo="'
       + esc(r.cat.key)+'" title="'+esc(r.cat.name+' 자세히 보기 — 누가 갖고 있나·무엇을 내고 있나')+'">'
       + '<span class="cnm">'+r.cat.emoji+' '+esc(r.cat.name)+code+'</span>'
@@ -2353,7 +2360,7 @@ function tradeSectionHTML(where){
       .replace('{ratio}', d.ratio!=null? Math.round(d.ratio*100) : '')
       .replace('{krshare}', Math.round(r.krShare*100))
       .replace('{domn}', r.krN).replace('{domtop}', r.krTop||'');
-    const hasNews = d.paired && cmp && d.ratio!=null;
+    const hasNews = d.paired && cmp && d.ratio!=null && !d.fresh;
     const dom = r.krShare<0.05 ? 'none' : (r.krShare<0.20 ? 'low' : '');
     const gen=[ d.lv? fill((T.gen||{})[d.lv]) : '',
                 dom? fill((T.genDom||{})[dom]) : '',
@@ -2370,6 +2377,7 @@ function tradeSectionHTML(where){
     // 기간 대비 배율**이라 원전 카드가 '뉴스 비중 121%' 로 나왔다 — 비중은
     // 100%를 넘을 수 없으니 읽는 사람에게는 그냥 틀린 수다. 둘을 갈라 적는다:
     // 비중은 지금 이 분야가 뉴스에서 차지한 몫, 배율은 그 몫의 변화.
+    else if(d.fresh) badges.push(esc('뉴스 수집 시작 전'));
     if(hasNews){
       const chg = d.ratio>=1.10 ? ' ▲'+d.ratio.toFixed(1)+'배'
                 : d.ratio<=0.90 ? ' ▼'+d.ratio.toFixed(1)+'배' : '';
