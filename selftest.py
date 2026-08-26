@@ -1087,6 +1087,19 @@ def _origin_checks() -> None:
     check("it.sub" in js and "FEED.patents.subgroups" in js,
           "화면이 서버가 정한 하위 갈래(it.sub)를 쓴다 (다시 계산하지 않는다)")
 
+    # ── 매트릭스는 상위 몇 곳까지만 그린다 ─────────────────────────
+    # 국내 공보를 전수로 받기 시작하며 이 표가 5,026행 158,071px 이 됐다.
+    # 상한이 빠지면 그 상태로 조용히 되돌아가므로 세 자리를 다 못 박는다:
+    # 상한이 걸려 있나 · 넘치는 만큼 펼침 버튼이 나오나 · 버튼이 실제로 붙나.
+    check("regionMatrixHTML(list, {total:true, top:MTX_TOP})" in js,
+          "통계 탭 매트릭스에 상위 N 상한이 걸려 있다 (5,026행을 그대로 그리지 않게)")
+    check("mtxOpen" in js and "data-mtx" in js and "'[data-mtx]'" in js,
+          "펼침 버튼과 그 처리기가 함께 있다 (버튼만 있고 안 눌리는 상태를 막는다)")
+    # 버튼 문구에 남은 수가 들어가야 한다. '더 보기' 만으로는 30곳이 남았는지
+    # 3,000곳이 남았는지 몰라 누를지를 고를 수 없다.
+    check("more.toLocaleString()" in js and "곳 펼치기" in js,
+          "펼침 버튼이 남은 곳 수를 숫자로 말한다")
+
 
 def _foreign_checks() -> None:
     """해외 수집기. 국내와 규칙이 뒤집힌 자리가 많아 회귀 검사가 특히 중요하다."""

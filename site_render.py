@@ -1199,6 +1199,12 @@ a{color:inherit}
 .rghead{font-size:12.5px;font-weight:700;margin:0 0 5px;padding-bottom:3px;border-bottom:1px solid var(--line);
   display:flex;align-items:baseline;gap:6px}
 .rghead .rgn{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)}
+/* 국적 묶음 펼치기 — 국유특허의 '더 보기'(.stmore)와 같은 모양으로 둔다.
+   한 화면에 두 종류의 펼침 버튼이 다르게 생기면 서로 다른 일을 하는 것처럼 읽힌다. */
+.rgsec .rgmore{margin-top:6px;font:inherit;font-size:12px;font-weight:700;
+  color:var(--accent2);background:none;border:1px dashed var(--line);
+  border-radius:9px;padding:8px;cursor:pointer;width:100%}
+.rgsec .rgmore:hover{border-color:var(--accent2)}
 .catlead{display:flex;flex-direction:column;gap:11px}
 .catlead .crow{display:flex;flex-direction:column;gap:5px}
 .catlead .clab{font-size:12.5px;font-weight:700}
@@ -2650,24 +2656,50 @@ function matrixTableHTML(ranked, opts){
   return '<div class="pmxwrap"><table class="pmx"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
 }
 // 출원인 국적(지역)별로 나눈 매트릭스. opts.top 이 있으면 지역마다 상위 N 출원인만(홈 요약용).
-function regionMatrixHTML(list, opts){
-  opts = opts||{};
+// 국적 묶음마다 몇 곳까지 펼쳐 뒀는지. 기본은 상위 MTX_TOP 곳.
+// 처음에는 전부 그렸는데, 국내 공보를 전수로 받기 시작하면서 이 표가 5,026행
+// 158,071px 이 됐다 — 한 화면에 담기지 않는 정도가 아니라 스크롤로도 끝에
+// 닿기 어렵고, 그리는 것만으로 탭 전환이 느려진다. 상위 열 곳이면 '이 나라는
+// 누가 어느 분야에 내나' 라는 이 표의 물음에는 답이 되고, 나머지는 펼쳐서 본다.
+const MTX_TOP = 10;
+const mtxOpen = new Set();
+
+function _rgSecHTML(rg, list, opts){
+  const known=new Set(FEED.patents.countries.map(c=>c.code));
+  const sub=rg.code? list.filter(it=>it.aCountry===rg.code)
+                   : list.filter(it=>!known.has(it.aCountry));
+  if(!sub.length) return '';
+  const all=_rankApplicants(sub);
+  const cap=opts.top||0;
+  const open=mtxOpen.has(rg.code);
+  const ranked=(cap && !open)? all.slice(0, cap) : all;
+  const more=all.length-ranked.length;
+  // 버튼은 '몇 곳이 더 있는지'를 숫자로 말한다. '더 보기' 만으로는 30곳이
+  // 남았는지 3,000곳이 남았는지 몰라 누를지 말지를 고를 수 없다.
+  const btn = (cap && all.length>cap)
+    ? '<button class="rgmore" data-mtx="'+esc(rg.code)+'" aria-expanded="'+open+'">'
+      + (open? '상위 '+cap+'곳만 보기'
+             : '나머지 '+more.toLocaleString()+'곳 펼치기')+'</button>'
+    : '';
+  return '<div class="rgsec" data-rgsec="'+esc(rg.code)+'"><div class="rghead">'
+    + flg(rg.emoji)+' <b>'+esc(rg.name)+'</b>'
+    + ' <span class="rgn">'+sub.length+'건 · 출원인 '+all.length.toLocaleString()
+    + ((cap && !open && more>0)? ' (상위 '+ranked.length+')':'') + '</span></div>'
+    + matrixTableHTML(ranked, opts) + btn + '</div>';
+}
+
+function _mtxGroups(list){
   const known=new Set(FEED.patents.countries.map(c=>c.code));
   const groups=FEED.patents.countries.slice();
   // 알 수 없는 지역(옛 데이터 등)은 버리지 않고 '기타'로 모아 KPI 합계와 어긋나지 않게 한다.
   if(list.some(it=>!known.has(it.aCountry))) groups.push({code:'', emoji:'🏳️', name:'기타'});
-  const html=groups.map(rg=>{
-    const sub=rg.code? list.filter(it=>it.aCountry===rg.code)
-                     : list.filter(it=>!known.has(it.aCountry));
-    if(!sub.length) return '';
-    const all=_rankApplicants(sub);
-    const ranked=opts.top? all.slice(0,opts.top) : all;
-    const more=all.length-ranked.length;
-    return '<div class="rgsec"><div class="rghead">'+flg(rg.emoji)+' <b>'+esc(rg.name)+'</b>'
-      + ' <span class="rgn">'+sub.length+'건 · 출원인 '+all.length
-      + (more>0? ' (상위 '+ranked.length+')':'') + '</span></div>'
-      + matrixTableHTML(ranked, opts)+'</div>';
-  }).filter(Boolean).join('');
+  return groups;
+}
+
+function regionMatrixHTML(list, opts){
+  opts = opts||{};
+  const html=_mtxGroups(list).map(rg=>_rgSecHTML(rg, list, opts))
+    .filter(Boolean).join('');
   return html || '<p class="sub" style="margin:0">아직 수집된 특허가 없습니다.</p>';
 }
 
@@ -3029,7 +3061,7 @@ function renderStats(list){
       + '이 표는 <b>가로로</b>(이 기업이 어느 분야에 내나) 읽으세요. '
       + '<b>세로로</b>(이 분야를 누가 나눠 갖나) 보려면 국적으로 묶지 않은 '
       + '<b>홈의 분야별 경쟁 구도</b>가 낫습니다.</p>'
-      + regionMatrixHTML(list, {total:true}) + '</div>'
+      + regionMatrixHTML(list, {total:true, top:MTX_TOP}) + '</div>'
     + krEntryHTML(list)
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
@@ -3218,6 +3250,23 @@ function wire(){
     const rb=e.target.closest('[data-rank]');
     if(rb){ rankMode=rb.getAttribute('data-rank');
       localStorage.setItem('pnp_rankMode', rankMode); render(); return; }
+    // 국적 묶음 펼치기/접기 — 통계 패널 전체가 아니라 그 묶음만 갈아 끼운다.
+    // 전체를 다시 그리면 다른 묶음의 펼침 상태는 살아남아도 스크롤 위치가 튄다.
+    const mb=e.target.closest('[data-mtx]');
+    if(mb){
+      const code=mb.getAttribute('data-mtx');
+      mtxOpen.has(code)? mtxOpen.delete(code) : mtxOpen.add(code);
+      const sec=mb.closest('.rgsec');
+      const rg=_mtxGroups(filtered()).find(g=>g.code===code);
+      if(sec && rg){
+        const tmp=document.createElement('div');
+        tmp.innerHTML=_rgSecHTML(rg, filtered(), {total:true, top:MTX_TOP});
+        const next=tmp.firstElementChild;
+        // 접을 때는 그 자리로 돌려놔야 화면이 튀지 않는다(국유특허와 같은 처리).
+        if(next){ const shrink=!mtxOpen.has(code); sec.replaceWith(next);
+          if(shrink) next.scrollIntoView({block:'start'}); }
+      }
+      return; }
     // 매트릭스 칸 클릭 → 그 출원인·분야로 좁혀 목록 보기
     const mc=e.target.closest('.pmx td.has[data-ap]');
     if(mc){ state.q=mc.getAttribute('data-ap'); $('#q').value=state.q;
