@@ -306,10 +306,18 @@ CATEGORIES = [
     {"key": "y04s30", "emoji": "🚗", "name": "수송(전기차)",
      "en": "Systems supporting specific end-user applications in the sector of transportation",
      "cpc": ["Y04S30"],
-     # B60L 전체. 30/10 은 '전기·하이브리드차의 상호운용' 이라 충전(B60L53)만이
-     # 아니라 차량 쪽 구동·제어까지 걸린다(V2G 가 그 자리다).
-     "ipc": ["B60L", "H02J50", "B60M"],
-     "match": ["Y04S30", "B60L", "H02J50", "B60M"]},
+     # 30/00 은 '수송 부문의 **최종 수용가 응용**' 이다 — 차량 자체가 아니라 차량이
+     # 계통과 주고받는 자리다. 그래서 B60L 을 통째로 넣지 않고 세 자리만 쓴다:
+     #   B60L 53  충전 방법·회로          (30/12 원격·협조 충전)
+     #   B60L 55  **차량→계통 역송(V2G)**  (30/10 상호운용의 본진)
+     #   B60L 58  배터리 감시·제어         (셋 중 가장 느슨하다 — 넘치면 여기부터 뺀다)
+     # B60L 전체를 넣었더니 구동·제동회생까지 들어와 미국·중국에서만 수천 건이 되고,
+     # 이 분야만 상한에 걸려 '전수가 아닌 표본' 이 된다. 한 표 안에서 성격이 다른
+     # 수치가 섞이는 것이 이 프로젝트가 계속 피해 온 오차다.
+     # B60M(전차선)·H02J50(무선전력)도 뺐다 — 전자는 철도 급전이라 수용가 응용이
+     # 아니고, 후자는 휴대기기 무선충전까지 걸린다. 되돌리려면 여기에 다시 넣으면 된다.
+     "ipc": ["B60L53", "B60L55", "B60L58"],
+     "match": ["Y04S30", "B60L53", "B60L55", "B60L58"]},
     {"key": "y04s40", "emoji": "🌐", "name": "통신·정보기술",
      "en": ("Systems for electrical power generation, transmission, distribution or "
             "end-user application management characterised by the use of communication "
