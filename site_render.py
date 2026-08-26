@@ -1719,19 +1719,48 @@ function insightsHTML(){
   }).join('') : '<span class="iempty">데이터가 쌓이면 표시됩니다.</span>';
 
   // 2) 이슈 흐름 (카테고리 최근 vs 이전)
+  // 화살표는 **건수 차이가 아니라 비중 변화**를 가리킨다.
+  //
+  // 여기서 크게 틀리고 있었다. 수집은 아카이브 전체와 중복을 제거하므로,
+  // 아카이브가 커질수록 '새 기사'로 잡히는 수가 구조적으로 줄어든다 — 실측
+  // (2026-08-26)에서 여덟 분야가 예외 없이 ▼ 였고, 그중 둘은 **실제로는
+  // 늘어난** 분야였다:
+  //     원전·SMR      화면 '135건 ▼160'  ·  실제 비중 26.7%, 1.12배 증가
+  //     송·변전·전력망  화면 ' 79건 ▼72'   ·  실제 비중 15.6%, 1.28배 증가
+  // 방향이 정해진 오차라 특히 나쁘다. insights 는 이미 이 이유로 share·ratio 를
+  // 함께 계산해 두었는데(그 판단이 주석으로도 적혀 있다), 화면만 옛 수치를
+  // 그리고 있었다.
+  //
+  // 건수는 그대로 둔다 — '얼마나 많이 나왔나' 는 사실이고 크기를 읽는 데 쓴다.
+  // 바뀌는 것은 그 옆의 화살표뿐이다.
   const ct = (ins.catTrend||[]).slice(0,6);
   const ctHtml = ct.length ? ct.map(r=>{
-    const d=r.delta; const cls=d>0?'up':(d<0?'dn':'fl'); const sym=d>0?'▲':(d<0?'▼':'–');
-    const dd=(!cmp || d===0)?'':(' '+sym+Math.abs(d));
-    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+esc(r.name)+' 필터"><div class="nm">'
+    // 이전 기간에 그 분야가 아예 없었으면 배율이 정의되지 않는다(ratio=null).
+    // 새로 만든 분류가 여기 해당한다 — 배율 대신 '새 분류' 라고 적는다.
+    const fresh = cmp && r.ratio==null;
+    const v = r.ratio;
+    const cls = (!cmp||v==null) ? 'fl' : v>=1.10 ? 'up' : v<=0.90 ? 'dn' : 'fl';
+    const sym = (!cmp||v==null) ? '' : v>=1.10 ? '▲' : v<=0.90 ? '▼' : '–';
+    const dd = fresh ? ' 새 분류'
+      : (!cmp||v==null) ? ''
+      : (' '+sym+(sym==='–' ? '' : v.toFixed(1)+'배'));
+    const tip = esc(r.name)+' 필터 — 최근 '+w.recentDays+'일 '+r.recent+'건, '
+      + '뉴스에서 차지한 비중 '+Math.round((r.share||0)*100)+'%'
+      + (fresh ? ' (이전 기간에는 없던 분류입니다)'
+         : (cmp && v!=null) ? ' (이전 기간 대비 '+v.toFixed(2)+'배)' : '');
+    return '<div class="row" data-cat="'+esc(r.key)+'" title="'+tip+'"><div class="nm">'
       +r.emoji+' '+esc(r.name)+'</div><div class="d">'+r.recent+'<span class="n">건</span>'
-      +'<span class="'+(cmp?cls:'fl')+'">'+dd+'</span></div></div>';
+      +'<span class="'+cls+'">'+esc(dd)+'</span></div></div>';
   }).join('') : '<span class="iempty">–</span>';
 
   const kwSub = cmp ? '최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색'
                     : '최근 '+w.recentDays+'일 뉴스 제목 · 눌러서 검색 (비교할 이전 기간이 아직 쌓이지 않아 증감은 표시하지 않습니다)';
-  const ctSub = cmp ? '카테고리별 최근 '+w.recentDays+'일 새 기사 (이전 대비) · 눌러서 필터'
-                    : '카테고리별 최근 '+w.recentDays+'일 새 기사 · 눌러서 필터';
+  // 부제가 화살표의 뜻을 말해야 한다. '이전 대비' 만 적어 두면 옆의 건수와
+  // 견주는 것으로 읽힌다 — 실제로 재는 것은 그 분야가 뉴스에서 차지한 비중이다.
+  const ctSub = cmp
+    ? '카테고리별 최근 '+w.recentDays+'일 새 기사 · 화살표는 <b>뉴스에서 차지한 비중</b>의 '
+      + '이전 대비 배율입니다(건수 차이가 아닙니다) · 눌러서 필터'
+    : '카테고리별 최근 '+w.recentDays+'일 새 기사 · 눌러서 필터';
 
   // '이번 주 공개 특허'는 아래 특허 섹션으로 옮겼다 — 인사이트는 뉴스 기반 둘만 둔다.
   return '<div class="insights two">'
