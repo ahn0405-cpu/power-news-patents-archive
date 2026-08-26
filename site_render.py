@@ -1118,31 +1118,57 @@ a{color:inherit}
 @media (max-width:1100px){ .homebot{grid-template-columns:1fr} }
 @media (max-width:720px){ .homekpi{grid-template-columns:repeat(2,1fr)} }
 /* 트렌드 인사이트 바 */
-.insights{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;margin:2px 0 16px}
-.insights.two{grid-template-columns:1.15fr 1fr}   /* '이번 주 공개 특허'를 특허 섹션으로 뺀 뒤 */
+/* 패널 둘(키워드·이슈 흐름)을 하나로 접은 뒤로 이 격자는 한 칸이다. 예전의
+   여러 칸 규칙을 그대로 두면 접은 패널이 절반 폭에 갇혀, 그래프의 선 이름과
+   분야 이름이 잘린다(실측 460px). */
+.insights{display:grid;grid-template-columns:1fr;gap:12px;margin:2px 0 16px}
 .insights .ipanel{background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:12px 14px;box-shadow:var(--shadow);min-width:0}
 .insights h3{font-size:12px;font-weight:800;letter-spacing:.01em;margin:0 0 2px;display:flex;
   align-items:center;gap:6px}
 .insights .isub{color:var(--muted);font-size:11px;margin:0 0 10px}
-.kwrap{display:flex;flex-wrap:wrap;gap:6px}
-.kw{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--chipbg);color:var(--ink);
-  border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
-.kw:hover{border-color:var(--accent);transform:translateY(-1px)}
-.kw .c{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
-.kw .up{color:var(--accent);font-weight:800;font-size:10.5px}
-.kw.hot{border-color:var(--accent)}
 .trend{display:flex;flex-direction:column;gap:7px}
+/* 뉴스 트렌드 — 결론 한 줄. 계산해서 말하는 문장이라 브리핑(사람이 쓴 사건
+   서술)과 겹치지 않는다. 격차가 좁으면 문구 자체가 바뀐다(leadLineHTML). */
+.lead2{margin:2px 0 12px}
+.lead2 .l2h{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.5}
+.lead2 .l2h b{color:var(--accent2)}
+.lead2 .l2h em{font-style:normal;font-size:13px;font-weight:700;color:var(--muted);
+  margin-left:8px;white-space:nowrap}
+.lead2 .l2s{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;
+  font-size:11.5px;font-weight:600;color:var(--muted)}
+.lead2 .l2s .lu{color:var(--q2)}
+/* 30일 그래프. 세로축은 비중이다 — 일별 기사 수가 23~180건으로 널뛰어 건수로
+   그리면 그 널뜀이 곡선을 다 먹는다(실측). 좁으면 제 상자에서 가로로 넘긴다. */
+.tcwrap{overflow-x:auto;margin:0 0 10px}
+.tchart{width:100%;min-width:520px;height:auto;display:block}
+.tchart .tl{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.tchart .tg{stroke:var(--line);stroke-width:1}
+.tchart .tgl{font-size:9.5px;fill:var(--muted);font-weight:600}
+.tchart .tll{font-size:10.5px;font-weight:700}
+/* 분야 줄 — 이름 · 흐름 · 수치 · 그 분야를 끄는 말. */
+.trend .row .kws{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;min-width:0}
+.kw2{font-size:10.5px;font-weight:600;color:var(--muted);background:var(--bg);
+  border:1px solid var(--line);border-radius:999px;padding:1px 7px;cursor:pointer;
+  white-space:nowrap}
+.kw2:hover{color:var(--accent2);border-color:var(--accent2)}
 /* 이름 · 30일 흐름 · 수치 세 칸. 같은 격자에 서야 세로로 훑을 수 있다 —
    칸 폭이 줄마다 다르면 선끼리 견줄 수 없다. */
-.trend .row{display:grid;grid-template-columns:1fr 68px auto;align-items:center;gap:9px;font-size:12.5px;
-  cursor:pointer;border-radius:6px;padding:2px 4px;margin:0 -4px}
+.trend .row{display:grid;grid-template-columns:minmax(120px,1fr) 62px 74px minmax(0,1.1fr);
+  align-items:center;gap:9px;font-size:12.5px;
+  cursor:pointer;border-radius:6px;padding:3px 4px;margin:0 -4px}
 .trend .row:hover{background:var(--bg)}
 .trend .row .sp{display:flex;align-items:center;justify-content:flex-end;min-width:0}
 .trend .row .sp .spk{opacity:.85}
 .trend .row:hover .sp .spk{opacity:1}
 /* 아주 좁으면 흐름 칸을 접는다 — 68px 아래로는 선이 뜻을 잃는다. */
+@media (max-width:820px){
+  /* 좁으면 말 칸을 줄 아래로 내린다 — 네 칸을 다 세우면 이름이 잘린다. */
+  .trend .row{grid-template-columns:1fr 62px 74px;gap:6px 9px}
+  .trend .row .kws{grid-column:1 / -1;justify-content:flex-start}
+}
 @media (max-width:520px){
+  /* 아주 좁으면 흐름 칸을 접는다 — 62px 아래로는 선이 뜻을 잃는다. */
   .trend .row{grid-template-columns:1fr auto}
   .trend .row .sp{display:none}
 }
@@ -1730,6 +1756,124 @@ function briefHTML(){
     + '</div>';   // ← .brief 닫기. 없으면 홈의 후속 블록이 전부 이 카드 안에 중첩된다.
 }
 
+// ── 트렌드 인사이트: 결론 한 줄 · 30일 그래프 · 통합 표 ──────────────
+//
+// 전에는 패널 둘이 나란히 있었다(요즘 뜨는 키워드 · 이슈 흐름). 둘 다 **목록**
+// 이라 '그래서 지금 뭐가 이슈냐' 를 읽는 사람이 머릿속에서 합쳐야 했고, 게다가
+// 서로 따로 놀았다 — '원전 146' 칩과 '원전·SMR 137건 ▲1.1배' 줄이 같은 것을
+// 두 번 말하는데 화면에서는 이어져 있지 않았다.
+//
+// 키워드를 분야에 붙일 수 있는지 실측했다(최근 7일 510건): 원전 90% · 전기요금
+// 95% · 해상풍력 100% · 전력망 65% · 데이터센터 63% 가 한 분야로 모인다.
+// 일반어만 흩어진다(전력 24% · AI 44%) → 그런 말은 대표 키워드에서 뺀다.
+const KW_MIN_SHARE = 0.55;   // 한 분야에 이만큼은 모여야 그 분야의 말이라 할 수 있다
+const KW_PER_CAT = 3;        // 분야마다 대표 키워드 몇 개
+const LEAD_GAP = 1.35;       // 1위가 2위의 이 배 이상이어야 '지금은 X 다' 라고 말한다
+const TCHART = {w:660, h:158, pad:{l:30, r:96, t:12, b:22}};
+// 상위 네 분야의 선. 눈으로 고르지 않고 검사기를 돌려 맞춘 조합이다 —
+// 밝은 화면·어두운 화면 양쪽에서 명도대·채도·색각이상 시 인접색 구분·대비를
+// 모두 통과한다. 넷을 넘기지 않는 이유도 같다(그 이상은 구분되게 못 뽑는다).
+const TCOL = ['#2F6FB5', '#D1562C', '#1F8A6D', '#A24BA0'];
+
+// 분야별 대표 키워드. 그 말이 실제로 그 분야 기사에서 나왔을 때만 붙인다.
+function catKeywords(){
+  const D=(FEED.insights.window||{}).recentDays||7;
+  const days=new Set([...new Set((FEED.news.items||[]).map(i=>i.date))].sort().slice(-D));
+  const recent=(FEED.news.items||[]).filter(i=>days.has(i.date));
+  const out={};
+  (FEED.insights.trending||[]).forEach(k=>{
+    const w=k.term; if(!w) return;
+    const hit=recent.filter(a=>(a.title||'').indexOf(w)>=0);
+    if(!hit.length) return;
+    const c={}; hit.forEach(a=>{ c[a.category]=(c[a.category]||0)+1; });
+    const top=Object.keys(c).sort((x,y)=>c[y]-c[x])[0];
+    // 한 분야에 충분히 모이지 않는 일반어는 어느 분야의 말도 아니다.
+    if(c[top]/hit.length < KW_MIN_SHARE) return;
+    (out[top]||(out[top]=[])).push({term:w, n:c[top]});
+  });
+  Object.keys(out).forEach(k=>{ out[k]=out[k].sort((a,b)=>b.n-a.n).slice(0,KW_PER_CAT); });
+  return out;
+}
+
+// 결론 한 줄. **격차를 보고 말을 바꾼다** — 1위가 뚜렷할 때만 '지금은 X 다' 라고
+// 말한다. 어느 날 1·2위가 20%:19% 인데도 같은 문장을 쓰면 그건 거짓말이 된다.
+function leadLineHTML(rows){
+  if(!rows.length) return '';
+  const a=rows[0], b=rows[1];
+  const gap = b && b.share>0 ? a.share/b.share : 99;
+  const pct=v=>Math.round(v*100)+'%';
+  const mul=r=>r.ratio==null? '' : (r.ratio>=1.10? ' ▲'+r.ratio.toFixed(1)+'배'
+                                  : r.ratio<=0.90? ' ▼'+r.ratio.toFixed(1)+'배' : '');
+  let head, sub;
+  if(gap >= LEAD_GAP){
+    head = a.emoji+' 지금은 <b>'+esc(a.name)+'</b> 입니다';
+    sub  = '최근 뉴스의 '+pct(a.share)+''+mul(a);
+  } else if(b){
+    head = a.emoji+b.emoji+' <b>'+esc(a.name)+'·'+esc(b.name)+'</b> 이 함께 이슈입니다';
+    sub  = pct(a.share)+mul(a)+' · '+pct(b.share)+mul(b)+' — 1·2위가 가깝습니다';
+  } else {
+    head = '뚜렷한 쏠림이 없습니다'; sub = '';
+  }
+  const up=rows.filter(r=>r.ratio!=null && r.ratio>=1.10 && r!==rows[0]).slice(0,2);
+  const dn=rows.filter(r=>r.ratio!=null && r.ratio<=0.90).slice(0,2);
+  const side=[];
+  if(up.length) side.push('<span class="lu">함께 오른 곳 '
+    + up.map(r=>r.emoji+esc(r.name)+' '+r.ratio.toFixed(1)+'배').join(' · ')+'</span>');
+  if(dn.length) side.push('<span class="ld">식은 곳 '
+    + dn.map(r=>r.emoji+esc(r.name)+' '+r.ratio.toFixed(1)+'배').join(' · ')+'</span>');
+  return '<div class="lead2"><div class="l2h">'+head
+    + (sub? '<em>'+esc(sub)+'</em>':'')+'</div>'
+    + (side.length? '<div class="l2s">'+side.join('')+'</div>':'')+'</div>';
+}
+
+// 30일 그래프. 세로축은 **비중**이다 — 일별 기사 수가 23~180건으로 널뛰어서
+// 건수로 그리면 그 널뜀이 곡선을 다 먹는다(실측). 상위 네 분야만 선으로 긋고
+// 이름을 선 끝에 직접 단다(범례를 따로 두면 눈이 왕복한다).
+function trendChartHTML(rows){
+  const top=rows.slice(0,4);
+  if(top.length<2) return '';
+  const days=[...new Set((FEED.news.items||[]).map(i=>i.date))].sort().slice(-TREND_DAYS);
+  if(days.length<7) return '';
+  const series=top.map(r=>catShareSeries([r.key], TREND_DAYS));
+  const {w,h,pad}=TCHART;
+  const x0=pad.l, x1=w-pad.r, y0=pad.t, y1=h-pad.b;
+  const max=Math.max(0.1, Math.max.apply(null, series.map(s=>Math.max.apply(null, s))));
+  const px=i=>x0+(i/Math.max(1,days.length-1))*(x1-x0);
+  const py=v=>y1-(v/max)*(y1-y0);
+  let g='<svg class="tchart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="'
+    + esc('최근 '+TREND_DAYS+'일 분야별 뉴스 비중 흐름: '
+          + top.map(r=>r.name).join(', '))+'">';
+  // 눈금 — 없으면 위아래 간격이 무슨 뜻인지 안 읽힌다.
+  [0, max/2, max].forEach(v=>{
+    g+='<line class="tg" x1="'+x0+'" y1="'+py(v).toFixed(1)+'" x2="'+x1
+      + '" y2="'+py(v).toFixed(1)+'"/>'
+      + '<text class="tgl" x="'+(x0-6)+'" y="'+(py(v)+3.5).toFixed(1)
+      + '" text-anchor="end">'+Math.round(v*100)+'%</text>';
+  });
+  series.forEach((s,i)=>{
+    const d=s.map((v,j)=>(j?'L':'M')+px(j).toFixed(1)+' '+py(v).toFixed(1)).join(' ');
+    g+='<path class="tl" d="'+d+'" stroke="'+TCOL[i]+'"/>'
+      + '<circle class="td" cx="'+px(s.length-1).toFixed(1)+'" cy="'+py(s[s.length-1]).toFixed(1)
+      + '" r="3" fill="'+TCOL[i]+'"/>';
+  });
+  // 선 끝 이름은 **서로 밀어낸다**. 그냥 마지막 값 자리에 두면 곡선이 가까울 때
+  // 글자가 겹쳐 둘 다 못 읽는다(실측: 송·변전 15%와 재생에너지 13%가 붙었다).
+  // 위에서부터 훑으며 최소 간격을 못 지키면 아래로 민다. 선은 제자리에 있고
+  // 이름만 옮기므로, 어느 이름이 어느 선인지는 색과 y 순서가 지킨다.
+  const LBL_GAP = 13;
+  const lab = series.map((s,i)=>({i, y:py(s[s.length-1])}))
+    .sort((a,b)=>a.y-b.y);
+  lab.forEach((L,k)=>{ if(k && L.y - lab[k-1].y < LBL_GAP) L.y = lab[k-1].y + LBL_GAP; });
+  lab.forEach(L=>{
+    g+='<text class="tll" x="'+(x1+7)+'" y="'+(L.y+3.5).toFixed(1)
+      + '" fill="'+TCOL[L.i]+'">'+esc(top[L.i].emoji+' '+top[L.i].name)+'</text>';
+  });
+  g+='<text class="tgl" x="'+x0+'" y="'+(h-5)+'">'+esc(days[0])+'</text>'
+   + '<text class="tgl" x="'+x1+'" y="'+(h-5)+'" text-anchor="end">'
+   + esc(days[days.length-1])+'</text></svg>';
+  return '<div class="tcwrap">'+g+'</div>';
+}
+
 function insightsHTML(){
   const ins = FEED.insights;
   if(!ins || !ins.asOf) return '';
@@ -1739,15 +1883,12 @@ function insightsHTML(){
   // 안 그러면 prev 가 전부 0 이라 모든 항목이 전량 급증한 것처럼 보인다.
   const cmp = ins.comparable !== false;
 
-  // 1) 최근 많이 언급된 키워드 (클릭 → 검색)
-  const kws = (ins.trending||[]);
-  const kwHtml = kws.length ? kws.map(k=>{
-    const up = (cmp && k.rising) ? '<span class="up" title="이전 대비 증가">▲'+(k.count-k.prev)+'</span>' : '';
-    return '<button class="kw'+((cmp&&k.rising)?' hot':'')+'" data-kw="'+esc(k.term)+'" title="'+esc(k.term)
-      +' — 검색">'+esc(k.term)+'<span class="c">'+k.count+'</span>'+up+'</button>';
-  }).join('') : '<span class="iempty">데이터가 쌓이면 표시됩니다.</span>';
+  // 키워드 칩은 분야 줄 안으로 들어갔다(catKeywords). 여기 있던 옛 칩은 지운다 —
+  // 거기 '▲' 옆의 수가 **생건수 차이**라, 하루평균으로는 늘었는데 총량으로는 준
+  // 말들이 '▲-178' 처럼 찍히고 있었다(원전 146건/7일 vs 324건/21일). 부호가
+  // 스스로 모순인 표시였다. 어제 이슈 흐름에서 고친 것과 같은 종류다.
 
-  // 2) 이슈 흐름 (카테고리 최근 vs 이전)
+  // 이슈 흐름 (카테고리 최근 vs 이전)
   // 화살표는 **건수 차이가 아니라 비중 변화**를 가리킨다.
   //
   // 여기서 크게 틀리고 있었다. 수집은 아카이브 전체와 중복을 제거하므로,
@@ -1769,7 +1910,9 @@ function insightsHTML(){
   // 겹쳐 그리지 않는 이유: 그러려면 색이 열한 개 필요한데 그만큼을 서로 구분되게
   // 뽑을 수 없다(색각 이상까지 보면 더 그렇다). 줄을 나누면 색이 아예 필요 없고,
   // 이름이 그림 바로 옆에 붙어 범례도 필요 없다.
-  const ct = (ins.catTrend||[]).slice(0,6);
+  const KW = catKeywords();
+  // 열한 분야를 다 세운다. 여덟 줄로 자르면 새로 연 세 분류가 영영 안 보인다.
+  const ct = (ins.catTrend||[]);
   const ctHtml = ct.length ? ct.map(r=>{
     // 이전 기간에 그 분야가 아예 없었으면 배율이 정의되지 않는다(ratio=null).
     // 새로 만든 분류가 여기 해당한다 — 배율 대신 '새 분류' 라고 적는다.
@@ -1788,29 +1931,37 @@ function insightsHTML(){
     // 아니라 비중이라야 위 화살표와 같은 것을 말한다(건수는 아카이브가 커질수록
     // 구조적으로 줄어든다 — 바로 위 주석의 그 이유다).
     const spk = sparkShare(catShareSeries([r.key], TREND_DAYS));
+    // 그 분야를 끌고 있는 말. 칩을 누르면 검색으로 간다(옛 키워드 패널이 하던 일).
+    // 숫자는 붙이지 않는다 — 방향은 바로 옆 분야 화살표가 이미 말한다.
+    const kws = (KW[r.key]||[]).map(k=>
+      '<span class="kw2" data-kw="'+esc(k.term)+'" title="'
+      + esc(k.term+' — 최근 '+w.recentDays+'일 이 분야 기사 '+k.n+'건의 제목에 나옵니다')
+      + '">'+esc(k.term)+'</span>').join('');
     return '<div class="row" data-cat="'+esc(r.key)+'" title="'+tip+'"><div class="nm">'
       +r.emoji+' '+esc(r.name)+'</div>'
       +'<div class="sp">'+spk+'</div>'
-      +'<div class="d">'+r.recent+'<span class="n">건</span>'
-      +'<span class="'+cls+'">'+esc(dd)+'</span></div></div>';
+      +'<div class="d">'+Math.round((r.share||0)*100)+'<span class="n">%</span>'
+      +'<span class="'+cls+'">'+esc(dd)+'</span></div>'
+      +'<div class="kws">'+kws+'</div></div>';
   }).join('') : '<span class="iempty">–</span>';
 
-  const kwSub = cmp ? '최근 '+w.recentDays+'일 뉴스 제목 · <b>▲</b>=이전 대비 증가 · 눌러서 검색'
-                    : '최근 '+w.recentDays+'일 뉴스 제목 · 눌러서 검색 (비교할 이전 기간이 아직 쌓이지 않아 증감은 표시하지 않습니다)';
-  // 부제가 화살표의 뜻을 말해야 한다. '이전 대비' 만 적어 두면 옆의 건수와
-  // 견주는 것으로 읽힌다 — 실제로 재는 것은 그 분야가 뉴스에서 차지한 비중이다.
-  const ctSub = cmp
-    ? '카테고리별 최근 '+w.recentDays+'일 새 기사 · 선은 <b>최근 '+TREND_DAYS+'일 비중 흐름</b>, '
-      + '화살표는 그 비중의 이전 대비 배율입니다(건수 차이가 아닙니다) · 눌러서 필터'
-    : '카테고리별 최근 '+w.recentDays+'일 새 기사 · 눌러서 필터';
-
-  // '이번 주 공개 특허'는 아래 특허 섹션으로 옮겼다 — 인사이트는 뉴스 기반 둘만 둔다.
-  return '<div class="insights two">'
-    + '<div class="ipanel"><h3>🔥 요즘 뜨는 키워드</h3>'
-    + '<p class="isub">'+kwSub+'</p>'
-    + '<div class="kwrap">'+kwHtml+'</div></div>'
-    + '<div class="ipanel"><h3>📈 이슈 흐름</h3>'
-    + '<p class="isub">'+ctSub+'</p>'
+  // 부제가 무엇을 재는지 말해야 한다. '이전 대비' 만 적어 두면 옆의 수와 견주는
+  // 것으로 읽힌다 — 실제로 재는 것은 그 분야가 뉴스에서 차지한 **비중**이다.
+  const sub = cmp
+    ? '최근 '+w.recentDays+'일 뉴스에서 각 분야가 차지한 <b>비중</b>과, 그 비중의 이전 대비 '
+      + '배율입니다(건수 차이가 아닙니다). 선은 최근 '+TREND_DAYS+'일 흐름, 오른쪽은 그 분야를 '
+      + '끌고 있는 말입니다 · 분야를 누르면 필터, 말을 누르면 검색.'
+    : '최근 '+w.recentDays+'일 뉴스에서 각 분야가 차지한 비중입니다 '
+      + '(비교할 이전 기간이 아직 쌓이지 않아 증감은 표시하지 않습니다).';
+  // 패널 둘을 하나로 접는다. 전에는 키워드와 이슈 흐름이 나란히 있었는데, 둘 다
+  // 목록인 데다 서로 이어져 있지 않아 '그래서 지금 뭐가 이슈냐' 를 읽는 사람이
+  // 머릿속에서 합쳐야 했다.
+  return '<div class="insights"><div class="ipanel wide">'
+    + '<h3>📈 뉴스 트렌드'
+    + '<span class="morelink" data-go="news">뉴스 탭 →</span></h3>'
+    + leadLineHTML(ct)
+    + trendChartHTML(ct)
+    + '<p class="isub">'+sub+'</p>'
     + '<div class="trend">'+ctHtml+'</div></div></div>';
 }
 

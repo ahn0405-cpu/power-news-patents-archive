@@ -1322,8 +1322,39 @@ def _origin_checks() -> None:
     ins2 = ins2[:ins2.find("\n}")]
     check("sparkShare(catShareSeries([r.key], TREND_DAYS))" in ins2,
           "흐름 선은 비중으로 그린다 (건수는 아카이브가 커질수록 구조적으로 준다)")
-    check("TREND_DAYS" in js and "비중 흐름" in ins2,
-          "부제가 선의 뜻을 밝힌다")
+    check("TREND_DAYS" in js and "건수 차이가 아닙니다" in ins2 and "비중" in ins2,
+          "부제가 무엇을 재는지 밝힌다 (비중이지 건수가 아니다)")
+    # 패널 둘을 하나로 접었다. 옛 키워드 칩은 '▲' 옆에 **생건수 차이**를 찍어
+    # '▲-178' 처럼 부호가 스스로 모순인 표시를 내고 있었다(원전 146건/7일 vs
+    # 324건/21일 — 하루평균으로는 늘고 총량으로는 줄었다). 되살아나지 않게 막는다.
+    # 글자를 통째로 박아 두면 따옴표만 달라도 빠져나간다(변이시험에서 통과했다).
+    # 그 **식** 자체를 막는다 — count-prev 는 이 버그 말고 쓸 데가 없다.
+    check("k.count-k.prev" not in js.replace(" ", ""),
+          "키워드에 생건수 차이를 붙이지 않는다 ('▲-178' 이 다시 나오지 않게)")
+    check("catKeywords" in js and "KW_MIN_SHARE" in js,
+          "키워드를 분야에 붙인다 (한 분야에 모이는 말만)")
+    check("c[top]/hit.length < KW_MIN_SHARE" in js,
+          "흩어지는 일반어는 어느 분야의 말도 아니다 ('전력' 24%·'AI' 44%)")
+    # 1위가 뚜렷할 때만 '지금은 X 다' 라고 말한다. 20%:19% 인데 같은 문장을 쓰면
+    # 그건 거짓말이 된다 → 격차를 보고 말이 바뀌어야 한다.
+    check("LEAD_GAP" in js and "gap >= LEAD_GAP" in js
+          and "함께 이슈입니다" in js and "뚜렷한 쏠림이 없습니다" in js,
+          "격차가 좁으면 결론 문장이 바뀐다 (단정하지 않는다)")
+    check("leadLineHTML(ct)" in ins2 and "trendChartHTML(ct)" in ins2,
+          "결론 한 줄과 30일 그래프를 실제로 그린다")
+    # 그래프의 세로축은 비중이다 — 일별 기사 수가 23~180건으로 널뛰어 건수로
+    # 그리면 그 널뜀이 곡선을 다 먹는다.
+    tc = js[js.find("function trendChartHTML"):]
+    tc = tc[:tc.find("\nfunction ")]
+    check("catShareSeries([r.key], TREND_DAYS)" in tc,
+          "그래프도 비중으로 그린다")
+    check("top.slice(0,4)" in tc or "rows.slice(0,4)" in tc,
+          "선은 넷까지만 — 그 이상은 서로 구분되는 색을 못 뽑는다")
+    check("TCOL" in js and js.count("'#2F6FB5'") >= 1,
+          "선 색은 검사기로 맞춘 조합을 쓴다")
+    # 선 끝 이름이 겹치면 둘 다 못 읽는다(실측: 15%와 13% 곡선이 붙었다).
+    check("LBL_GAP" in tc and "L.y = lab[k-1].y + LBL_GAP" in tc,
+          "선 끝 이름이 겹치면 밀어낸다")
     # 같은 이름의 규칙을 **같은 층에** 둘 두면 세기가 같아 순서로 진다 — 전에
     # 물린 자리다(.shns .inb 가 뒤에 오는 .shns .sbn 에 졌다). 미디어 쿼리 안의
     # 재정의는 다른 이야기라 세지 않는다 → 중괄호 깊이로 가른다.
@@ -1342,8 +1373,8 @@ def _origin_checks() -> None:
     tr = _top_level(".trend.row{")
     check(tr == 1,
           f"'.trend .row' 을 같은 층에 두 번 적지 않는다 (둘이면 순서로 진다 — 받은 값 {tr})")
-    check("grid-template-columns:1fr68pxauto" in css2,
-          "이름·흐름·수치 세 칸이 같은 격자에 선다")
+    check("minmax(120px,1fr)62px74pxminmax(0,1.1fr)" in css2,
+          "이름·흐름·수치·말 네 칸이 같은 격자에 선다")
 
     # ── 홈은 요약, 거래 탭은 상세 ─────────────────────────────────
     # 분야 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 먹고 있었다. 홈은 '지금
