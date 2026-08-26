@@ -234,7 +234,13 @@ def _lazy_checks(sr) -> None:
         check('id="' + sym + '"' in sr._PAGE, f"{sym} 국기를 그려 둔다")
     # 이모지가 flg() 를 거치지 않고 그대로 붙는 자리가 남아 있으면 안 된다.
     import re as _re3
-    raw = _re3.findall(r"\+\s*\(?(?:it|p|r|rg|off|top|topA)\.(?:aFlag|flag|emoji)\s*\|\|", js)
+    # 변수 이름을 열거하면 새로 생긴 이름을 놓친다 — 옛 목록에 'g.flag'·'t.flag'
+    # 가 없어서 국기 세 자리가 오래 빠져 있었다(국내 공개 패널 머리, 분야별 경쟁
+    # 구도의 출원인 칩 둘). 이름을 세지 말고 **모양**으로 본다.
+    # .emoji 는 다르게 다룬다 — 분야 이모지(⚡🏠🚗)도 같은 이름을 쓰는데 그쪽은
+    # 국기가 아니라 그대로 찍혀도 된다. 국기를 담는 객체(지역 rg·특허청 off)에서만 본다.
+    raw = (_re3.findall(r"\+\s*\(?[A-Za-z_$][\w$]*\.(?:aFlag|flag)\s*\|\|", js)
+           + _re3.findall(r"\+\s*\(?(?:rg|off)\.emoji\s*\|\|", js))
     check(not raw, f"국기를 flg() 없이 그대로 붙이는 자리가 없다 (발견 {len(raw)}곳)")
     # 반대쪽 실수도 있다 — flg() 가 돌려준 SVG 를 문자열에 담아 두었다가 나중에
     # esc() 로 흘려보내면 '<svg class="fl" …>' 가 글자 그대로 화면에 찍힌다
@@ -1126,6 +1132,112 @@ def _origin_checks() -> None:
           "비중은 share 로, 변화는 '배' 로 따로 적는다 (121% 가 다시 나오지 않게)")
     check("catShareSeries(d.newsKeys" in js,
           "흐름 그래프도 이어진 뉴스 분류를 전부 합쳐 그린다")
+
+    # ── 해외 출원인의 국내 공개: 회사별 / 기술별 ──────────────────
+    # 같은 자료인데 묻는 것이 둘이다. 회사별은 '이 회사가 한국에 무엇을 걸어
+    # 뒀나', 기술별은 '이 기술에 누가 한국에 권리를 걸고 있나' 다. 기술별이
+    # 없을 때는 뒤쪽 물음에 답하려면 회사 블록을 전부 훑으며 분야칩을 눈으로
+    # 세야 했다 — 출원인이 수십 곳이라 사실상 불가능했다.
+    print("\n· 국내 공개 — 회사별 / 기술별")
+    import json, re as _re, subprocess, tempfile
+    check("data-kr=\"ap\"" in js and "data-kr=\"cat\"" in js
+          and "'[data-kr]'" in js,
+          "두 보기 버튼과 그 처리기가 함께 있다 (버튼만 있고 안 눌리는 상태를 막는다)")
+    # 읽기만 봐서는 안 된다 — setItem 을 지워도 getItem 줄에 이름이 남아
+    # 통과한다(변이시험에서 실제로 통과했다). 읽기와 쓰기를 따로 본다.
+    check("getItem('pnp_krMode')" in js
+          and "setItem('pnp_krMode'" in js,
+          "고른 보기를 쓰고 또 읽는다 (새로 고칠 때마다 회사별로 돌아가지 않게)")
+    # 묶은 기준은 블록 머리에 이미 있다 → 항목에는 **다른 축**이 붙어야 한다.
+    # 기술별인데 항목에도 분야명을 붙이면 같은 말을 두 번 하고, 정작 누가 낸
+    # 건인지는 끝내 안 보인다.
+    # 나머지는 글자를 맞춰 보는 대신 **실제로 돌려서** 본다. 문자열 대조로는
+    # 정렬을 0 으로 곱해 무력화해도 그 글자는 그대로 남아 통과한다(변이시험에서
+    # 실제로 통과했다).
+    ks2 = js.find("const KR_MODES")
+    ke2 = js.find("// ── 분야별 경쟁 구도")
+    check(0 <= ks2 < ke2, "국내 공개 패널 블록을 떼어낼 수 있다")
+    if 0 <= ks2 < ke2:
+        items = (
+            # 큰 곳 3건 · 작은 곳 1건 — 기술별 블록 안 순서를 가른다
+            [{"office": "KR", "aCountry": "JP", "aName": "큰곳", "aFlag": "🇯🇵",
+              "category": "y04s10", "title": f"큰{i}", "number": f"N{i}", "url": ""}
+             for i in range(3)]
+            + [{"office": "KR", "aCountry": "CN", "aName": "작은곳", "aFlag": "🇨🇳",
+                "category": "y04s10", "title": "작은0", "number": "M0", "url": ""}]
+            # 분야를 모르는 건 — 기술별에서 빠져야 한다
+            + [{"office": "KR", "aCountry": "US", "aName": "미상곳", "aFlag": "🇺🇸",
+                "category": "", "title": "분야없음", "number": "X0", "url": ""}]
+            # 국내 출원인·해외 공개는 애초에 이 패널에 들어오지 않는다
+            + [{"office": "KR", "aCountry": "KR", "aName": "국내곳", "aFlag": "🇰🇷",
+                "category": "y04s10", "title": "국내건", "number": "K0", "url": ""},
+               {"office": "US", "aCountry": "JP", "aName": "큰곳", "aFlag": "🇯🇵",
+                "category": "y04s10", "title": "해외공개", "number": "U0", "url": ""}]
+        )
+        feed = {"patents": {"categories": [
+            {"key": "y04s10", "emoji": "⚡", "name": "발전·송배전 지원"}], "krLimit": 15}}
+        # 이 블록은 첫 줄에서 localStorage 를 읽는다(브라우저에만 있다).
+        # 저장해 둔 값을 돌려주게 해서, 초기값이 실제로 그걸 따르는지도 본다 —
+        # 글자만 맞춰 보면 그 줄을 무력화해도 이름이 남아 통과한다.
+        prog3 = ("const localStorage={getItem(){return 'cat';},setItem(){}};\n"
+                 + js[ks2:ke2]
+                 + "\nfunction esc(s){return String(s).replace(/[&<>\"]/g,"
+                   "c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}\n"
+                   "function flg(f){return '<svg class=\"fl\"></svg>';}\n"
+                   "function safeUrl(u){return u||'#';}\n"
+                 + f"const FEED={json.dumps(feed, ensure_ascii=False)};\n"
+                 + f"const IT={json.dumps(items, ensure_ascii=False)};\n"
+                   "const boot=krMode;\n"
+                   "krMode='ap'; const ap=krEntryHTML(IT);\n"
+                   "krMode='cat'; const cat=krEntryHTML(IT);\n"
+                   "console.log(JSON.stringify({boot, ap, cat, none:krEntryHTML([])}));")
+        prog3 = prog3.replace("\\\\", "\\")
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(prog3)
+            path3 = f.name
+        try:
+            out3 = subprocess.run(["node", path3], capture_output=True, text=True,
+                                  timeout=30)
+            ok3 = out3.returncode == 0
+            check(ok3, "국내 공개 패널 JS 가 실행된다"
+                       + ("" if ok3 else f" ({out3.stderr.strip()[:200]})"))
+            r3 = json.loads(out3.stdout) if ok3 else None
+        finally:
+            try:
+                __import__("os").unlink(path3)
+            except OSError:
+                pass
+        if r3:
+            heads = lambda h: _re.findall(r'<div class="kap">(.*?)</div>', h)
+            check(r3["boot"] == "cat",
+                  f"저장해 둔 보기로 시작한다 (받은 값 {r3['boot']!r})")
+            # 이 패널은 '해외 출원인이 국내에 공개한 것' 만 담는다.
+            check("국내곳" not in r3["ap"] and "해외공개" not in r3["ap"],
+                  "국내 출원인과 해외 공개분은 애초에 들어오지 않는다")
+            # 묶은 기준은 블록 머리에 있으니 항목에는 **다른 축**이 붙어야 한다.
+            first_cat_item = _re.search(r'<ul class="klist">(.*?)</li>', r3["cat"])
+            check(bool(first_cat_item) and "큰곳" in first_cat_item.group(1),
+                  "기술별 항목에는 출원인이 붙는다 (분야명을 두 번 적지 않는다)")
+            first_ap_item = _re.search(r'<ul class="klist">(.*?)</li>', r3["ap"])
+            check(bool(first_ap_item)
+                  and "발전·송배전 지원" in first_ap_item.group(1),
+                  "회사별 항목에는 분야가 붙는다")
+            # 분야를 모르는 건은 기술별에서 빠진다 — 이름 없는 블록이 생기지 않게.
+            check("분야없음" in r3["ap"] and "분야없음" not in r3["cat"],
+                  "분야를 모르는 건은 회사별에는 남고 기술별에서만 빠진다")
+            # 블록 안 순서: 많이 낸 곳이 먼저. 0 을 곱해 무력화하면 여기서 걸린다.
+            body = r3["cat"][r3["cat"].find('<ul class="klist">'):]
+            check(body.find("큰곳") < body.find("작은곳"),
+                  "기술별 블록 안은 그 분야에 많이 낸 곳부터 세운다")
+            # 블록 머리에 건수와 출원인 수가 함께 선다.
+            check(any("2곳" in h for h in heads(r3["cat"])),
+                  "기술별 블록 머리가 그 분야의 출원인 수를 말한다")
+            check(r3["none"] == "", "담을 것이 없으면 패널을 통째로 뺀다")
+    # 패널 하나만 갈아 끼워야 한다. 통계 전체를 다시 그리면 위에서 펼쳐 둔
+    # 국적 묶음이 그대로 있어도 스크롤이 튄다.
+    check("querySelector('.krpanel')" in js,
+          "보기를 바꿀 때 그 패널만 갈아 끼운다")
 
     # 한 dict 리터럴에 같은 키를 두 번 적으면 파이썬은 **조용히 뒤엣것만** 남긴다.
     # FIELD_NEWS 를 "news" 로 넣었다가 먼저 있던 "news"(해석 문구)에 덮여, 화면이

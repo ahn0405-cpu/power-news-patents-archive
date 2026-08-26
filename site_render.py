@@ -2230,7 +2230,7 @@ function tradeSectionHTML(){
       return '<span class="shn'+(i===0 && inbar1? ' inb':'')+'"'
              +(a?' title="총계 보정: '+esc(a.raw+'건 → 표본 '+a.of
              +'건 중 제 것 '+a.kept+'건 비율')+'"':'')+'>'
-        + (t.flag||'')+' '+esc(t.name)+(a?'*':'')
+        + flg(t.flag)+' '+esc(t.name)+(a?'*':'')
         + '<b>'+Math.round(t.v/r.tot*100)+'%</b></span>'; }).join('')
       + (rest>0.005? '<span class="shn rest">나머지<b>'+Math.round(rest*100)+'%</b></span>':'');
     // ③ 국내 공개는 '누가 갖고 있나' 와 성격이 다르다 — 한국에서 실제로 부딪히는
@@ -2785,28 +2785,76 @@ function officeRankHTML(ranked){
 
 // 해외 출원인이 한국에 공개한 특허 — 그들이 국내 시장에서 지킬 값어치가 있다고 본 기술.
 // 국내 업계 입장에선 '누가 무엇을 들고 들어왔나'가 가장 실용적인 신호다.
+// 이 표를 두 가지로 볼 수 있게 한다. 같은 자료인데 묻는 것이 다르다:
+//   회사별 — "이 회사가 한국에 무엇을 걸어 뒀나" (누구와 부딪히나)
+//   기술별 — "이 기술에 누가 한국에 권리를 걸고 있나" (이 분야에 들어가도 되나)
+// 기술별이 없을 때는 뒤쪽 물음에 답하려면 회사 블록을 전부 훑으며 분야칩을
+// 눈으로 세야 했다 — 출원인이 수십 곳이라 사실상 불가능했다.
+const KR_MODES = ['ap','cat'];
+let krMode = KR_MODES.includes(localStorage.getItem('pnp_krMode'))
+  ? localStorage.getItem('pnp_krMode') : 'ap';
+const KR_SHOW = 12;          // 블록마다 보일 건수
+
+function _krItemHTML(it, mode, cm){
+  // 묶은 기준은 블록 머리에 이미 있으니 항목에는 **다른 축**을 붙인다.
+  // 회사별로 묶었으면 그 건이 무슨 기술인지를, 기술별로 묶었으면 누가 낸 건지를.
+  const tag = mode==='cat'
+    ? '<span class="kc">'+flg(it.aFlag)+' '+esc(it.aName||'')+'</span>'
+    : (cm[it.category]? '<span class="kc">'+esc(cm[it.category].name)+'</span>' : '');
+  return '<li><a href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener">'
+    + esc(it.title)+'</a>'+tag
+    + '<span class="kn mono">'+esc(it.number||'')+'</span></li>';
+}
+
 function krEntryHTML(list){
   const rows=list.filter(it=>it.office==='KR' && it.aCountry!=='KR');
   if(!rows.length) return '';
-  const by={};
-  rows.forEach(it=>{ (by[it.aName]||(by[it.aName]={flag:it.aFlag,items:[]})).items.push(it); });
-  const order=Object.entries(by).sort((a,b)=>b[1].items.length-a[1].items.length||a[0].localeCompare(b[0]));
   const cm={}; FEED.patents.categories.forEach(c=>cm[c.key]=c);
-  const blocks=order.map(([nm,g])=>{
-    const lis=g.items.slice(0,12).map(it=>{
-      const c=cm[it.category];
-      return '<li><a href="'+esc(safeUrl(it.url))+'" target="_blank" rel="noopener">'+esc(it.title)+'</a>'
-        + (c?'<span class="kc">'+esc(c.name)+'</span>':'')
-        + '<span class="kn mono">'+esc(it.number||'')+'</span></li>';
-    }).join('');
-    const more=g.items.length>12? '<li class="kmore">… 외 '+(g.items.length-12)+'건</li>':'';
-    return '<div class="krow"><div class="kap">'+(g.flag||'')+' '+esc(nm)
-      + '<span class="kcnt">'+g.items.length+'건</span></div><ul class="klist">'+lis+more+'</ul></div>';
+  const mode=krMode;
+  const by={};
+  rows.forEach(it=>{
+    const k = mode==='cat' ? (it.category||'') : it.aName;
+    if(mode==='cat' && !cm[k]) return;          // 분야를 모르는 건은 기술별에서 뺀다
+    const g = by[k]||(by[k]={items:[], names:new Set()});
+    g.items.push(it); g.names.add(it.aName);
+    if(mode!=='cat') g.flag=it.aFlag;
+  });
+  const order=Object.entries(by)
+    .sort((a,b)=>b[1].items.length-a[1].items.length||a[0].localeCompare(b[0]));
+  const blocks=order.map(([k,g])=>{
+    // 기술별 블록 안에서는 많이 낸 곳부터 세운다. 그냥 두면 열두 줄이 우연히
+    // 잡히는 순서라, 그 분야에서 누가 큰지가 안 보인다.
+    let items=g.items;
+    if(mode==='cat'){
+      const cnt={}; items.forEach(it=>cnt[it.aName]=(cnt[it.aName]||0)+1);
+      items=items.slice().sort((x,y)=> cnt[y.aName]-cnt[x.aName]
+        || (x.aName||'').localeCompare(y.aName||''));
+    }
+    const lis=items.slice(0,KR_SHOW).map(it=>_krItemHTML(it, mode, cm)).join('');
+    const more=items.length>KR_SHOW
+      ? '<li class="kmore">… 외 '+(items.length-KR_SHOW).toLocaleString()+'건</li>':'';
+    const head = mode==='cat'
+      ? (cm[k].emoji+' '+esc(cm[k].name)
+         + '<span class="kcnt">'+g.items.length.toLocaleString()+'건 · '
+         + g.names.size.toLocaleString()+'곳</span>')
+      : (flg(g.flag)+' '+esc(k)
+         + '<span class="kcnt">'+g.items.length.toLocaleString()+'건</span>');
+    return '<div class="krow"><div class="kap">'+head+'</div>'
+      + '<ul class="klist">'+lis+more+'</ul></div>';
   }).join('');
-  return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개</h3>'
-    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
+  const seg='<span class="rankseg">'
+    + '<button data-kr="ap" aria-pressed="'+(mode==='ap')+'" '
+    + 'title="이 회사가 한국에 무엇을 걸어 뒀나">회사별</button>'
+    + '<button data-kr="cat" aria-pressed="'+(mode==='cat')+'" '
+    + 'title="이 기술에 누가 한국에 권리를 걸고 있나">기술별</button></span>';
+  const lead = mode==='cat'
+    ? '<b>기술별</b> — 이 기술에 <b>누가</b> 한국에 권리를 걸고 있는지 봅니다. '
+      + '블록 안은 그 분야에 많이 낸 곳부터입니다.'
+    : '<b>회사별</b> — 이 회사가 한국에 <b>무엇을</b> 걸어 뒀는지 봅니다.';
+  return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개'+seg+'</h3>'
+    + '<p class="sub">'+lead+' 해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
     + '포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다. '
-    + '분야별 동향을 살피는 데 참고가 됩니다. 제목을 누르면 원문으로 이동. '
+    + '제목을 누르면 원문으로 이동. '
     + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
     + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
     + '<div class="krwrap">'+blocks+'</div></div>';
@@ -2876,7 +2924,7 @@ function concChip(t, tot){
     +'건 중 실제로 이 회사 것이었던 '+a.kept+'건의 비율로, 총계를 '+a.raw
     +'건에서 깎아 썼습니다.') : '';
   return '<span class="cta"'+(tip? ' title="'+esc(tip)+'"' : '')+'>'
-    + (t.flag||'') + ' ' + esc(t.name) + (a? '<span class="ctn">*</span>' : '')
+    + flg(t.flag) + ' ' + esc(t.name) + (a? '<span class="ctn">*</span>' : '')
     + '<span class="ctn">'+Math.round(t.v/tot*100)+'%</span></span>';
 }
 
@@ -3275,6 +3323,17 @@ function wire(){
     const rb=e.target.closest('[data-rank]');
     if(rb){ rankMode=rb.getAttribute('data-rank');
       localStorage.setItem('pnp_rankMode', rankMode); render(); return; }
+    // 국내 공개 보기 방식(회사별/기술별) — 패널 하나만 갈아 끼운다.
+    // 통계 전체를 다시 그리면 위에서 펼쳐 둔 국적 묶음이 그대로 있어도 스크롤이 튄다.
+    const kb=e.target.closest('[data-kr]');
+    if(kb){ krMode=kb.getAttribute('data-kr');
+      localStorage.setItem('pnp_krMode', krMode);
+      const cur=document.querySelector('.krpanel');
+      if(cur){ const tmp=document.createElement('div');
+        tmp.innerHTML=krEntryHTML(filtered());
+        const next=tmp.firstElementChild; if(next) cur.replaceWith(next); }
+      else render();
+      return; }
     // 국적 묶음 펼치기/접기 — 통계 패널 전체가 아니라 그 묶음만 갈아 끼운다.
     // 전체를 다시 그리면 다른 묶음의 펼침 상태는 살아남아도 스크롤 위치가 튄다.
     const mb=e.target.closest('[data-mtx]');
