@@ -92,6 +92,66 @@ def _dump(node: ET.Element, indent: str = "      ") -> tuple[int, list]:
     return n, hits
 
 
+SAMPLE_N = 40          # 나라마다 이만큼 훑어 '채워진 비율' 을 잰다
+
+
+def _fill_rates() -> None:
+    """표본을 넉넉히 훑어 **INID 항목이 실제로 채워지는 비율**을 잰다.
+
+    앞의 한 건짜리 덤프는 '필드가 있나' 를 본 것이고, 여기서는 '값이 오나' 를
+    센다. 둘은 다르다 — 두 건 보고 '비어 있다' 고 단정하면 안 된다.
+
+    무엇을 세나(특허 서지의 표준 항목):
+      · INID (71) 출원인 주소/국가  → applicantCountry (서지상세)
+      · INID (30) 우선권            → priorityNo · priorityDate (검색 응답)
+      · 패밀리                       → familyNo
+    (30) 이나 패밀리가 채워지면, 중국 공보를 그 특허의 미국·유럽 가족 문헌과
+    이어서 국적을 물려받을 수 있다 — KIPRIS 안에 남은 마지막 길이다.
+    """
+    print(f"\n{'='*62}\n채워진 비율 (나라마다 {SAMPLE_N}건)\n{'='*62}")
+    print("  한 건 덤프는 '필드가 있나' 였고, 여기서는 '값이 오나' 를 센다.\n")
+    for office in OFFICES:
+        root = _fetch(_search_url({
+            "ipc": IPC, "collectionValues": office,
+            "currentPage": "1", "docsCount": str(SAMPLE_N)}))
+        if root is None:
+            print(f"  [{office}] 검색 실패")
+            continue
+        rows = root.findall(".//searchResult")
+        if not rows:
+            print(f"  [{office}] 결과 없음")
+            continue
+        n = len(rows)
+        cnt = {"priorityNo": 0, "priorityDate": 0, "familyNo": 0,
+               "internationalApplicationNo": 0}
+        lits = []
+        for r in rows:
+            for k in cnt:
+                if (r.findtext(k) or "").strip():
+                    cnt[k] += 1
+            lit = (r.findtext("ltrtno") or "").strip()
+            if lit:
+                lits.append(lit)
+        print(f"  [{office}] 검색 {n}건")
+        for k, v in cnt.items():
+            print(f"      {k:28s} {v:3d}/{n}  ({v*100//n}%)")
+        # 서지상세는 건마다 한 번씩 부른다 → 표본을 줄인다(초당 한도는 넉넉하다).
+        got = blank = 0
+        for lit in lits[:15]:
+            r2 = _fetch(_bib_url(lit, office))
+            if r2 is None:
+                continue
+            v = (r2.findtext(".//applicantCountry") or "").strip()
+            if v:
+                got += 1
+            else:
+                blank += 1
+        tot = got + blank
+        if tot:
+            print(f"      applicantCountry (INID 71)   {got:3d}/{tot}  ({got*100//tot}%)")
+        print()
+
+
 def main() -> int:
     if not cfg.KIPRIS_KEY:
         raise SystemExit("KIPRIS_KEY 가 없습니다 (GitHub Secret 확인)")
@@ -139,6 +199,8 @@ def main() -> int:
     print(f"\n{'='*62}\n판정\n{'='*62}")
     for off in OFFICES:
         print(f"  {off}: {verdict.get(off, '(못 봄)')}")
+    _fill_rates()
+
     print("\n  읽는 법")
     print("   · 대조군 US 에서 값이 오고 CN·JP 에서 안 오면 → 그 공보에 원래 없다.")
     print("     KIPRIS 경로로는 끝이고, 다른 출처를 붙이는 수밖에 없다.")
