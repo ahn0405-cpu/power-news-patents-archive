@@ -359,6 +359,20 @@ TOTAL_FIX_MIN = 10      # 이보다 표본이 적으면 구성비가 튀어 총�
 TOTAL_FIX_SHARE = 0.10  # 이 비율 이상 섞였을 때만 (몇 건은 표본 오차와 구분되지 않는다)
 
 
+def _cat_of(p: dict) -> str:
+    """그리는 시점에 분야를 다시 정한다.
+
+    아카이브는 누적이라, 저장된 category 는 **그때의 분야 체계**로 정해진 값이다.
+    분야를 Y04S 로 갈아엎으면 옛 항목의 'renew'·'grid' 는 어느 분야에도 없어
+    화면에서 통째로 사라진다. 저장 파일을 고치는 대신 그릴 때 다시 나눈다 —
+    실체참조·공동출원인·출원인 국적 때와 같은 자리다(되돌리기 쉽고 손실이 없다).
+
+    분류 코드가 아무 데도 안 걸리면 빈 값이다. 옛 키로 흘려보내지 않는다 —
+    '미분류' 로 세어 화면에 몇 건인지 밝히는 편이 정직하다.
+    """
+    return pcfg.classify(p.get("cpc") or [], "")
+
+
 def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> dict:
     items = []
     per_week: dict[str, int] = {}
@@ -424,7 +438,7 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
                 "aName": aname, "aCountry": region, "aFlag": flag,
                 "office": p.get("office", ""),
                 "pub_date": p.get("pub_date"),
-                "category": p.get("category", "etc"), "country": region,
+                "category": _cat_of(p), "country": region,
                 "week": wk,
             }
             if std and std != num:          # 같으면 싣지 않는다(페이로드 절약)

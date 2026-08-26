@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import news_config as ncfg
 
@@ -256,28 +257,70 @@ APPLICANTS = [
 #       전력량 계측은 G01R21/G01R22 가 같은 자리를 덮는다.
 #     Y02E(에너지 감축) → 애초에 우리 분야 정의에는 쓰지 않았다.
 #   나머지 일곱 분야는 CPC 와 IPC 가 같은 코드라 그대로 쓴다.
+# ── 분야 = CPC Y04S (스마트그리드) ────────────────────────────────
+# 우리가 여덟 분야를 손으로 정해 두었었다. 그러면 '왜 이 여덟인가'를 늘 우리가
+# 변호해야 하고, 기관 문서·국제 통계와 대조도 안 된다. 이미 있는 국제 표준을 쓴다.
+#
+# Y04S = "SYSTEMS INTEGRATING TECHNOLOGIES RELATED TO POWER NETWORK OPERATION,
+#         COMMUNICATION OR INFORMATION TECHNOLOGIES FOR IMPROVING THE ELECTRICAL
+#         POWER GENERATION, TRANSMISSION, DISTRIBUTION, MANAGEMENT OR USAGE,
+#         i.e. SMART GRIDS"  (CPC 2026.08)
+# 발전원의 종류가 아니라 **계통에 ICT 를 붙인 것**에 부여된다. 그래서 태양광·풍력
+# 발전기 자체(H02S·F03D)도, 배터리 소재(H01M4·H01M50)도 여기 자리가 없다 —
+# 의도한 결과다(실측: 재생에너지·저장 8,540건 중 H01M 이 5,290건이고 그 절반이
+# 전극·부품이었다. 계통이 아니라 이차전지 산업이다).
+#
+# 원전만 예외로 남긴다. Y04S 에는 원전 자리가 **없다** — 실측으로 확인했다:
+#   첫 IPC 가 G21 인 항목 285건 중 Y 코드를 받은 42건이 전부 Y02E30 이고 Y04S 는 0건.
+#   Y04S 를 받은 47건의 정체는 H02J 36 · G06Q 7 · G06F 2 · H02H 1 뿐이다.
+# 그래서 원전은 Y04S 가 아니라 **Y02E 30(원자력)** 을 근거로 따로 세운다.
+#
+# 이름은 옮긴 것이다. 공식 표제(en)를 함께 담아 화면 툴팁에 붙인다 — 옮긴 말이
+# 표준을 대체하는 것처럼 보이면 안 된다.
+#
+# ipc: 수집 질의에 쓸 IPC 접두. **Y04S 로는 모을 수 없다**(실측):
+#   국내 항목별검색에 cpcNumber 없음 · 해외는 cpc= 무시(지게차 특허가 온다) ·
+#   epc= 는 색인이 비어 0건 · 해외 서지상세 cpcInfo/cpcCd 도 빈값(3건 표본).
+#   그래서 IPC 로 모으고, 실제 Y04S 코드가 붙어 있으면 그것을 우선한다(match).
 CATEGORIES = [
+    {"key": "y04s10", "emoji": "⚡", "name": "발전·송배전 지원",
+     "en": "Systems supporting electrical power generation, transmission or distribution",
+     "cpc": ["Y04S10"],
+     "ipc": ["H02J3", "H02J13", "H02J1", "H02J15", "H02G", "H01F27",
+             "H02B", "H01H33", "H02H"],
+     "match": ["Y04S10", "H02J3", "H02J13", "H02J1", "H02J15",
+               "H02G", "H01F27", "H02B", "H01H33", "H02H"]},
+    {"key": "y04s20", "emoji": "🏠", "name": "수용가·배전 말단",
+     "en": ("Management or operation of end-user stationary applications or the "
+            "last stages of power distribution"),
+     "cpc": ["Y04S20"],
+     "ipc": ["H02J9", "H02J7", "G01R21", "G01R22"],
+     "match": ["Y04S20", "H02J9", "H02J7", "G01R21", "G01R22"]},
+    {"key": "y04s30", "emoji": "🚗", "name": "수송(전기차)",
+     "en": "Systems supporting specific end-user applications in the sector of transportation",
+     "cpc": ["Y04S30"],
+     "ipc": ["B60L53", "H02J50"],
+     "match": ["Y04S30", "B60L53", "H02J50"]},
+    {"key": "y04s40", "emoji": "🌐", "name": "통신·정보기술",
+     "en": ("Systems for electrical power generation, transmission, distribution or "
+            "end-user application management characterised by the use of communication "
+            "or information technologies"),
+     "cpc": ["Y04S40"],
+     "ipc": ["H04L12", "H04W4", "G06F1"],
+     "match": ["Y04S40", "H04L12", "H04W4"]},
+    {"key": "y04s50", "emoji": "💱", "name": "시장·거래",
+     "en": ("Market activities related to the operation of systems integrating "
+            "technologies related to power network operation or related to "
+            "communication or information technologies"),
+     "cpc": ["Y04S50"],
+     "ipc": ["G06Q50", "G06Q30"],
+     "match": ["Y04S50", "G06Q50", "G06Q30"]},
+    # 예외. Y04S 밖이라는 것을 화면에도 밝힌다(근거는 Y02E 30).
     {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
-     "cpc": ["G21C", "G21D"], "ipc": ["G21C", "G21D"], "match": ["G21"]},
-    {"key": "renew", "emoji": "🌿", "name": "재생에너지·저장",
-     "cpc": ["H02S", "H01M10", "F03D"], "ipc": ["H02S", "H01M10", "F03D"],
-     "match": ["H02S", "F03D", "H01M"]},
-    {"key": "meter", "emoji": "🧮", "name": "계량·스마트그리드",
-     "cpc": ["Y04S", "G01R21", "G01R22"],
-     "ipc": ["G01R21", "G01R22", "H02J13"],     # Y04S 대체 — 위 주석 참고
-     "match": ["Y04S", "G01R21", "G01R22"]},
-    {"key": "datacenter", "emoji": "🖥️", "name": "데이터센터·무정전전원",
-     "cpc": ["H02J9"], "ipc": ["H02J9"], "match": ["H02J9"]},
-    {"key": "supply", "emoji": "⚡", "name": "전력수급·수요관리",
-     "cpc": ["H02J3"], "ipc": ["H02J3"], "match": ["H02J3", "H02J13"]},
-    {"key": "mega", "emoji": "🏗️", "name": "전력반도체·전력변환",
-     "cpc": ["H02M", "H01L29"], "ipc": ["H02M", "H01L29"],
-     "match": ["H02M", "H01L", "H03K17"]},
-    {"key": "industry", "emoji": "🏭", "name": "전력설비·기기",
-     "cpc": ["H01H33", "H02B"], "ipc": ["H01H33", "H02B"], "match": ["H01H", "H02B"]},
-    {"key": "grid", "emoji": "🔌", "name": "송·변전·전력망",
-     "cpc": ["H02G", "H01F27", "H02J1"], "ipc": ["H02G", "H01F27", "H02J1"],
-     "match": ["H02G", "H01F", "H02J"]},
+     "en": "Nuclear fission reactors (Y02E 30/30) — outside the Y04S scheme",
+     "outside": True,
+     "cpc": ["Y02E30", "G21C", "G21D"], "ipc": ["G21C", "G21D"],
+     "match": ["Y02E30", "G21"]},
 ]
 
 # ── KIPRISplus (국내 공보) ────────────────────────────────────────
@@ -418,6 +461,43 @@ KIPRIS_CPC_BASE = os.getenv("KIPRIS_CPC_BASE",
                             "http://plus.kipris.or.kr/openapi/rest")
 KIPRIS_CPC_KEYPARAM = os.getenv("KIPRIS_CPC_KEYPARAM", "accessKey")
 KIPRIS_CPC_LIMIT = int(os.getenv("KIPRIS_CPC_LIMIT", "400"))   # 0 이면 끔
+
+_MAIN_GROUP = re.compile(r"^[A-H][0-9]{2}[A-Z]([0-9]+)")
+
+
+def is_index_code(code: str) -> bool:
+    """'2000 시리즈' 색인 코드인가.
+
+    CPC/IPC 는 주분류 외에 **부가 태그**를 둔다. 상위 분류의 계층을 거울처럼
+    비추면서 소재·용도·환경 특성을 짚어 주는 코드로, 메인그룹 번호가 2000 이상이다
+    (H02J 2300/28 저장, H01M 2300 전해질, F05B 2270 풍력 제어…). 검색 정밀도를 위한
+    심사관 참고용이지 **그 특허의 성격을 규정하는 코드가 아니다** → 분야를 정하는
+    데 쓰지 않는다.
+
+    메인그룹이 100 을 넘는다고 색인 코드인 것은 아니다 — C07D 307/00, C09J 141/00
+    처럼 진짜 메인그룹도 세 자리를 쓴다(처음에 그렇게 재서 59건을 잘못 골랐다).
+    """
+    m = _MAIN_GROUP.match((code or "").replace(" ", ""))
+    return bool(m) and int(m.group(1).split("/")[0]) >= 2000
+
+
+def classify(codes: list[str], fallback: str = "") -> str:
+    """분류 코드 목록 → 분야 키(CATEGORIES 순서 = 우선순위).
+
+    수집할 때도 그릴 때도 같은 함수를 쓴다. 그래야 아카이브에 저장된 옛 분야 키와
+    무관하게, 그리는 시점에 지금 규칙으로 다시 나눌 수 있다(저장분을 건드리지 않고
+    분야 체계를 바꿀 수 있는 이유가 이것이다).
+
+    색인 코드는 빼고 본다. 진짜 분류 코드가 하나도 없을 때만 색인 코드라도 본다 —
+    아무 근거 없이 fallback 으로 흘리는 것보다 낫다.
+    """
+    real = [c for c in codes if not is_index_code(c)] or list(codes)
+    for cat in CATEGORIES:
+        for pref in cat["match"]:
+            if any(c.startswith(pref) for c in real):
+                return cat["key"]
+    return fallback
+
 
 CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
 APPLICANT_BY_NAME = {a["name"]: a for a in APPLICANTS}

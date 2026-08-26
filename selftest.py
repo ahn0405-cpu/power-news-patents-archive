@@ -959,9 +959,11 @@ def _origin_checks() -> None:
                      + (f"(틀림: {wrong})" if wrong else "(12종 모두)"))
     # 송·변전의 match 가 'H02J' 라서, H02J 코드가 색인 코드뿐인 항목이 그리로
     # 끌려간다(실측 1건). 진짜 분류 코드가 있으면 그쪽이 이겨야 한다.
-    check(_ks._classify(["H02J2300/28", "H01M10/052"], "etc") == "renew",
+    # 'H02J3000/10' 은 색인 코드이면서 y04s10 의 match 접두 'H02J3' 으로 시작한다
+    # — 거르지 않으면 부가 태그가 분야를 끌고 간다.
+    check(_ks._classify(["H02J3000/10", "G06Q50/06"], "etc") == "y04s50",
           "분야는 진짜 분류 코드로 정한다 (색인 코드가 끌고 가지 않는다)")
-    check(_ks._classify(["H02J2300/28"], "etc") == "grid",
+    check(_ks._classify(["H02J3000/10"], "etc") == "y04s10",
           "진짜 분류 코드가 하나도 없을 때만 색인 코드를 본다")
 
 
@@ -1258,8 +1260,8 @@ def _kipris_checks() -> None:
               f"CPC 조회의 키 질의 이름이 {cfg.KIPRIS_CPC_KEYPARAM} 다 (계열이 다르다)")
         enriched = [i for i in items if any(c.startswith("Y04S") for c in i["cpc"])]
         check(bool(enriched), f"보강된 건에 CPC 가 들어간다 ({len(enriched)}건)")
-        check(all(i["category"] == "meter" for i in enriched),
-              "Y04S 가 붙으면 계량·스마트그리드로 분류된다 (IPC 로는 못 잡는 코드)")
+        check(all(i["category"].startswith("y04s") for i in enriched),
+              "Y04S 가 붙으면 그 Y04S 분야로 분류된다 (IPC 로는 못 잡는 코드)")
 
         # 국내 전용이라 특허청 축은 만들지 않는다. 빈 dict 이어야 기존 stats 가
         # 덮이지 않는다(merge_stats 계약).
