@@ -535,6 +535,93 @@ def code_matches(code: str, pref: str) -> bool:
     return rest == "" or rest[0] == "/"
 
 
+# ── Y04S 10/00 안의 하위 갈래 ────────────────────────────────────
+# 발전·송배전 지원 한 분야가 수집분의 약 70%다. 그 안에서 장주기 ESS 가 어디쯤인지
+# 보이지 않아, CPC 가 이미 나눠 둔 하위 그룹으로 한 번 더 쪼갠다. 갈래도 이름도
+# 우리가 만든 것이 아니다 — CPC 2026.08 Y04S 10/00 의 하위 그룹 그대로다(en 은
+# 그 원문 표제, name 은 우리가 옮긴 말).
+#
+# 순서가 곧 우선순위다. 먼저 걸리는 갈래가 이긴다 → **좁은 것을 위에** 둔다.
+# G01R31(전기적 특성 시험)이 특히 그렇다: 같은 서브클래스 안에
+#   /08·/11·/50~/58  선로 고장 위치 → 10/52 정전·고장 관리
+#   /36~/39x         전지 상태 진단 → 10/14 에너지 저장
+#   나머지            절연·회로 시험 → 10/30 상태 감시
+# 가 섞여 있어, G01R31 을 통째로 한 갈래에 넣으면 그 분야의 4,504건이 한 칸에
+# 뭉친다. 좁은 접두를 위에 두어야 갈라진다.
+SUBGROUPS = {
+    "y04s10": [
+        {"code": "10/52", "name": "정전·고장 관리",
+         "en": "Outage or fault management, e.g. fault detection or location",
+         "ipc": ["G01R31/02", "G01R31/08", "G01R31/11", "G01R31/14", "G01R31/34",
+                 "G01R31/50", "G01R31/52", "G01R31/54", "G01R31/58", "H02H7/26"]},
+        {"code": "10/14", "name": "에너지 저장",
+         "en": "Energy storage units",
+         "ipc": ["H02J15", "H02J3/28", "H02J3/32",
+                 "G01R31/36", "G01R31/37", "G01R31/38", "G01R31/39",
+                 "H01M10/42", "H01M10/44", "H01M10/48"]},
+        {"code": "10/12", "name": "분산전원 연계",
+         "en": "Monitoring or controlling equipment for energy generation units,"
+               " e.g. distributed energy generation [DER] or load-side generation",
+         "ipc": ["H02J3/38", "H02J3/40", "H02J3/46", "H02J3/48", "H02J3/50"]},
+        {"code": "10/22", "name": "무효전력·FACTS",
+         "en": "Flexible AC transmission systems [FACTS] or power factor or"
+               " reactive power compensating or correcting units",
+         "ipc": ["H02J3/12", "H02J3/16", "H02J3/18"]},
+        {"code": "10/18", "name": "개폐·차단",
+         "en": "using switches, relays or circuit breakers,"
+               " e.g. intelligent electronic devices [IED]",
+         "ipc": ["H01H", "G01R31/327", "G01R31/333"]},
+        {"code": "10/20", "name": "보호계전",
+         "en": "using protection elements, arrangements or systems",
+         "ipc": ["H02H"]},
+        {"code": "10/16", "name": "변전소·변압",
+         "en": "Electric power substations",
+         "ipc": ["H02B", "H01F27", "H01F30", "H01F38"]},
+        {"code": "10/30", "name": "상태 감시·진단",
+         "en": "State monitoring, e.g. fault, temperature monitoring,"
+               " insulator monitoring, corona discharge",
+         "ipc": ["G01R31", "G01R1", "G01R15", "G01R19", "G01R27", "G01R29",
+                 "G01R35", "G01D21", "G01K", "G01H"]},
+        {"code": "10/40", "name": "정보 표시",
+         "en": "Display of information, e.g. of data or controls",
+         "ipc": ["G09G", "G06F3/048"]},
+        {"code": "10/50", "name": "계통 운영·제어",
+         "en": "Systems or methods supporting the power network operation or"
+               " management, involving a certain degree of interaction with the"
+               " load-side end user applications",
+         "ipc": ["H02J13", "H02J3", "H02J1", "H02J4", "H02J11", "G05B",
+                 "G06Q50/06"]},
+        # 어디에도 안 걸리는 나머지. 실측 691건(10.5%)이고 거의 전부 H02G —
+        # 전선·케이블 부설과 접속함이다. Y04S 10 에 대응하는 하위 그룹이 아예
+        # 없어서 남는 것이라, '기타' 가 아니라 그 사실을 이름에 적는다.
+        {"code": "10/00", "name": "배선·케이블",
+         "en": "Systems supporting electrical power generation, transmission or"
+               " distribution",
+         # 이름을 짧게 두는 이유: 막대 칸 안에 들어가는 글자다. 처음에
+         # '배선·케이블 (하위 갈래 없음)' 으로 뒀더니 102px 칸에서 잘렸다.
+         # 사연은 툴팁으로 옮긴다 — 코드가 '10/00'(하위 없는 상위 그룹) 인 것
+         # 자체가 이미 신호이기도 하다.
+         "note": "Y04S 10 에 대응하는 하위 그룹이 없어 상위 그룹 직속으로 둡니다"
+                 " — 전선 부설·가공선·케이블 접속함 등.",
+         "ipc": []},
+    ],
+}
+SUBGROUP_LAST = {k: v[-1]["code"] for k, v in SUBGROUPS.items()}
+
+
+def subgroup_of(codes: list[str], cat_key: str) -> str:
+    """분류 코드 목록 → 그 분야 안의 하위 갈래 코드. 없으면 빈 문자열."""
+    subs = SUBGROUPS.get(cat_key)
+    if not subs:
+        return ""
+    real = [c for c in codes if not is_index_code(c)] or list(codes)
+    for sub in subs:
+        for pref in sub["ipc"]:
+            if any(code_matches(c, pref) for c in real):
+                return sub["code"]
+    return SUBGROUP_LAST[cat_key]
+
+
 def classify(codes: list[str], fallback: str = "") -> str:
     """분류 코드 목록 → 분야 키(CATEGORIES 순서 = 우선순위).
 

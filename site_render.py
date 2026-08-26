@@ -455,6 +455,13 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
                 it["summary"] = p["snippet"]
             if p.get("cpc"):
                 it["cpc"] = p["cpc"][:3]
+            # 하위 갈래는 **여기서** 정한다. 화면에 싣는 cpc 는 앞 세 개로 자른
+            # 것이라, 브라우저가 다시 계산하면 네 번째 이후 코드로 갈리는 건을
+            # 놓친다. 코드가 하나도 없으면 붙이지 않는다(없는 것을 지어내지 않게).
+            sub = pcfg.subgroup_of(p.get("cpc") or [], it["category"]) \
+                if p.get("cpc") else ""
+            if sub:
+                it["sub"] = sub
             # 항목별 mock 우선(없으면 주 단위 — 옛 데이터 하위호환)
             if p.get("mock", week_mock):
                 it["mock"] = True
@@ -515,6 +522,11 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
                         "en": c.get("en", ""), "cpc": (c.get("cpc") or [""])[0],
                         **({"outside": True} if c.get("outside") else {})}
                        for c in pcfg.CATEGORIES],
+        # 분야 안의 하위 갈래(지금은 Y04S 10/00 만). 순서가 CPC 표의 순서가 아니라
+        # 우선순위 순서라, 화면은 이 목록이 아니라 건수로 정렬한다.
+        "subgroups": {k: [{"code": s["code"], "name": s["name"], "en": s["en"],
+                           **({"note": s["note"]} if s.get("note") else {})}
+                          for s in v] for k, v in pcfg.SUBGROUPS.items()},
         "countries": [{"code": k, "emoji": v[0], "name": v[1]}
                       for k, v in pcfg.COUNTRY_LABEL.items()],
         "perWeek": [{"x": w, "y": per_week[w]} for w in sorted(per_week)],
@@ -884,6 +896,14 @@ a{color:inherit}
   .trow .shbar i .sbc, .trow .shbar i .fl{display:none}
   .shns .sbn.inb{display:inline-flex} .shns .shn.inb{display:block}
 }
+/* 하위 갈래 막대. 위 막대와 달리 칸이 열한 개라 얇은 칸이 여럿 생긴다 →
+   칸 사이를 1px 벌려 경계를 보이고, 좁은 칸에서 글자가 넘치지 않게 붙인다.
+   ('무엇을 내고 있나' 는 네 칸뿐이라 이 처리가 필요 없다) */
+.trow .sgbar i{padding:0 6px;box-shadow:1px 0 0 var(--card) inset}
+.trow .sgbar i:last-child{box-shadow:none}
+/* 칩이 열한 개면 한 줄에 안 들어간다 → 줄바꿈을 허용하고 간격을 넓힌다.
+   .shns 는 원래 세 칩짜리라 줄바꿈을 안 쓴다. */
+.shns.sgns{display:flex;flex-wrap:wrap;gap:4px 14px;row-gap:5px}
 /* 칩 안에서 줄이 갈리면 안 된다 — 좁은 화면에서 '■ 59%' / '전기 계측' / 'G01R' 이
    세 줄로 흩어져 무엇이 무엇의 값인지 읽히지 않았다(실측 430px). */
 .shns .sbn{display:inline-flex;align-items:baseline;gap:5px;color:var(--muted);
@@ -2157,6 +2177,7 @@ function tradeSectionHTML(){
   const ADJ=FEED.patents.totalsAdjusted||{};
   // 분야별 세부 기술은 따로 패널을 두지 않고 여기 카드 안으로 들어온다(축은 분야다).
   const SUB={}; subsRows().forEach(s=>SUB[s.cat.key]=s);
+  const SUBG=subgRows();
   const body=rows.map(d=>{
     const r=d.r, pct=Math.round(r.cr3*100);
     // ① 지분 막대 — '상위 3곳 77%' 라고 쓰기보다 그 77% 를 보이게 한다. 위아래로
@@ -2245,6 +2266,7 @@ function tradeSectionHTML(){
       + r.n.toLocaleString()+'곳 중 상위 3곳이 '+pct+'%</span></div>'
       + bar + '<div class="shns">'+names+'</div>' + krc
       + subsBlockHTML(SUB[r.cat.key], T)
+      + subgBlockHTML(SUBG[r.cat.key], r.cat)
       + '<p class="tr" title="'+esc(short)+'">'+esc(gen)+'</p>'
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
@@ -2348,6 +2370,69 @@ function subsBlockHTML(r, T){
     + esc(r.cat.name+' 상위 세 갈래: '
           + r.top.map(t=>nameOf(t.code)+' '+Math.round(t.share*100)+'%').join(', '))
     + '">'+segs+rest+'</div><div class="shns">'+names+'</div></div>';
+}
+
+// ── 분야 안의 하위 갈래 (지금은 Y04S 10/00 만) ─────────────────────────
+// 발전·송배전 지원 하나가 수집분의 70%다. 그 안에서 장주기 ESS 가 어디쯤인지
+// 위의 '무엇을 내고 있나' 로는 안 보인다 — 그 막대의 축은 IPC 서브클래스라
+// G01R31(전기적 특성 시험) 한 칸에 선로 고장 위치·전지 상태 진단·절연 시험이
+// 함께 들어간다. 여기서는 축을 CPC Y04S 하위 그룹으로 바꾼다.
+//
+// 위 막대와 달리 **상위 3개로 자르지 않고 전부 그린다**. 갈래가 열한 개뿐이고,
+// 자르면 이 토막을 만든 이유(작은 갈래가 어디 있나)가 사라진다. 대신 이름은
+// 3% 넘는 갈래에만 붙인다 — 얇은 칸에 글자를 넣으면 겹친다.
+const SUBG_NAME_MIN = 0.03;
+function subgRows(){
+  const map=(FEED.patents.subgroups)||{};
+  const by={};
+  (FEED.patents.items||[]).forEach(it=>{
+    if(!it.sub || !map[it.category]) return;
+    const m=by[it.category]||(by[it.category]={});
+    m[it.sub]=(m[it.sub]||0)+1;
+  });
+  const out={};
+  Object.keys(by).forEach(k=>{
+    const n=Object.values(by[k]).reduce((s,v)=>s+v,0);
+    if(!n) return;
+    out[k]={n, parts: map[k].map(s=>({...s, v: by[k][s.code]||0,
+                                      share:(by[k][s.code]||0)/n}))
+                    .filter(p=>p.v>0)
+                    .sort((a,b)=> b.v-a.v || a.code.localeCompare(b.code))};
+  });
+  return out;
+}
+
+function subgBlockHTML(r, cat){
+  if(!r || !r.parts.length) return '';
+  // 큰 갈래 셋만 뚜렷한 색을 쓰고 나머지는 옅은 회색 계단이다. 열한 칸에 전부
+  // 다른 색을 주면 색이 순위가 아니라 이름표처럼 읽힌다.
+  const COL=['var(--q3)','var(--q2)','var(--q1)'];
+  const col=i=> i<3 ? COL[i] : 'color-mix(in srgb, var(--fg) '+(16-Math.min(i,9))+'%, transparent)';
+  const segs=r.parts.map((p,i)=>{
+    const tip=p.name+' (Y04S '+p.code+') — '+r.n.toLocaleString()+'건 중 '
+      + p.v.toLocaleString()+'건, '+Math.round(p.share*100)+'%'
+      + (p.note? '\n'+p.note : '') + (p.en? '\n'+p.en : '');
+    // 이름은 **색이 진한 앞 세 칸에만** 넣는다. 처음에는 3% 넘는 칸 전부에
+    // 넣었는데, 네 번째부터는 배경이 옅어 흰 글자가 그대로 묻혔다(보이지 않는
+    // 글자를 그리고 있었다). 나머지는 아래 칩 줄이 전부 맡는다.
+    const lab = (i<3 && p.share>=SUBG_NAME_MIN)
+      ? '<b>'+esc(p.name)+'</b><em>'+Math.round(p.share*100)+'%</em>' : '';
+    return '<i title="'+esc(tip)+'" style="width:'+(p.share*100).toFixed(1)
+      + '%;background:'+col(i)+'">'+lab+'</i>';
+  }).join('');
+  const tipOf=p=> [p.name+' (Y04S '+p.code+')', p.note, p.en].filter(Boolean).join('\n');
+  const chips=r.parts.map((p,i)=>'<span class="sbn">'
+    + '<i style="background:'+col(i)+'"></i>'
+    + '<b>'+Math.round(p.share*100)+'%</b>'+esc(p.name)
+    + '<span class="sbc mono" title="'+esc(tipOf(p))+'">'+esc(p.code)+'</span>'
+    + '</span>').join('');
+  return '<div class="subrow"><div class="blk">Y04S 어느 갈래인가'
+    + '<span class="blkd">'+r.n.toLocaleString()+'건 · CPC 하위 그룹 '
+    + r.parts.length+'개</span></div>'
+    + '<div class="shbar sgbar" role="img" aria-label="'
+    + esc(cat.name+' 하위 갈래: '
+          + r.parts.map(p=>p.name+' '+Math.round(p.share*100)+'%').join(', '))
+    + '">'+segs+'</div><div class="shns sgns">'+chips+'</div></div>';
 }
 
 // 국유판매기술 — 권리자가 국가라 창구가 분명하고, 무상은 비용 없이 실시할 수 있다.
