@@ -1083,6 +1083,60 @@ a{color:inherit}
   border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
 .klist .kn{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
 .klist .kmore{color:var(--muted);font-size:11.5px}
+/* 해외 국내공개 — 목록 위의 분석 */
+.kana{margin:0 0 4px}
+.kalead{margin:0 0 12px;font-size:13.5px;line-height:1.65}
+.kacols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:16px 22px}
+.kah{font-size:12px;font-weight:800;color:var(--accent2);letter-spacing:.02em;
+  margin:0 0 5px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.kanote{margin:0 0 9px;font-size:11.5px;line-height:1.6;color:var(--muted)}
+/* 줄마다 따로 grid 를 만들면 이름 길이에 따라 막대 자리가 줄마다 달라진다 —
+   같은 그림 안에서 자가 다른 셈이라 견줄 수가 없다(실측 270·262·277·248px).
+   바깥에 한 번만 grid 를 두고 줄은 display:contents 로 흘려보내면 세 칸이
+   모든 줄에서 같은 폭으로 선다. */
+.kfrows{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,1.3fr) auto;
+  align-items:center;gap:6px 9px;font-size:12.5px}
+.kfrow{display:contents}
+.kfn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 막대는 얇게, 데이터 끝만 둥글게, 바닥(0)에 붙여 둔다 */
+.kfb{height:9px;border-radius:3px;background:var(--line);overflow:hidden}
+.kfb i{display:block;height:100%;background:var(--accent2);border-radius:0 3px 3px 0}
+.kfv{display:flex;align-items:baseline;gap:6px;white-space:nowrap;font-size:11.5px}
+/* 좁은 자리에서는 이름 칸이 세 글자로 잘려('원전·…') 어느 막대인지 알 수 없었다.
+   이름을 제 줄로 올리고 아래에 막대와 숫자를 둔다 — 자는 그대로 공유한다.
+   화면 폭이 아니라 **칸 폭**으로 판단한다. 두 칸이 나란히 서면 화면이 820px 라도
+   칸은 349px 뿐이라, 화면 기준(560px)으로는 그 경우를 못 잡았다(실측 세 줄이 잘렸다). */
+.kacol{min-width:0;container-type:inline-size}
+@container (max-width:420px){
+  .kfrows{grid-template-columns:minmax(0,1fr) auto;gap:0 9px}
+  .kfn{grid-column:1 / -1;white-space:normal;padding-top:9px}
+  .kfb{grid-column:1;margin-top:3px} .kfv{grid-column:2;margin-top:3px}
+}
+.kfv b{font-size:12.5px}
+.kfv span{color:var(--muted)}
+.kfw{font-size:10px;border:1px solid var(--line);border-radius:5px;padding:0 4px}
+.kafoot{margin:13px 0 0;padding-top:11px;border-top:1px solid var(--line);
+  font-size:12.5px;line-height:1.65;color:var(--muted)}
+.kafoot b{color:var(--ink)}
+.kalist{margin-top:18px}
+.kalist .kah{margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.kasub{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:0}
+.ksolo{margin-top:14px;border-top:1px solid var(--line);padding-top:11px}
+.ksolo>summary{cursor:pointer;font-size:12.5px;font-weight:800;list-style:none}
+.ksolo>summary::-webkit-details-marker{display:none}
+.ksolo>summary::before{content:'▸ ';color:var(--muted)}
+.ksolo[open]>summary::before{content:'▾ '}
+.ksolo>summary .kcnt{margin-left:5px;font-size:11px;font-weight:700;color:var(--muted)}
+/* details 를 접었을 때 안을 숨기는 것은 UA 규칙이라 작성자 규칙에 진다.
+   .kchips 에 display:flex 를 그냥 주면 접어도 칩이 그대로 보인다(실측). */
+.kchips{display:none;flex-wrap:wrap;gap:5px;margin-top:9px}
+.ksolo[open]>.kchips{display:flex}
+.krmore>.krwrap{display:none}
+.krmore[open]>.krwrap{display:grid;margin-top:12px}
+.kchip{font-size:11.5px;color:var(--ink);text-decoration:none;background:var(--chipbg);
+  border:1px solid var(--line);border-radius:6px;padding:2px 7px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kchip:hover{color:var(--accent2);border-color:var(--accent2)}
 /* 국내/해외 소제목 구분 */
 .brief .bsec{margin:0 0 13px}
 .brief .bsec:last-child{margin-bottom:0}
@@ -3275,6 +3329,7 @@ const KR_MODES = ['ap','cat'];
 let krMode = KR_MODES.includes(localStorage.getItem('pnp_krMode'))
   ? localStorage.getItem('pnp_krMode') : 'ap';
 const KR_SHOW = 12;          // 블록마다 보일 건수
+const KR_BLOCKS = 12;      // 펴 두는 블록 수(나머지는 접는다)
 
 function _krItemHTML(it, mode, cm){
   // 묶은 기준은 블록 머리에 이미 있으니 항목에는 **다른 축**을 붙인다.
@@ -3287,9 +3342,106 @@ function _krItemHTML(it, mode, cm){
     + '<span class="kn mono">'+esc(it.number||'')+'</span></li>';
 }
 
+// 목록 위에 올리는 **읽는 값**. 나열만 있으면 70건을 다 훑어야 겨우 감이 오는데,
+// 정작 궁금한 것은 셋뿐이다: 얼마나 들어와 있나 · 어느 분야에 · 어디서.
+//
+// 분모를 국내 공보 전체(같은 창 안의 KR 공개분)로 잡는 것이 핵심이다. 해외 건수만
+// 세면 '44건'이 큰지 작은지 알 길이 없다 — 발전·송배전은 226건 중 44건(19%)이고
+// 원전은 24건 중 9건(37%)이라, 건수로는 발전이 다섯 배지만 **밀도는 원전이 두 배**다.
+// 국내 업계가 알고 싶은 것은 뒤쪽이다.
+const KR_THIN = 20;    // 이보다 적은 분모의 비율은 표시하되 '표본 적음'을 붙인다
+
+// 막대 길이는 **그 묶음의 최댓값**에 맞춘다. 0~100% 자로 그리면 최댓값이 23% 인
+// 화면에서 다섯 줄이 전부 왼쪽 끝의 짤막한 토막이 되어 23·16·11 의 차이가 안 읽힌다.
+// 대신 절대값을 잃지 않도록 %와 원래 건수를 줄마다 직접 적는다 — 막대는 견주는
+// 일만 하고, 크기는 숫자가 말한다.
+function krBarRow(name, num, den, max, note){
+  const pct = den? Math.round(num*100/den) : 0;
+  const w = max>0? Math.round(num*100/den*100/max) : 0;
+  return '<div class="kfrow"><div class="kfn">'+name+'</div>'
+    + '<div class="kfb"><i style="width:'+w+'%"></i></div>'
+    + '<div class="kfv"><b>'+pct+'%</b><span class="mono">'+num+'/'+den+'건</span>'
+    + (note? '<span class="kfw">'+note+'</span>' : '')+'</div></div>';
+}
+
+function krAnalysisHTML(rows, krAll, cm){
+  // ① 분야별 해외 비중 — 비중 큰 순. 분모가 얇은 줄은 지우지 않고 표시만 한다
+  //    (지우면 '그 분야엔 해외가 없다' 로 잘못 읽힌다).
+  const fld=[];
+  (FEED.patents.categories||[]).forEach(c=>{
+    const den=krAll.filter(it=>it.category===c.key).length;
+    if(!den) return;
+    const num=rows.filter(it=>it.category===c.key).length;
+    fld.push({c, num, den, pct:num/den});
+  });
+  fld.sort((a,b)=> b.pct-a.pct || b.den-a.den);
+  const fldMax=fld.length? fld[0].pct*100 : 0;
+  const fldRows=fld.map(f=>krBarRow(
+    f.c.emoji+' '+esc(f.c.name), f.num, f.den, fldMax,
+    f.den<KR_THIN? '표본 적음' : '')).join('');
+
+  // ② 어디서 왔나 — 국적별 건수. 같은 자리에 같은 모양으로 둔다(눈이 덜 헤맨다).
+  // 이름을 아는 나라만 제 줄을 갖는다. 나머지(싱가포르·캐나다처럼 한두 건씩)는
+  // '기타' 로 묶는다 — 한 건짜리 줄이 늘어서면 위의 큰 셋이 안 보인다.
+  const known={}; (FEED.patents.countries||[]).forEach(c=>{ known[c.code]={name:c.name, emoji:c.emoji}; });
+  const rg={}; let etc=0;
+  rows.forEach(it=>{ const k=it.aCountry||'';
+    if(!known[k] || k==='KR'){ etc++; return; }
+    const g=rg[k]||(rg[k]={n:0, flag:known[k].emoji});
+    g.n++; });
+  const rgSort=Object.entries(rg).sort((a,b)=>b[1].n-a[1].n);
+  const rgMax=rows.length? Math.max(etc, ...rgSort.map(e=>e[1].n))*100/rows.length : 0;
+  const rgRows=rgSort
+    .map(([k,v])=>krBarRow(flg(v.flag)+' '+esc(known[k].name), v.n, rows.length, rgMax, '')).join('')
+    + (etc? krBarRow('🌐 기타', etc, rows.length, rgMax, '') : '');
+
+  // ③ 넓게 왔나 좁게 왔나 — 한 곳이 몰아 낸 것과 여러 곳이 한 건씩 낸 것은
+  //    같은 70건이라도 뜻이 정반대다(협상 상대가 하나냐 쉰이냐).
+  const cnt={}; rows.forEach(it=>cnt[it.aName]=(cnt[it.aName]||0)+1);
+  const firms=Object.keys(cnt).length;
+  const ones=Object.values(cnt).filter(v=>v===1).length;
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  const share=rows.length? Math.round(ones*100/firms) : 0;
+
+  const head=fld[0];
+  // 걸러진 목록 위에서도 이 칸은 다시 그려진다. 그때 '최근 90일 국내 공개' 라고
+  // 하면 걸러 낸 21건을 아카이브 전체인 양 말하게 된다 — 무엇을 센 값인지 밝힌다.
+  const narrowed = state.q || state.cats.size || state.countries.size || state.newonly
+    || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
+  const lead=(narrowed? '<b>걸러진 목록</b> 안의 국내 공개 <b>'
+                      : '최근 '+(FEED.patents.lookbackDays||90)+'일 국내 공개 <b>')
+    + krAll.length.toLocaleString()+'건</b> 가운데 <b>'+rows.length.toLocaleString()+'건</b>('
+    + (krAll.length? Math.round(rows.length*100/krAll.length):0)+'%)이 해외 출원인입니다.'
+    + (head? ' 분야로는 <b>'+esc(head.c.name)+'</b>의 해외 비중이 '
+        + Math.round(head.pct*100)+'%로 가장 높습니다.' : '');
+
+  return '<div class="kana">'
+    + '<p class="kalead">'+lead+'</p>'
+    + '<div class="kacols">'
+      + '<div class="kacol"><div class="kah">분야별 해외 비중</div>'
+        + '<p class="kanote">그 분야 국내 공개분 가운데 해외 출원인이 낸 몫입니다. '
+        + '건수가 아니라 <b>밀도</b>라서, 적게 공개되는 분야도 비중이 높으면 눈에 띕니다. '
+        + '막대는 <b>가장 큰 값에 맞춰</b> 그렸습니다(견주기용) — 크기는 옆의 숫자로 보세요.</p>'
+        + '<div class="kfrows">'+fldRows+'</div></div>'
+      + '<div class="kacol"><div class="kah">어디서 왔나</div>'
+        + '<p class="kanote">해외 '+rows.length.toLocaleString()+'건의 출원인 국적 구성입니다. '
+        + '막대는 위와 같은 방식입니다.</p>'
+        + '<div class="kfrows">'+rgRows+'</div></div>'
+    + '</div>'
+    + '<p class="kafoot">출원인 <b>'+firms.toLocaleString()+'곳</b> · 그중 <b>'
+      + ones.toLocaleString()+'곳('+share+'%)</b>이 1건뿐입니다'
+      + (top && top[1]>1? ' (가장 많은 곳은 '+esc(top[0])+' '+top[1]+'건)' : '')+'. '
+      + (share>=60
+         ? '몇 곳이 몰아 낸 것이 아니라 여러 곳이 <b>넓고 얕게</b> 들어와 있습니다 — '
+           + '부딪힐 상대가 하나로 좁혀지지 않습니다.'
+         : '소수의 출원인에 <b>몰려</b> 있습니다 — 상대가 좁아 개별 대응이 가능합니다.')
+    + '</p></div>';
+}
+
 function krEntryHTML(list){
   const rows=list.filter(it=>it.office==='KR' && it.aCountry!=='KR');
   if(!rows.length) return '';
+  const krAll=list.filter(it=>it.office==='KR');
   const cm={}; FEED.patents.categories.forEach(c=>cm[c.key]=c);
   const mode=krMode;
   const by={};
@@ -3300,9 +3452,18 @@ function krEntryHTML(list){
     g.items.push(it); g.names.add(it.aName);
     if(mode!=='cat') g.flag=it.aFlag;
   });
-  const order=Object.entries(by)
+  let order=Object.entries(by)
     .sort((a,b)=>b[1].items.length-a[1].items.length||a[0].localeCompare(b[0]));
-  const blocks=order.map(([k,g])=>{
+  // 회사별로 묶으면 블록이 출원인 수만큼 생긴다 — 실측 163곳 가운데 112곳(69%)이
+  // 1건뿐이라, 여러 건 낸 쉰 곳이 한 건짜리 백열두 곳에 묻혔다. 1건짜리는 이름만
+  // 칩으로 모아 접어 두고(정보는 안 버린다) 블록은 여러 건 낸 곳에만 준다.
+  let solo=[];
+  if(mode!=='cat'){
+    solo=order.filter(([,g])=>g.items.length===1).map(([k,g])=>({name:k, flag:g.flag, it:g.items[0]}));
+    if(solo.length>=5) order=order.filter(([,g])=>g.items.length>1);
+    else solo=[];
+  }
+  const blockHTML=([k,g])=>{
     // 기술별 블록 안에서는 많이 낸 곳부터 세운다. 그냥 두면 열두 줄이 우연히
     // 잡히는 순서라, 그 분야에서 누가 큰지가 안 보인다.
     let items=g.items;
@@ -3322,7 +3483,18 @@ function krEntryHTML(list){
          + '<span class="kcnt">'+g.items.length.toLocaleString()+'건</span>');
     return '<div class="krow"><div class="kap">'+head+'</div>'
       + '<ul class="klist">'+lis+more+'</ul></div>';
-  }).join('');
+  };
+  // 여러 건 낸 곳만 남겨도 쉰 곳이다 — 320px 화면에서 이 칸 하나가 14,000px 였다.
+  // 많이 낸 곳부터 KR_BLOCKS 곳을 펴 두고 나머지는 접는다(기술별은 대여섯 개라 그냥 둔다).
+  const blocks=order.slice(0, KR_BLOCKS).map(blockHTML).join('');
+  const rest=order.slice(KR_BLOCKS);
+  const restHTML=rest.length
+    ? '<details class="ksolo krmore"><summary>'
+      + (mode==='cat'? '나머지 분야 ' : '나머지 ')+rest.length.toLocaleString()+'곳 · '
+      + rest.reduce((n,e)=>n+e[1].items.length,0).toLocaleString()+'건'
+      + ' <span class="kcnt">펼쳐 보기</span></summary>'
+      + '<div class="krwrap">'+rest.map(blockHTML).join('')+'</div></details>'
+    : '';
   const seg='<span class="rankseg">'
     + '<button data-kr="ap" aria-pressed="'+(mode==='ap')+'" '
     + 'title="이 회사가 한국에 무엇을 걸어 뒀나">회사별</button>'
@@ -3332,13 +3504,26 @@ function krEntryHTML(list){
     ? '<b>기술별</b> — 이 기술에 <b>누가</b> 한국에 권리를 걸고 있는지 봅니다. '
       + '블록 안은 그 분야에 많이 낸 곳부터입니다.'
     : '<b>회사별</b> — 이 회사가 한국에 <b>무엇을</b> 걸어 뒀는지 봅니다.';
+  // 칩으로 줄여도 112곳이면 여전히 벽이다. 접어 두고 세어만 준다 — 펼치면 다 있다.
+  const soloHTML = solo.length
+    ? '<details class="ksolo"><summary>1건씩 낸 곳 '
+      + solo.length.toLocaleString()+'곳 <span class="kcnt">펼쳐 보기</span></summary>'
+      + '<div class="kchips">'+solo.map(s=>
+          '<a class="kchip" href="'+esc(safeUrl(s.it.url))+'" target="_blank" rel="noopener" '
+          + 'title="'+esc(s.it.title)+'">'+flg(s.flag)+' '+esc(s.name)+'</a>').join('')
+      + '</div></details>'
+    : '';
   return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개'+seg+'</h3>'
-    + '<p class="sub">'+lead+' 해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
-    + '포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다. '
-    + '제목을 누르면 원문으로 이동. '
+    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
+    + '포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다.'
     + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
     + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
-    + '<div class="krwrap">'+blocks+'</div></div>';
+    + krAnalysisHTML(rows, krAll, cm)
+    // 그림으로 본 다음에 개별 건을 본다. 목록이 먼저 오면 70건을 다 훑고 나서야
+    // 겨우 감이 오는데, 그 감이 바로 위 두 그림이 이미 재어 둔 것이다.
+    + '<div class="kalist"><div class="kah">건별로 보기'
+    + '<span class="kasub">'+lead+' 제목을 누르면 원문으로 이동합니다.</span></div>'
+    + '<div class="krwrap">'+blocks+'</div>'+restHTML+soloHTML+'</div></div>';
 }
 
 // ── 분야별 경쟁 구도 ───────────────────────────────────────────────

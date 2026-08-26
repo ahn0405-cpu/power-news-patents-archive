@@ -1215,10 +1215,18 @@ def _origin_checks() -> None:
                    "function safeUrl(u){return u||'#';}\n"
                  + f"const FEED={json.dumps(feed, ensure_ascii=False)};\n"
                  + f"const IT={json.dumps(items, ensure_ascii=False)};\n"
-                   "const boot=krMode;\n"
-                   "krMode='ap'; const ap=krEntryHTML(IT);\n"
-                   "krMode='cat'; const cat=krEntryHTML(IT);\n"
-                   "console.log(JSON.stringify({boot, ap, cat, none:krEntryHTML([])}));")
+                 # 화면 상태. 검색·필터가 걸리면 분석 첫 줄의 말이 달라져야 한다.
+                 + ("const state={q:'', cats:new Set(), countries:new Set(),"
+                    " newonly:false, period:'all', source:'', savedOnly:false,"
+                    " unreadOnly:false};\n")
+                 + ("const boot=krMode;\n"
+                    "krMode='ap'; const ap=krEntryHTML(IT);\n"
+                    "krMode='cat'; const cat=krEntryHTML(IT);\n"
+                    "krMode='ap'; const wide=krEntryHTML(IT);\n"
+                    "state.q='x'; const narrow=krEntryHTML(IT);\n"
+                    "state.q='';\n"
+                    "console.log(JSON.stringify({boot, ap, cat, wide, narrow,"
+                    " none:krEntryHTML([])}));"))
         prog3 = prog3.replace("\\\\", "\\")
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
                                          encoding="utf-8") as f:
@@ -1240,6 +1248,13 @@ def _origin_checks() -> None:
             heads = lambda h: _re.findall(r'<div class="kap">(.*?)</div>', h)
             check(r3["boot"] == "cat",
                   f"저장해 둔 보기로 시작한다 (받은 값 {r3['boot']!r})")
+            # 걸러진 목록 위에서 '최근 90일 국내 공개' 라고 하면, 걸러 낸 몇 건을
+            # 아카이브 전체인 양 말하게 된다. 무엇을 센 값인지 말이 달라져야 한다.
+            _lead = lambda h: (_re.search(r'<p class="kalead">(.*?)</p>', h)
+                               or _re.match("", "")).group(1) if '"kalead"' in h else ""
+            check("최근" in _lead(r3["wide"]) and "걸러진 목록" not in _lead(r3["wide"])
+                  and "걸러진 목록" in _lead(r3["narrow"]),
+                  "검색·필터가 걸리면 분석 첫 줄이 '걸러진 목록' 이라고 밝힌다")
             # 이 패널은 '해외 출원인이 국내에 공개한 것' 만 담는다.
             check("국내곳" not in r3["ap"] and "해외공개" not in r3["ap"],
                   "국내 출원인과 해외 공개분은 애초에 들어오지 않는다")
@@ -1517,6 +1532,56 @@ def _origin_checks() -> None:
           "검색칸과 그 입력칸 둘 다 줄어들 수 있다")
     check("minmax(min(300px,100%),1fr)" in css2,
           "국내 공개 칸이 화면보다 넓어지지 않는다 (320px 에서 넘치던 자리)")
+
+    # ── 해외 국내공개: 나열 위에 읽는 값을 올린다 ────────────────────
+    kr = js[js.find("function krEntryHTML("):]
+    kr = kr[:kr.find("\nfunction ", 10)]
+    # 소스 차례가 아니라 **돌려주는 문자열** 안의 차례를 본다(restHTML 이 위에서
+    # 미리 만들어지므로 소스 순서로 재면 헛짚는다).
+    krret = kr[kr.rfind("  return '<div class=\"panel wide krpanel\">"):]
+    check(krret.find("krAnalysisHTML(rows, krAll") > 0
+          and krret.find("krAnalysisHTML(rows, krAll") < krret.find('class="kalist"'),
+          "분석이 목록보다 **먼저** 온다 (뒤에 두면 292건을 훑고 나서야 감이 온다)")
+    ka = js[js.find("function krAnalysisHTML("):]
+    ka = ka[:ka.find("\nfunction ", 10)]
+    # 분모가 핵심이다. 해외 건수만 세면 44건이 큰지 작은지 알 길이 없다 —
+    # 그 분야 국내 공개분 **전체**로 나눠야 '밀도' 가 나온다.
+    check("krAll.filter(it=>it.category===c.key).length" in ka
+          and "rows.filter(it=>it.category===c.key).length" in ka,
+          "분야별 해외 비중의 분모가 그 분야 국내 공개분 전체다")
+    check("const krAll=list.filter(it=>it.office==='KR')" in kr,
+          "분모는 같은 창 안의 KR 공개분에서 센다")
+    # 0~100% 자로 그리면 최댓값 23% 인 화면에서 다섯 줄이 전부 토막이 된다.
+    kb = js[js.find("function krBarRow("):]
+    kb = kb[:kb.find("\n}")]
+    check("max>0? Math.round(num*100/den*100/max)" in kb and "width:'+w+'%" in kb,
+          "막대는 그 묶음의 최댓값에 맞춰 그린다 (0~100% 자로는 차이가 안 읽힌다)")
+    check("<b>'+pct+'%</b>" in kb and "num+'/'+den+'건" in kb,
+          "막대가 정규화된 만큼 %와 원래 건수를 줄마다 직접 적는다")
+    check("fldMax=fld.length? fld[0].pct*100" in ka and "rgMax=rows.length? Math.max(" in ka,
+          "두 그림이 각자의 최댓값을 쓴다 (분모가 달라 자를 같이 쓸 수 없다)")
+    check("f.den<KR_THIN? '표본 적음'" in ka and "const KR_THIN" in js,
+          "분모가 얇은 줄은 지우지 않고 '표본 적음' 을 붙인다")
+    # 줄마다 grid 를 따로 만들면 이름 길이에 따라 막대 자리가 달라져 견줄 수가 없다.
+    check(".kfrow{display:contents}" in css2 and ".kfrows{display:grid" in css2
+          and "'<div class=\"kfrows\">'+fldRows" in ka
+          and "'<div class=\"kfrows\">'+rgRows" in ka,
+          "한 그림의 막대가 같은 자를 쓴다 (줄마다 grid 를 따로 두지 않는다)")
+    # 화면 폭으로 재면 두 칸이 나란한 820px 을 놓친다 — 칸은 349px 뿐이었다.
+    check("@container(max-width:420px)" in css2
+          and "container-type:inline-size" in _rule(".kacol{"),
+          "이름 칸이 좁아지면 제 줄로 올라간다 (화면 폭이 아니라 칸 폭으로 잰다)")
+    # details 를 접었을 때 안을 숨기는 것은 UA 규칙이라 작성자 규칙에 진다.
+    check("display:none" in _rule(".kchips{") and ".ksolo[open]>.kchips{display:flex}" in css2,
+          "접힌 칩 묶음이 실제로 숨는다 (display:flex 를 그냥 주면 접어도 보인다)")
+    check("display:none" in _rule(".krmore>.krwrap{")
+          and ".krmore[open]>.krwrap{display:grid" in css2,
+          "접힌 나머지 블록이 실제로 숨는다")
+    check("order.slice(0, KR_BLOCKS)" in kr and "const KR_BLOCKS" in js
+          and "order.slice(KR_BLOCKS)" in kr,
+          "블록은 많이 낸 곳부터 몇 곳만 펴 둔다 (쉰 곳을 다 펴면 320px 에서 14,000px 였다)")
+    check("g.items.length===1" in kr and "solo.length>=5" in kr,
+          "1건뿐인 곳은 칩으로 모은다 (163곳 중 112곳이 그랬다)")
 
     # 한 dict 리터럴에 같은 키를 두 번 적으면 파이썬은 **조용히 뒤엣것만** 남긴다.
     # FIELD_NEWS 를 "news" 로 넣었다가 먼저 있던 "news"(해석 문구)에 덮여, 화면이
