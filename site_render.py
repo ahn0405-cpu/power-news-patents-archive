@@ -1030,6 +1030,36 @@ a{color:inherit}
    작은 쪽' 을 최소폭으로 준다. */
 /* 홈 한 줄 요약. 여섯 줄이 같은 격자에 서야 눈이 세로로 훑을 수 있다 —
    줄마다 폭이 다르면 규모 막대끼리 견주는 일이 불가능해진다. */
+/* 오늘의 짝 — 뉴스 분야/* 오늘의 짝 — 뉴스 분야 → 기술 분야 → 그 분야의 이번 주 특허. */
+.prow{border-top:1px solid var(--line);padding:12px 0 4px}
+.prow:first-of-type{border-top:0;padding-top:4px}
+.phead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
+.phead .pn{font-size:13px;font-weight:800;display:flex;align-items:baseline;gap:7px}
+.phead .pn em{font-style:normal;font-size:11px;font-weight:700;color:var(--q2)}
+.phead .parr{color:var(--muted);font-weight:700}
+.phead .pc{font:inherit;font-size:13px;font-weight:800;color:var(--ink);cursor:pointer;
+  background:var(--chipbg);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.phead .pc:hover{border-color:var(--accent2);color:var(--accent2)}
+.plist{list-style:none;margin:0;padding:0;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:8px}
+.plist li{font-size:12.5px;line-height:1.5;min-width:0}
+.plist a{color:var(--ink);text-decoration:none}
+.plist a:hover{color:var(--accent2);text-decoration:underline}
+.plist .pw{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;
+  display:flex;align-items:center;gap:4px}
+/* 오늘의 한 줄. KPI 바로 아래/* 오늘의 한 줄. KPI 바로 아래, 첫 화면 안에 든다. 머리글만 보이고 누르면
+   본문이 있는 패널로 내려간다 — 같은 글을 두 곳에 두지 않는다. */
+.today{display:flex;flex-direction:column;gap:7px;margin:14px 0 4px}
+.tdl{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
+  font:inherit;cursor:pointer;background:var(--card);border:1px solid var(--line);
+  border-left:3px solid var(--accent);border-radius:10px;padding:11px 13px}
+.tdl:hover{border-color:var(--accent2);border-left-color:var(--accent)}
+.tdl .tdi{font-size:15px;line-height:1.45;flex:none}
+.tdl .tdt{font-size:13.5px;line-height:1.55;color:var(--ink);flex:1;min-width:0}
+.tdl .tdt b{color:var(--accent2);font-weight:800;margin-right:5px;white-space:nowrap}
+.tdl .tdw{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;
+  flex:none;padding-top:2px}
+@media (max-width:700px){ .tdl .tdw{display:none} }
 .csum{display:flex;flex-direction:column;gap:2px;margin-top:12px}
 .crow2{display:grid;grid-template-columns:minmax(150px,1.15fr) minmax(60px,1fr) 58px 92px 62px auto;
   align-items:center;gap:10px;width:100%;text-align:left;font:inherit;cursor:pointer;
@@ -1103,9 +1133,19 @@ a{color:inherit}
 .kw .up{color:var(--accent);font-weight:800;font-size:10.5px}
 .kw.hot{border-color:var(--accent)}
 .trend{display:flex;flex-direction:column;gap:7px}
-.trend .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;font-size:12.5px;
+/* 이름 · 30일 흐름 · 수치 세 칸. 같은 격자에 서야 세로로 훑을 수 있다 —
+   칸 폭이 줄마다 다르면 선끼리 견줄 수 없다. */
+.trend .row{display:grid;grid-template-columns:1fr 68px auto;align-items:center;gap:9px;font-size:12.5px;
   cursor:pointer;border-radius:6px;padding:2px 4px;margin:0 -4px}
 .trend .row:hover{background:var(--bg)}
+.trend .row .sp{display:flex;align-items:center;justify-content:flex-end;min-width:0}
+.trend .row .sp .spk{opacity:.85}
+.trend .row:hover .sp .spk{opacity:1}
+/* 아주 좁으면 흐름 칸을 접는다 — 68px 아래로는 선이 뜻을 잃는다. */
+@media (max-width:520px){
+  .trend .row{grid-template-columns:1fr auto}
+  .trend .row .sp{display:none}
+}
 .trend .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trend .d{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;white-space:nowrap}
 .trend .d .n{color:var(--muted);font-weight:600}
@@ -1679,7 +1719,7 @@ function briefHTML(){
   if(b.author) foot.push('✍️ '+esc(b.author)+(b.mode?' · '+esc(b.mode):''));
   if(b.basis) foot.push('<span class="sep">·</span> '+esc(b.basis));
   if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
-  return '<div class="brief'+(briefCollapsed?' collapsed':'')+'">'
+  return '<div class="brief'+(briefCollapsed?' collapsed':'')+'" id="sec-brief">'
     + '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
     + (b.date?'<span class="bdate">'+esc(b.date)+' 기준</span>':'') + stale
     + '<button class="btoggle" id="briefToggle">'+(briefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
@@ -1722,6 +1762,13 @@ function insightsHTML(){
   //
   // 건수는 그대로 둔다 — '얼마나 많이 나왔나' 는 사실이고 크기를 읽는 데 쓴다.
   // 바뀌는 것은 그 옆의 화살표뿐이다.
+  //
+  // ③ 30일 흐름. 아카이브가 35일 쌓였는데 홈에는 추이 그림이 없었다 — 이 패널이
+  // 숫자 목록이라 '지금 얼마인가' 만 말하고 '어떻게 여기까지 왔나' 는 못 말한다.
+  // 분야마다 한 줄씩 30일 비중 스파크라인을 단다(소형 다중). 한 그림에 열한 줄을
+  // 겹쳐 그리지 않는 이유: 그러려면 색이 열한 개 필요한데 그만큼을 서로 구분되게
+  // 뽑을 수 없다(색각 이상까지 보면 더 그렇다). 줄을 나누면 색이 아예 필요 없고,
+  // 이름이 그림 바로 옆에 붙어 범례도 필요 없다.
   const ct = (ins.catTrend||[]).slice(0,6);
   const ctHtml = ct.length ? ct.map(r=>{
     // 이전 기간에 그 분야가 아예 없었으면 배율이 정의되지 않는다(ratio=null).
@@ -1737,8 +1784,14 @@ function insightsHTML(){
       + '뉴스에서 차지한 비중 '+Math.round((r.share||0)*100)+'%'
       + (fresh ? ' (이전 기간에는 없던 분류입니다)'
          : (cmp && v!=null) ? ' (이전 기간 대비 '+v.toFixed(2)+'배)' : '');
+    // 스파크라인은 '그 분야가 뉴스에서 차지한 비중' 의 30일 흐름이다. 건수가
+    // 아니라 비중이라야 위 화살표와 같은 것을 말한다(건수는 아카이브가 커질수록
+    // 구조적으로 줄어든다 — 바로 위 주석의 그 이유다).
+    const spk = sparkShare(catShareSeries([r.key], TREND_DAYS));
     return '<div class="row" data-cat="'+esc(r.key)+'" title="'+tip+'"><div class="nm">'
-      +r.emoji+' '+esc(r.name)+'</div><div class="d">'+r.recent+'<span class="n">건</span>'
+      +r.emoji+' '+esc(r.name)+'</div>'
+      +'<div class="sp">'+spk+'</div>'
+      +'<div class="d">'+r.recent+'<span class="n">건</span>'
       +'<span class="'+cls+'">'+esc(dd)+'</span></div></div>';
   }).join('') : '<span class="iempty">–</span>';
 
@@ -1747,8 +1800,8 @@ function insightsHTML(){
   // 부제가 화살표의 뜻을 말해야 한다. '이전 대비' 만 적어 두면 옆의 건수와
   // 견주는 것으로 읽힌다 — 실제로 재는 것은 그 분야가 뉴스에서 차지한 비중이다.
   const ctSub = cmp
-    ? '카테고리별 최근 '+w.recentDays+'일 새 기사 · 화살표는 <b>뉴스에서 차지한 비중</b>의 '
-      + '이전 대비 배율입니다(건수 차이가 아닙니다) · 눌러서 필터'
+    ? '카테고리별 최근 '+w.recentDays+'일 새 기사 · 선은 <b>최근 '+TREND_DAYS+'일 비중 흐름</b>, '
+      + '화살표는 그 비중의 이전 대비 배율입니다(건수 차이가 아닙니다) · 눌러서 필터'
     : '카테고리별 최근 '+w.recentDays+'일 새 기사 · 눌러서 필터';
 
   // '이번 주 공개 특허'는 아래 특허 섹션으로 옮겼다 — 인사이트는 뉴스 기반 둘만 둔다.
@@ -1792,7 +1845,7 @@ function patentBriefHomeHTML(){
     : (b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
   const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
     +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
-  return '<div class="homepanel pbhome"><h3>🔬 이번 주 특허 브리핑'
+  return '<div class="homepanel pbhome" id="sec-pbrief"><h3>🔬 이번 주 특허 브리핑'
     + (b.week? '<span class="pbw">'+esc(b.week)+' 수집분</span>':'')
     + '<span class="morelink" data-go="patents">특허 탭 →</span></h3>'
     + (b.headline?'<h4 class="pbh">'+esc(b.headline)+'</h4>':'')
@@ -1897,10 +1950,104 @@ function timelineHTML(){
 // 홈 구성: 아카이브 현황(숫자) → 트렌드 인사이트(계산) → 뉴스 → 특허.
 // 주제별로 묶어 읽히게 한다. 예전에는 뉴스 브리핑과 특허 브리핑 사이에 KPI·인사이트가
 // 끼어 있어 어디까지가 뉴스 얘기인지 흐렸다.
+// ① 오늘의 한 줄 — 스크롤 전에 '오늘 무슨 일이 있었나' 가 끝나게 한다.
+//
+// 뉴스·특허 브리핑의 headline 은 이미 데이터에 있는데, 각각 964px·857px 짜리
+// 패널 **안에** 묻혀 있었다. 실측(1280×800): 첫 화면에 브리핑이 3px 걸쳤다 —
+// 방문자는 스크롤해야 오늘 무슨 일인지 알 수 있었다.
+//
+// 두 줄만 위로 올린다. 본문을 옮기는 게 아니라 **머리글만** 올리고, 누르면 그
+// 패널로 내려간다(같은 글을 두 곳에 두지 않는다).
+function todayLineHTML(){
+  const rows=[];
+  const nb=FEED.brief, pb=FEED.patentBrief;
+  const one=(icon, label, head, when, target)=>
+    '<button type="button" class="tdl" data-jump="'+esc(target)+'">'
+    + '<span class="tdi">'+icon+'</span>'
+    + '<span class="tdt"><b>'+esc(label)+'</b>'+esc(head)+'</span>'
+    + (when? '<span class="tdw">'+esc(when)+'</span>' : '')
+    + '</button>';
+  if(nb && nb.headline)
+    rows.push(one('🧭','오늘의 브리핑 ', nb.headline, nb.date? nb.date+' 기준':'', 'sec-brief'));
+  if(pb && pb.headline)
+    rows.push(one('🔬','이번 주 특허 ', pb.headline, pb.week? pb.week+' 수집':'', 'sec-pbrief'));
+  if(!rows.length) return '';
+  return '<div class="today">'+rows.join('')+'</div>';
+}
+
+// ② 오늘의 짝 — 뉴스와 특허가 만나는 자리.
+//
+// 이 아카이브의 존재 이유는 둘을 잇는 것인데, 홈에서 둘이 만나는 자리가 사분면
+// 차트 하나뿐이었다. 뉴스는 뉴스대로 특허는 특허대로 따로 흐른다.
+//
+// 무엇을 고르나: **뉴스에서 비중이 가장 많이 오른 분야**다. 건수가 많은 분야가
+// 아니라 움직인 분야다 — 원전은 늘 많지만 그게 '오늘' 은 아니다. 배율은 이미
+// 이슈 흐름에서 쓰는 값이라 두 패널이 같은 것을 가리킨다.
+// 그 뉴스 분류에 짝지어진 특허 분야를 찾아, 그 분야의 이번 주 공개 특허를 건다.
+const PAIR_N = 3;          // 분야마다 특허 몇 건
+const PAIR_MIN = 1.10;     // 이 배율은 넘어야 '올랐다' 고 말한다(이슈 흐름과 같은 경계)
+
+function pairRows(){
+  const T=FEED.trade||{}, NEWSMAP=T.newsMap||{};
+  const cm={}; (FEED.patents.categories||[]).forEach(c=>cm[c.key]=c);
+  const nm={}; (FEED.news.categories||[]).forEach(c=>nm[c.key]=c);
+  // 뉴스 분류 → 특허 분야 (짝짓기 표를 뒤집는다)
+  const back={};
+  Object.keys(NEWSMAP).forEach(pk=>(NEWSMAP[pk]||[]).forEach(nk=>{ back[nk]=pk; }));
+  const items=(FEED.patents.items||[]);
+  // 가장 최근 주의 공개분만 — '이번 주' 라고 말하려면 그래야 한다.
+  const week=items.length
+    ? items.map(i=>i.week).sort().slice(-1)[0] : '';
+  const out=[];
+  (FEED.insights.catTrend||[])
+    .filter(c=>c.ratio!=null && c.ratio>=PAIR_MIN && back[c.key] && cm[back[c.key]])
+    .sort((a,b)=>b.ratio-a.ratio)
+    .forEach(c=>{
+      const pk=back[c.key];
+      const pats=items.filter(i=>i.category===pk && (!week || i.week===week))
+        .slice(0, PAIR_N);
+      if(pats.length) out.push({news:nm[c.key]||{key:c.key,name:c.key,emoji:''},
+                                trend:c, cat:cm[pk], pats:pats, week:week});
+    });
+  return out.slice(0,2);
+}
+
+function pairHTML(){
+  const rows=pairRows();
+  if(!rows.length) return '';
+  const body=rows.map(r=>{
+    const lis=r.pats.map(p=>
+      '<li><a href="'+esc(safeUrl(p.url))+'" target="_blank" rel="noopener">'
+      + esc(p.title)+'</a>'
+      + '<span class="pw">'+flg(p.aFlag)+' '+esc(p.aName||'')+'</span></li>').join('');
+    return '<div class="prow">'
+      + '<div class="phead">'
+      +   '<span class="pn">'+r.news.emoji+' '+esc(r.news.name)
+      +     '<em>뉴스 비중 '+Math.round((r.trend.share||0)*100)+'% '
+      +     '▲'+r.trend.ratio.toFixed(1)+'배</em></span>'
+      +   '<span class="parr">→</span>'
+      +   '<button type="button" class="pc" data-catgo="'+esc(r.cat.key)+'">'
+      +     r.cat.emoji+' '+esc(r.cat.name)+'</button>'
+      + '</div>'
+      + '<ul class="plist">'+lis+'</ul></div>';
+  }).join('');
+  return '<div class="homepanel"><h3>🔗 오늘의 짝'
+    + '<span class="morelink" data-go="patents">특허 탭 →</span></h3>'
+    + '<p class="sub">뉴스에서 <b>비중이 오른</b> 분야와, 짝지어진 기술 분야의 '
+    + '<b>이번 주 공개 특허</b>를 나란히 놓습니다. 건수가 많은 분야가 아니라 '
+    + '<b>움직인</b> 분야를 고릅니다 — 원전은 늘 많지만 그게 오늘은 아닙니다. '
+    + '기술 분야를 누르면 거래 탭에서 누가 갖고 있는지까지 볼 수 있습니다.</p>'
+    + body + '</div>';
+}
+
 function renderHome(){
   const parts=[];
   parts.push(kpiHTML());
+  const td=todayLineHTML(); if(td) parts.push(td);
   const ih=insightsHTML(); if(ih) parts.push('<div class="sec">🔎 트렌드 인사이트</div>'+ih);
+  // 짝은 인사이트 바로 뒤다. 위에서 '무엇이 움직였나' 를 본 다음, 그 움직임이
+  // 기술 쪽에서 무엇으로 나타나는지가 곧바로 이어져야 두 축이 한 이야기가 된다.
+  const ph=pairHTML(); if(ph) parts.push(ph);
 
   // 📰 뉴스 — 브리핑 전문 + 지난 브리핑 타임라인.
   // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
@@ -2468,6 +2615,9 @@ function tradeSectionHTML(where){
 // 전부 세면 한 건이 여러 번 계수돼 합이 100%를 넘고, '몇 퍼센트' 라는 말이
 // 뜻을 잃는다 → 첫 코드 하나만 센다. 실측(누적 16,265건): 코드가 아예 없는 항목 0건,
 // 첫 코드가 Y(CPC 전용 태깅) 인 항목 1건 — 대표 코드로 쓰기에 무리가 없다.
+// 흐름 그림이 볼 날수. 아카이브가 35일이라 30일이면 거의 전부를 쓰면서도
+// 초반의 들쭉날쭉한 며칠(수집을 막 시작한 때)은 비켜 간다.
+const TREND_DAYS = 30;
 const SUBS_MIN = 30;        // 이 아래로는 비율이 한두 건에 휘둘린다
 function subsRows(){
   const cats=FEED.patents.categories||[];
@@ -3415,6 +3565,18 @@ function wire(){
     e.preventDefault(); sp.click();
   });
   $('#home').onclick = e=>{
+    // '오늘의 한 줄' → 그 브리핑 패널로 내려간다.
+    // 위임은 **그 요소가 들어 있는 컨테이너**에 달아야 한다. [data-jump] 처리기가
+    // #guide 에만 있어서, 홈에 올린 줄은 눌러도 아무 일이 없었다(실측) —
+    // 바로 아래 data-sup 주석이 같은 교훈을 이미 적어 두고 있었다.
+    const tj=e.target.closest('[data-jump]');
+    if(tj){ const t=document.getElementById(tj.getAttribute('data-jump'));
+      if(t){ // 접혀 있으면 펴 준다 — 내려갔는데 접힌 카드만 보이면 헛걸음이다.
+        if(t.classList.contains('collapsed')){ briefCollapsed=false;
+          localStorage.setItem('pnp_briefClosed','0'); renderHome(); }
+        const t2=document.getElementById(tj.getAttribute('data-jump'));
+        (t2||t).scrollIntoView({behavior:'smooth', block:'start'}); }
+      return; }
     // 브리핑 접기/펼치기
     if(e.target.closest('#briefToggle')){ briefCollapsed=!briefCollapsed;
       localStorage.setItem('pnp_briefClosed', briefCollapsed?'1':'0');

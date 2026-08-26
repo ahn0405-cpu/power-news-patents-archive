@@ -1280,12 +1280,76 @@ def _origin_checks() -> None:
     check("r.ratio==null" in ins and "새 분류" in ins,
           "이전 기간에 없던 분류는 배율 대신 '새 분류' 라고 적는다")
 
+    # ── 홈 첫 화면: 오늘의 한 줄 · 오늘의 짝 · 30일 흐름 ──────────
+    # 실측(1280x800) 첫 화면에 그림이 하나도 없었고 브리핑은 3px 만 걸쳤다 —
+    # '오늘 무슨 일인가' 를 알려면 스크롤해야 했다.
+    print("\n· 홈 첫 화면")
+    css2 = _re.sub(r"\s+", "", _sr._CSS)
+    # ① 머리글만 올린다. 본문을 옮기면 같은 글이 두 곳에 생긴다.
+    check("todayLineHTML" in js and "+ todayLineHTML" not in js.replace("const td=todayLineHTML();", ""),
+          "오늘의 한 줄을 그린다")
+    check("const td=todayLineHTML(); if(td) parts.push(td);" in js,
+          "홈이 오늘의 한 줄을 **부른다** (정의만 두지 않는다)")
+    check('id="sec-brief"' in js and 'id="sec-pbrief"' in js,
+          "내려갈 자리(브리핑 카드)에 앵커가 있다")
+    # 위임은 그 요소가 든 컨테이너에 달아야 한다. [data-jump] 가 #guide 에만
+    # 있어서 홈의 줄은 눌러도 아무 일이 없었다(실측).
+    home_h = js[js.find("$('#home').onclick"):]
+    home_h = home_h[:home_h.find("$('#results')")] or home_h[:4000]
+    # 주석에도 같은 글자가 들어 있다 → **부르는 모양**으로 본다. 글자만 찾으면
+    # 코드를 지워도 주석이 남아 통과한다(변이시험에서 실제로 통과했다).
+    check("closest('[data-jump]')" in home_h,
+          "홈 컨테이너에도 [data-jump] 처리기가 있다 (#guide 에만 있어 안 눌리던 자리)")
+    check("classList.contains('collapsed')" in home_h,
+          "접힌 카드로 내려가면 펴 준다 (내려갔는데 접혀 있으면 헛걸음이다)")
+
+    # ② 짝은 '많은 분야' 가 아니라 '움직인 분야' 를 고른다.
+    pair = js[js.find("function pairRows"):]
+    pair = pair[:pair.find("\nfunction pairHTML")]
+    check("c.ratio>=PAIR_MIN" in pair,
+          "짝은 비중이 오른 분야를 고른다 (건수 순으로 고르면 늘 원전이다)")
+    check("b.ratio-a.ratio" in pair,
+          "많이 오른 순으로 세운다")
+    check("i.week===week" in pair,
+          "'이번 주 공개' 라고 말하려면 최신 주만 담는다")
+    check("back[nk]=pk" in pair,
+          "짝짓기 표를 뒤집어 쓴다 (뉴스 분류 -> 특허 분야)")
+    check("+ pairHTML()" in js or "const ph=pairHTML(); if(ph) parts.push(ph);" in js,
+          "홈이 짝 패널을 부른다")
+
+    # ③ 흐름은 건수가 아니라 비중이어야 위 화살표와 같은 것을 말한다.
+    ins2 = js[js.find("function insightsHTML"):]
+    ins2 = ins2[:ins2.find("\n}")]
+    check("sparkShare(catShareSeries([r.key], TREND_DAYS))" in ins2,
+          "흐름 선은 비중으로 그린다 (건수는 아카이브가 커질수록 구조적으로 준다)")
+    check("TREND_DAYS" in js and "비중 흐름" in ins2,
+          "부제가 선의 뜻을 밝힌다")
+    # 같은 이름의 규칙을 **같은 층에** 둘 두면 세기가 같아 순서로 진다 — 전에
+    # 물린 자리다(.shns .inb 가 뒤에 오는 .shns .sbn 에 졌다). 미디어 쿼리 안의
+    # 재정의는 다른 이야기라 세지 않는다 → 중괄호 깊이로 가른다.
+    def _top_level(sel: str) -> int:
+        n, depth, i = 0, 0, 0
+        while i < len(css2):
+            c = css2[i]
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+            elif css2.startswith(sel, i) and depth == 0:
+                n += 1
+            i += 1
+        return n
+    tr = _top_level(".trend.row{")
+    check(tr == 1,
+          f"'.trend .row' 을 같은 층에 두 번 적지 않는다 (둘이면 순서로 진다 — 받은 값 {tr})")
+    check("grid-template-columns:1fr68pxauto" in css2,
+          "이름·흐름·수치 세 칸이 같은 격자에 선다")
+
     # ── 홈은 요약, 거래 탭은 상세 ─────────────────────────────────
     # 분야 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 먹고 있었다. 홈은 '지금
     # 무슨 일이 벌어지나' 를 한눈에 보이는 자리라 카드가 너무 무겁다 → 지도와
     # 한 줄 요약만 남기고, 상세는 '누구와 부딪히나' 를 묻는 거래 탭으로 보낸다.
     print("\n· 홈은 요약, 거래 탭은 상세")
-    css2 = _re.sub(r"\s+", "", _sr._CSS)
     check("tradeSectionHTML('trade')" in js,
           "거래 탭이 분야 카드를 **실제로** 그린다 (홈으로 보내는 안내만 두지 않는다)")
     # 정의만 보면 안 된다 — 'function catSummaryHTML(rows){' 자체가 그 글자를
