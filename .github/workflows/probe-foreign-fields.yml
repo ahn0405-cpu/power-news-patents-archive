@@ -1,0 +1,35 @@
+# 해외 공보 응답의 전체 필드 확인 — 출원인 국적이 오는가 (수동 실행 전용).
+#
+# 국적 미상 4,848건(CN 4,133 · JP 713)을 메울 수 있는지 가리는 프로브다.
+# 검색 응답의 전체 필드 목록은 본 적이 없어서, 안 읽는 필드에 국적이 있는지
+# 확인되지 않았다. 대조군(US)을 함께 보아 '공보에 없어서' 와 '호출이 틀려서' 를
+# 가른다 — 이 구분을 안 하면 다음 수가 정반대로 갈린다.
+name: 해외 응답 필드 확인 (수동)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # 값은 찍지 않는다. 비어 있는지만 길이로 본다.
+      - name: 시크릿 확인 (값은 찍지 않음)
+        env:
+          K: ${{ secrets.KIPRIS_KEY }}
+        run: |
+          echo "KIPRIS_KEY 길이=${#K}"
+          if [ -z "$K" ]; then echo "::error::KIPRIS_KEY 가 비어 있습니다"; exit 1; fi
+
+      - name: 프로브 실행
+        env:
+          KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}
+        run: python probe_foreign_fields.py
