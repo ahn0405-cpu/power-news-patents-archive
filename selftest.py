@@ -1239,6 +1239,32 @@ def _origin_checks() -> None:
     check("querySelector('.krpanel')" in js,
           "보기를 바꿀 때 그 패널만 갈아 끼운다")
 
+    # ── 좁은 화면에서 본문이 가로로 넘치지 않는다 ──────────────────
+    # 통계 탭이 430px 화면에서 본문 536px 이었다(배포본에서도 그랬다). 원인은
+    # 세 가지가 겹친 것이고, 셋 다 '줄어들 수 없어서' 생긴다:
+    #   · 그리드 칸의 기본 min-width:auto → 표의 최소폭까지 패널이 늘어난다.
+    #     .pmxwrap 에 overflow-x:auto 가 있어도 조상이 안 줄면 스크롤 상자가
+    #     아예 만들어지지 않아 아무 일도 하지 않는다.
+    #   · 검색칸이 제 최소폭을 고집해 오른쪽 묶음을 화면 밖으로 민다.
+    #   · minmax(300px,…) 는 화면이 300px 보다 좁아도 칸을 못 줄인다.
+    css2 = _re.sub(r"\s+", "", _sr._CSS)
+    check(".stats>.panel{min-width:0}" in css2,
+          "통계 패널이 줄어들 수 있다 (표의 최소폭이 화면을 밀어내지 않게)")
+    check(".searchrow{" in css2 and "flex-wrap:wrap}" in
+          css2[css2.find(".searchrow{"):css2.find(".searchrow{") + 120],
+          "검색 줄이 좁은 화면에서 접힌다")
+    # 검색칸과 그 안의 input 둘 다 줄어들 수 있어야 한다. input 은 기본 최소폭이
+    # 있어 flex:1 만으로는 안 줄고, 그 최소폭이 그대로 바깥까지 밀어낸다.
+    def _rule(sel):
+        i = css2.find(sel)
+        return css2[i:css2.find("}", i)] if i >= 0 else ""
+    # 공백을 지운 CSS 라 '.search input{' 은 '.searchinput{' 이 된다.
+    check("min-width:0" in _rule(".search{")
+          and "min-width:0" in _rule(".searchinput{"),
+          "검색칸과 그 입력칸 둘 다 줄어들 수 있다")
+    check("minmax(min(300px,100%),1fr)" in css2,
+          "국내 공개 칸이 화면보다 넓어지지 않는다 (320px 에서 넘치던 자리)")
+
     # 한 dict 리터럴에 같은 키를 두 번 적으면 파이썬은 **조용히 뒤엣것만** 남긴다.
     # FIELD_NEWS 를 "news" 로 넣었다가 먼저 있던 "news"(해석 문구)에 덮여, 화면이
     # 오류 없이 짝을 전부 잃었다. 사람 눈으로는 안 보이는 종류의 실수라 기계가 본다.

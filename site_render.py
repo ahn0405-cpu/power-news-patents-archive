@@ -1022,7 +1022,10 @@ a{color:inherit}
   border-top:1px solid var(--line)}
 @media (max-width:1100px){ .pbhome .bpoints{grid-template-columns:1fr} }
 /* 해외 출원인의 국내 공개 */
-.krwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+/* minmax(300px,…) 는 화면이 300px 보다 좁아도 칸을 300px 밑으로 못 줄인다
+   → 320px 화면에서 칸이 화면 밖으로 나갔다. min() 으로 '300px 또는 100% 중
+   작은 쪽' 을 최소폭으로 준다. */
+.krwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px}
 .krow{min-width:0}
 .kap{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;
   padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line)}
@@ -1084,10 +1087,14 @@ a{color:inherit}
 /* 컨트롤 */
 .controls{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;
   position:sticky;top:0;z-index:5;background:var(--bg);padding-top:8px}
-.searchrow{display:flex;gap:8px;align-items:center}
-.search{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);
+/* 줄바꿈을 허용하고 칸이 줄어들 수 있게 해 둔다. 안 그러면 좁은 화면에서
+   검색칸이 제 최소폭을 고집해 오른쪽 정렬·토글 묶음을 화면 밖으로 밀어낸다
+   (실측 360px: 본문이 395px 이 되어 페이지 전체에 가로 스크롤이 걸렸다).
+   input 은 기본 최소폭이 있어 flex:1 만으로는 안 줄어든다 → min-width:0 을 준다. */
+.searchrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search{flex:1 1 220px;min-width:0;display:flex;align-items:center;gap:8px;background:var(--card);
   border:1px solid var(--line);border-radius:9px;padding:9px 13px}
-.search input{flex:1;border:0;background:none;color:var(--ink);font:inherit;font-size:15px;outline:none}
+.search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:15px;outline:none}
 .search .ico{color:var(--muted)}
 .selects{display:flex;gap:8px;flex-wrap:wrap}
 .selects select,.selects button.toggle{font:inherit;font-size:13px;color:var(--ink);
@@ -1159,6 +1166,14 @@ a{color:inherit}
 .viewseg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 /* 통계 뷰 */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+/* 그리드 칸은 기본이 min-width:auto 라 **안에 든 것의 최소폭까지** 늘어난다.
+   매트릭스 표는 칸 이름이 nowrap 이라 최소폭이 화면보다 넓고, 그래서 패널이
+   화면 밖으로 밀려 본문 전체에 가로 스크롤이 걸렸다(실측 430px 화면에서 본문
+   536px). .pmxwrap 에 overflow-x:auto 를 걸어 뒀지만, 조상이 줄어들 수 없으면
+   스크롤 상자가 만들어지지 않아 아무 일도 하지 않는다.
+   칸이 줄어들 수 있게 해 두면 표는 제 상자 안에서 가로로 넘어간다. */
+.stats>.panel{min-width:0}
+.stats .rgsec, .stats .pmxwrap{min-width:0}
 .stats .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 17px;box-shadow:var(--shadow)}
 .stats .panel.wide{grid-column:1 / -1}
 .stats h3{font-size:14px;font-weight:700;margin:0 0 4px;display:flex;align-items:center;gap:7px}
