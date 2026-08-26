@@ -17,6 +17,10 @@ OPS 로 수집했으니 경로도 검증돼 있다. OPS 서지의 applicant 노�
 오는지는 확인된 적이 없다.** 추측으로 수집기를 고치고 일주일을 기다리는 대신
 여기서 한 번 확인한다.
 
+주의 — 이 프로브는 첫 관문에서 막힐 수 있다. OPS 자격은 2026-08-09 이후 세 주
+연속 401 이었고 그래서 수집 백엔드가 KIPRIS 로 바뀌었다(build_site.py 주석).
+자격이 되살아난 뒤에 돌려야 뒤쪽 물음에 답을 얻는다.
+
 무엇을 보나:
   1) 토큰이 나오나 (자격 확인)
   2) 공개번호 하나로 서지를 받을 수 있나 (docdb / epodoc 두 표기 모두 시도)
@@ -80,7 +84,22 @@ def _token() -> str:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return json.loads(r.read())["access_token"]
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"토큰 실패 {e.code}: {_body(e)}")
+        msg = _body(e)
+        print(f"  ✗ 토큰 실패 {e.code}: {msg}")
+        if e.code == 401:
+            # 이 실패에는 내력이 있다. build_site.py 주석에 적혀 있듯 2026-08-09·
+            # 08-16·08-23 세 주 연속으로 같은 401 이 났고, 그래서 특허 수집
+            # 백엔드가 OPS → KIPRIS 로 바뀌었다(특허 데이터가 8/03 에서 멈춰 있었다).
+            # 그 사실을 여기서 말하지 않으면 '한 번 더 눌러 보자' 를 반복하게 된다.
+            print("\n  이 401 은 새로운 일이 아니다.")
+            print("  2026-08-09·08-16·08-23 세 주 연속으로 같은 오류가 났고, 그래서")
+            print("  특허 수집 백엔드를 OPS → KIPRIS 로 바꿨다(build_site.py 주석).")
+            print("  코드나 호출의 문제가 아니라 **EPO 계정 쪽 자격 문제**다:")
+            print("    · ops.epo.org → My Apps 에서 앱이 살아 있는지")
+            print("    · Consumer key / secret 을 새로 발급받아 GitHub Secret 갱신")
+            print("  자격이 되살아나면 이 프로브를 그대로 다시 돌리면 된다 —")
+            print("  중국·일본 공보에서 국적이 오는지는 그때 처음 확인된다.")
+        raise SystemExit(1)
 
 
 def _biblio(token: str, fmt: str, num: str):
