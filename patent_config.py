@@ -397,8 +397,12 @@ ORIGIN_OP = os.getenv("ORIGIN_OP", "bibliographicInfo")
 ORIGIN_KEYPARAM = os.getenv("ORIGIN_KEYPARAM", "accessKey")
 # 실측: 건당 약 5초. 여섯 갈래 동시면 800곳에 10분 남짓이고, 4천여 곳이 엿새면
 # 다 찬다. 매일 실행에 얹기에 그 정도가 한계다.
-ORIGIN_PER_RUN = int(os.getenv("ORIGIN_PER_RUN", "800"))   # 0 이면 끔
-ORIGIN_WORKERS = int(os.getenv("ORIGIN_WORKERS", "6"))
+# 상한을 대폭 올렸다. KIPRISplus 의 제약은 **일일 총량이 아니라 초당 호출 수**다
+# (공지 실측: 75회/초, 2026-09-01 부터 100회/초). 지금까지 워커 6 × 건당 약 5초라
+# 1.2 req/s — 한도의 1.6% 만 쓰면서 보강을 며칠에 나눠 하고 있었다. 워커를 20 으로
+# 올려도 약 4 req/s 로 한도의 5% 다. 그래서 한 실행에서 전수를 끝낸다.
+ORIGIN_PER_RUN = int(os.getenv("ORIGIN_PER_RUN", "4000"))  # 0 이면 끔
+ORIGIN_WORKERS = int(os.getenv("ORIGIN_WORKERS", "20"))
 ORIGIN_TIMEOUT = int(os.getenv("ORIGIN_TIMEOUT", "20"))
 # 몇 번 연달아 실패하면 그만 시도한다. 번호 표기가 안 맞는 문헌이 섞여 있으면
 # 매 실행 같은 것을 다시 두드리며 상한을 다 써 버린다.
@@ -426,7 +430,7 @@ ORIGIN_KR_SERVICE = os.getenv("ORIGIN_KR_SERVICE", KIPRIS_SERVICE)
 ORIGIN_KR_OP = os.getenv("ORIGIN_KR_OP", "getBibliographyDetailInfoSearch")
 ORIGIN_KR_KEYPARAM = os.getenv("ORIGIN_KR_KEYPARAM", KIPRIS_KEYPARAM)
 # 대상은 국내 출원인 1,174곳(실측)이라 해외(4천여 곳)보다 훨씬 작다 — 이틀이면 찬다.
-ORIGIN_KR_PER_RUN = int(os.getenv("ORIGIN_KR_PER_RUN", "600"))   # 0 이면 끔
+ORIGIN_KR_PER_RUN = int(os.getenv("ORIGIN_KR_PER_RUN", "4000"))  # 0 이면 끔
 
 COUNTRY_KO = {
     "대한민국": "KR", "한국": "KR",
@@ -474,7 +478,7 @@ COUNTRY_KO = {
 KIPRIS_CPC_BASE = os.getenv("KIPRIS_CPC_BASE",
                             "http://plus.kipris.or.kr/openapi/rest")
 KIPRIS_CPC_KEYPARAM = os.getenv("KIPRIS_CPC_KEYPARAM", "accessKey")
-KIPRIS_CPC_LIMIT = int(os.getenv("KIPRIS_CPC_LIMIT", "400"))   # 0 이면 끔
+KIPRIS_CPC_LIMIT = int(os.getenv("KIPRIS_CPC_LIMIT", "5000"))  # 0 이면 끔
 
 _MAIN_GROUP = re.compile(r"^[A-H][0-9]{2}[A-Z]([0-9]+)")
 

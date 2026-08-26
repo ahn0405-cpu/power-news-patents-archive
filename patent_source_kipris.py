@@ -40,6 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import patent_config as cfg
@@ -343,10 +344,16 @@ def _enrich_cpc(items: list[dict]) -> int:
         sub = any(c.startswith(p) for c in it["cpc"] for p in _SUBSTITUTE)
         return (0 if sub else 1, it.get("pub_date") or "")
     order = sorted(items, key=_pri)[:cfg.KIPRIS_CPC_LIMIT]
+    # 건당 1요청이라 순차로 돌면 상한에 비례해 그대로 시간이 된다 — 400건에 7분이
+    # 걸렸고, 상한을 5,000 으로 올린 뒤로는 한 시간을 넘겨 잡 자체가 위태롭다.
+    # KIPRISplus 의 제약은 일일 총량이 아니라 **초당 호출 수**(75회/초, 9/1 부터
+    # 100회/초)이므로 갈래를 늘리는 것이 맞는 답이다. 국적 보강과 같은 방식이다.
+    with ThreadPoolExecutor(max_workers=max(1, cfg.ORIGIN_WORKERS)) as pool:
+        got = list(pool.map(
+            lambda it: _cpc_of((it.get("filing_no") or "").strip() or it["number"]),
+            order))
     changed = 0
-    for it in order:
-        appno = (it.get("filing_no") or "").strip() or it["number"]
-        cpc = _cpc_of(appno)
+    for it, cpc in zip(order, got):
         if not cpc:
             continue
         merged = cpc + [c for c in it["cpc"] if c not in cpc]
@@ -355,8 +362,6 @@ def _enrich_cpc(items: list[dict]) -> int:
         it["category"] = _classify(merged, before)
         if it["category"] != before:
             changed += 1
-        if cfg.KIPRIS_DELAY:
-            time.sleep(cfg.KIPRIS_DELAY)
     skipped = len(items) - len(order)
     print(f"  CPC 보강 {len(order)}건 · 분류 정정 {changed}건"
           + (f" · 상한으로 건너뜀 {skipped}건" if skipped else ""))
