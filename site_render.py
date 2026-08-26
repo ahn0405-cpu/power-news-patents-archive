@@ -367,10 +367,16 @@ def _cat_of(p: dict) -> str:
     화면에서 통째로 사라진다. 저장 파일을 고치는 대신 그릴 때 다시 나눈다 —
     실체참조·공동출원인·출원인 국적 때와 같은 자리다(되돌리기 쉽고 손실이 없다).
 
-    분류 코드가 아무 데도 안 걸리면 빈 값이다. 옛 키로 흘려보내지 않는다 —
-    '미분류' 로 세어 화면에 몇 건인지 밝히는 편이 정직하다.
+    코드가 아무 데도 안 걸리면, **지금 체계에 있는 키일 때만** 저장된 분야를 쓴다.
+    그 항목은 그 분야의 IPC 로 조회해서 들어온 것이라 근거가 있다(수집기도 같은
+    규칙으로 fallback 한다). 지금 체계에 없는 옛 키('renew'·'grid'…)면 빈 값이다 —
+    옛 이름을 화면에 흘려보내느니 세지 않는 편이 정직하다.
     """
-    return pcfg.classify(p.get("cpc") or [], "")
+    got = pcfg.classify(p.get("cpc") or [], "")
+    if got:
+        return got
+    old = p.get("category") or ""
+    return old if old in pcfg.CATEGORY_BY_KEY else ""
 
 
 def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> dict:
