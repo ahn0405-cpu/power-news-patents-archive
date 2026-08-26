@@ -84,6 +84,25 @@ def main() -> None:
     seeded = patent_archive.seed_stats(pstats_store, patent_weeks)
     if seeded:
         print(f"  (예전 주별 버킷의 집계 {seeded}곳을 stats.json 으로 이전)")
+
+    # ── 특허 아카이브 초기화 (일회성, 명시적) ──
+    # 분야 체계를 CPC Y04S 로 갈아엎으면 옛 아카이브를 이어 쓸 수 없다. 옛것은
+    # 우리가 손으로 정한 여덟 분야에 맞춘 IPC 로 모은 것이라 Y04S 갈래별 커버리지가
+    # **고르지 않다** — H02J15·G01R31·H04B3/54 는 아예 조회한 적이 없다. 고르지 않은
+    # 옛것과 고른 새것을 섞으면 분야끼리 비교가 방향성 있게 왜곡된다(부분집합으로
+    # 세면 소수가 다 가진 것처럼 보이던 것과 같은 종류의 오차다).
+    #
+    # 되돌릴 수 없다. gh-pages 는 매 실행 단일 커밋으로 강제 푸시라 이력이 없고,
+    # 남는 사본은 Actions 아티팩트(14일)뿐이다 → 환경변수로 **한 번만** 켠다.
+    # 뉴스는 건드리지 않는다(분야 체계와 무관하다).
+    if os.getenv("PATENT_RESET", "").strip().lower() in ("1", "on", "true", "yes"):
+        print(f"  ⚠️ 특허 아카이브 초기화: {len(patent_weeks)}주 "
+              f"{sum(len(w.get('patents', [])) for w in patent_weeks.values()):,}건 "
+              f"· 집계 {len(pstats_store.get('totals', {})):,}곳을 버리고 새로 시작합니다 "
+              f"(PATENT_RESET). 뉴스는 그대로 둡니다.")
+        patent_weeks = {}
+        pstats_store = {"totals": {}, "offices": {}, "updated": {},
+                        "origins": {}, "originTry": {}}
     print(f"기존 아카이브: 뉴스 {len(news_days)}일 · 특허 {len(patent_weeks)}주 "
           f"· 집계 {len(pstats_store.get('totals', {}))}곳 ({source_dir})")
 

@@ -286,35 +286,49 @@ CATEGORIES = [
     {"key": "y04s10", "emoji": "⚡", "name": "발전·송배전 지원",
      "en": "Systems supporting electrical power generation, transmission or distribution",
      "cpc": ["Y04S10"],
+     # 10/50 계통 운영 · 10/14 저장 · 10/16 변전소 · 10/18 개폐 · 10/20 보호 ·
+     # 10/22 무효전력 · 10/30 상태감시 · 10/12 분산전원 감시
      "ipc": ["H02J3", "H02J13", "H02J1", "H02J15", "H02G", "H01F27",
-             "H02B", "H01H33", "H02H"],
+             "H02B", "H01H33", "H02H", "G01R31"],
      "match": ["Y04S10", "H02J3", "H02J13", "H02J1", "H02J15",
-               "H02G", "H01F27", "H02B", "H01H33", "H02H"]},
+               "H02G", "H01F27", "H02B", "H01H33", "H02H", "G01R31"]},
     {"key": "y04s20", "emoji": "🏠", "name": "수용가·배전 말단",
      "en": ("Management or operation of end-user stationary applications or the "
             "last stages of power distribution"),
      "cpc": ["Y04S20"],
-     "ipc": ["H02J9", "H02J7", "G01R21", "G01R22"],
-     "match": ["Y04S20", "H02J9", "H02J7", "G01R21", "G01R22"]},
+     # 20/12 수용가 저장·UPS · 20/30 스마트미터링 · 20/222 수요반응
+     # H02J7 을 통째로 넣지 않는다 — 기기 배터리 충전 회로(휴대기기·공구)까지
+     # 딸려 온다(실측 118건). 20/12 에 맞는 것은 예비전원(H02J 7/34)과 태양광
+     # 연계 충전(H02J 7/35)이다. 코드를 자르지 않게 해 둔 것이 여기서 값을 한다.
+     "ipc": ["H02J9", "G01R21", "G01R22", "G01D4", "H02J7/34", "H02J7/35"],
+     "match": ["Y04S20", "H02J9", "G01R21", "G01R22", "G01D4",
+               "H02J7/34", "H02J7/35"]},
     {"key": "y04s30", "emoji": "🚗", "name": "수송(전기차)",
      "en": "Systems supporting specific end-user applications in the sector of transportation",
      "cpc": ["Y04S30"],
-     "ipc": ["B60L53", "H02J50"],
-     "match": ["Y04S30", "B60L53", "H02J50"]},
+     # B60L 전체. 30/10 은 '전기·하이브리드차의 상호운용' 이라 충전(B60L53)만이
+     # 아니라 차량 쪽 구동·제어까지 걸린다(V2G 가 그 자리다).
+     "ipc": ["B60L", "H02J50", "B60M"],
+     "match": ["Y04S30", "B60L", "H02J50", "B60M"]},
     {"key": "y04s40", "emoji": "🌐", "name": "통신·정보기술",
      "en": ("Systems for electrical power generation, transmission, distribution or "
             "end-user application management characterised by the use of communication "
             "or information technologies"),
      "cpc": ["Y04S40"],
-     "ipc": ["H04L12", "H04W4", "G06F1"],
-     "match": ["Y04S40", "H04L12", "H04W4"]},
+     # 좁게 잡는다. 이 갈래의 IPC 짝(H04L12 통신망 · H04W4 무선 · G06F 연산)은
+     # 범용 대분류라 그대로 조회하면 전력과 무관한 것이 쏟아진다 — 전력선반송
+     # (H04B3/54)처럼 전력에 붙박인 코드만 쓰고, 나머지는 실제 Y04S40 코드가
+     # 붙어 있을 때만 걸린다. 그래서 이 갈래는 원래 얇다(실측 16건).
+     "ipc": ["H04B3/54"],
+     "match": ["Y04S40", "H04B3/54"]},
     {"key": "y04s50", "emoji": "💱", "name": "시장·거래",
      "en": ("Market activities related to the operation of systems integrating "
             "technologies related to power network operation or related to "
             "communication or information technologies"),
      "cpc": ["Y04S50"],
-     "ipc": ["G06Q50", "G06Q30"],
-     "match": ["Y04S50", "G06Q50", "G06Q30"]},
+     # G06Q50/06 = 전력·가스·수도 사업. G06Q 전체나 G06Q30(상거래)은 범용이라 안 쓴다.
+     "ipc": ["G06Q50/06"],
+     "match": ["Y04S50", "G06Q50/06"]},
     # 예외. Y04S 밖이라는 것을 화면에도 밝힌다(근거는 Y02E 30).
     {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
      "en": "Nuclear fission reactors (Y02E 30/30) — outside the Y04S scheme",
