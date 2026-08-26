@@ -1287,6 +1287,32 @@ def _origin_checks() -> None:
     check("r.ratio==null" in ins and "새 분류" in ins,
           "이전 기간에 없던 분류는 배율 대신 '새 분류' 라고 적는다")
 
+    # ── 분야 설명은 데이터에서 만든다 ─────────────────────────────
+    # '전력 8대 분야(IPC)' 라고 손으로 적어 둔 문구가, 분야를 Y04S 여섯으로 갈아
+    # 끼운 뒤에도 그대로 남아 있었다 — 화면이 없는 분야 여덟 개를 말하고 있었다.
+    # 수를 적지 말고 목록을 세게 한다.
+    print("\n· 분야 설명")
+    # 주석에도 같은 말이 있다 — 그 내력을 적어 둔 것이라 지우면 안 된다.
+    # 그러니 **주석을 걷어낸 뒤 따옴표 안의 문자열만** 본다. 주석 안의 따옴표까지
+    # 세면 설명을 써 둔 것 때문에 검사가 실패한다(실제로 그랬다).
+    # 오늘만 다섯 번째로 겪는 자리다 — 글자를 찾을 때는 어디서 찾는지가 먼저다.
+    _nc = _re.sub(r"^\s*//.*$", "", js, flags=_re.M)
+    _lit = _re.findall(r"'([^'\n]*)'", _nc)
+    stale = [t for t in _lit if "8대 분야" in t or "여덟 분야" in t]
+    check(not stale,
+          "화면 문구에 분야 수를 손으로 적지 않는다 (Y04S 로 바꾼 뒤 6개가 됐다) "
+          + (f"(남은 것: {stale})" if stale else ""))
+    check("catScopeText" in js and "cs.length+'대 분야'" in js,
+          "분야 수를 실제 목록에서 센다")
+    # 설명이 **함수 안에서** 두 가지를 다 말해야 한다. 밖 어딘가에 그 글자가
+    # 있으면 통과하던 검사라, 원전 대목을 지워도 조용했다(변이시험에서 통과했다).
+    cn = js[js.find("function catScopeNote"):]
+    cn = cn[:cn.find("\n}")]
+    check("CPC Y04S" in cn and "Y02E 30" in cn and "c.outside" in js,
+          "설명이 Y04S 갈래와 원전을 따로 더한 이유를 함께 말한다")
+    check("+catScopeNote()+" in js,
+          "설명을 실제로 그린다 (정의만 두지 않는다)")
+
     # ── 홈 첫 화면: 오늘의 한 줄 · 오늘의 짝 · 30일 흐름 ──────────
     # 실측(1280x800) 첫 화면에 그림이 하나도 없었고 브리핑은 3px 만 걸쳤다 —
     # '오늘 무슨 일인가' 를 알려면 스크롤해야 했다.
@@ -1310,19 +1336,16 @@ def _origin_checks() -> None:
     check("classList.contains('collapsed')" in home_h,
           "접힌 카드로 내려가면 펴 준다 (내려갔는데 접혀 있으면 헛걸음이다)")
 
-    # ② 짝은 '많은 분야' 가 아니라 '움직인 분야' 를 고른다.
-    pair = js[js.find("function pairRows"):]
-    pair = pair[:pair.find("\nfunction pairHTML")]
-    check("c.ratio>=PAIR_MIN" in pair,
-          "짝은 비중이 오른 분야를 고른다 (건수 순으로 고르면 늘 원전이다)")
-    check("b.ratio-a.ratio" in pair,
-          "많이 오른 순으로 세운다")
-    check("i.week===week" in pair,
-          "'이번 주 공개' 라고 말하려면 최신 주만 담는다")
-    check("back[nk]=pk" in pair,
-          "짝짓기 표를 뒤집어 쓴다 (뉴스 분류 -> 특허 분야)")
-    check("+ pairHTML()" in js or "const ph=pairHTML(); if(ph) parts.push(ph);" in js,
-          "홈이 짝 패널을 부른다")
+    # ② 뉴스와 특허를 잇는 다리. 전에는 '오늘의 짝' 패널이 이 일을 했는데,
+    # 그 패널이 보여 준 특허 6건 중 3건이 바로 아래 '이번 주 공개 특허' 와
+    # 겹쳤고(실측) 왼쪽 절반(오른 분야)은 결론 한 줄이 이미 말하고 있었다.
+    # 295px 짜리 패널 대신 링크 하나로 남긴다 — 다만 **다리 자체는 있어야 한다**.
+    check("pairHTML" not in js and "pairRows" not in js,
+          "겹치던 '오늘의 짝' 패널은 없앴다")
+    check("data-catpat" in js and "l2go" in js,
+          "결론 한 줄이 그 분야 특허로 가는 다리를 남긴다")
+    check("'[data-catpat]'" in js,
+          "그 다리를 누르면 실제로 움직인다 (버튼만 있고 안 눌리는 상태를 막는다)")
 
     # ③ 흐름은 건수가 아니라 비중이어야 위 화살표와 같은 것을 말한다.
     ins2 = js[js.find("function insightsHTML"):]

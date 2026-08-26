@@ -1030,23 +1030,6 @@ a{color:inherit}
    작은 쪽' 을 최소폭으로 준다. */
 /* 홈 한 줄 요약. 여섯 줄이 같은 격자에 서야 눈이 세로로 훑을 수 있다 —
    줄마다 폭이 다르면 규모 막대끼리 견주는 일이 불가능해진다. */
-/* 오늘의 짝 — 뉴스 분야/* 오늘의 짝 — 뉴스 분야 → 기술 분야 → 그 분야의 이번 주 특허. */
-.prow{border-top:1px solid var(--line);padding:12px 0 4px}
-.prow:first-of-type{border-top:0;padding-top:4px}
-.phead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
-.phead .pn{font-size:13px;font-weight:800;display:flex;align-items:baseline;gap:7px}
-.phead .pn em{font-style:normal;font-size:11px;font-weight:700;color:var(--q2)}
-.phead .parr{color:var(--muted);font-weight:700}
-.phead .pc{font:inherit;font-size:13px;font-weight:800;color:var(--ink);cursor:pointer;
-  background:var(--chipbg);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
-.phead .pc:hover{border-color:var(--accent2);color:var(--accent2)}
-.plist{list-style:none;margin:0;padding:0;display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:8px}
-.plist li{font-size:12.5px;line-height:1.5;min-width:0}
-.plist a{color:var(--ink);text-decoration:none}
-.plist a:hover{color:var(--accent2);text-decoration:underline}
-.plist .pw{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;
-  display:flex;align-items:center;gap:4px}
 /* 오늘의 한 줄. KPI 바로 아래/* 오늘의 한 줄. KPI 바로 아래, 첫 화면 안에 든다. 머리글만 보이고 누르면
    본문이 있는 패널로 내려간다 — 같은 글을 두 곳에 두지 않는다. */
 .today{display:flex;flex-direction:column;gap:7px;margin:14px 0 4px}
@@ -1138,6 +1121,16 @@ a{color:inherit}
 .lead2 .l2s{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;
   font-size:11.5px;font-weight:600;color:var(--muted)}
 .lead2 .l2s .lu{color:var(--q2)}
+/* 뉴스와 특허를 잇는 다리. 옆의 '함께 오른 곳' 문구와 같은 줄에 서되, 누를 수
+   있다는 것이 보여야 한다. */
+.lead2 .l2go{font:inherit;font-size:11.5px;font-weight:700;color:var(--accent2);
+  background:none;border:0;padding:0;cursor:pointer;white-space:nowrap}
+.lead2 .l2go:hover{text-decoration:underline}
+/* 매트릭스가 거래 탭으로 왔다. 거기 .panel 격자가 없으므로 표가 줄어들 수 있게
+   직접 잡아 준다 — 안 그러면 표의 최소폭이 본문을 화면 밖으로 민다(통계 탭에서
+   같은 자리를 이미 한 번 물렸다). */
+.mtxwrap{min-width:0}
+.mtxwrap .rgsec, .mtxwrap .pmxwrap{min-width:0}
 /* 30일 그래프. 세로축은 비중이다 — 일별 기사 수가 23~180건으로 널뛰어 건수로
    그리면 그 널뜀이 곡선을 다 먹는다(실측). 좁으면 제 상자에서 가로로 넘긴다. */
 .tcwrap{overflow-x:auto;margin:0 0 10px}
@@ -1843,9 +1836,21 @@ function leadLineHTML(rows, cmp){
     + up.map(r=>r.emoji+esc(r.name)+' '+r.ratio.toFixed(1)+'배').join(' · ')+'</span>');
   if(dn.length) side.push('<span class="ld">식은 곳 '
     + dn.map(r=>r.emoji+esc(r.name)+' '+r.ratio.toFixed(1)+'배').join(' · ')+'</span>');
+  // 뉴스와 특허를 잇는 다리. 전에는 '오늘의 짝' 패널이 이 일을 했는데, 그 패널이
+  // 보여 주던 특허 6건 중 3건이 바로 아래 '이번 주 공개 특허' 와 겹쳤고(실측)
+  // 왼쪽 절반(오른 분야)은 이 줄이 이미 말하고 있었다 → 295px 짜리 패널 대신
+  // 링크 하나로 남긴다.
+  const T=FEED.trade||{}, NEWSMAP=T.newsMap||{};
+  const back={}; Object.keys(NEWSMAP).forEach(pk=>
+    (NEWSMAP[pk]||[]).forEach(nk=>{ back[nk]=pk; }));
+  const cm={}; (FEED.patents.categories||[]).forEach(c=>cm[c.key]=c);
+  const pk=back[a.key], pc=pk? cm[pk] : null;
+  const bridge = pc
+    ? '<button type="button" class="l2go" data-catpat="'+esc(pk)+'">'
+      + pc.emoji+' '+esc(pc.name)+' 특허 보기 →</button>' : '';
   return '<div class="lead2"><div class="l2h">'+head
     + (sub? '<em>'+esc(sub)+'</em>':'')+'</div>'
-    + (side.length? '<div class="l2s">'+side.join('')+'</div>':'')+'</div>';
+    + ((side.length||bridge)? '<div class="l2s">'+side.join('')+bridge+'</div>':'')+'</div>';
 }
 
 // 30일 그래프. 세로축은 **비중**이다 — 일별 기사 수가 23~180건으로 널뛰어서
@@ -2053,6 +2058,30 @@ function pastPatentBriefsHTML(){
     + '</div></details>';
 }
 
+// 분야 설명을 **데이터에서** 만든다. 손으로 '전력 8대 분야(IPC)' 라고 적어 둔
+// 문구가 분야를 Y04S 여섯으로 갈아 끼운 뒤에도 그대로 남아, 화면이 없는 분야
+// 여덟 개를 말하고 있었다. 수를 세지 말고 목록을 세게 한다.
+function catScopeText(){
+  const cs=(FEED.patents.categories||[]);
+  if(!cs.length) return '전력 분야';
+  const inY=cs.filter(c=>!c.outside), out=cs.filter(c=>c.outside);
+  return '전력 '+cs.length+'대 분야';
+}
+// 그 분야가 무엇인지 한 문장. '8대 분야' 같은 말만 두면 무엇을 세는지 모른다.
+function catScopeNote(){
+  const cs=(FEED.patents.categories||[]);
+  if(!cs.length) return '';
+  const inY=cs.filter(c=>!c.outside), out=cs.filter(c=>c.outside);
+  return '분야는 우리가 정한 것이 아니라 <b>CPC Y04S</b>(스마트그리드 — 계통 운영에 '
+    + '통신·정보기술을 붙인 기술을 묶는 국제 분류)의 '+inY.length+'개 갈래를 그대로 씁니다: '
+    + inY.map(c=>esc(c.name)+'('+esc(c.cpc||'')+')').join(' · ') + '.'
+    + (out.length? ' 여기에 <b>'+out.map(c=>esc(c.name)).join('·')+'</b>'
+        + '을 따로 더해 '+cs.length+'개입니다 — 원전은 계통에 ICT 를 붙인 기술이 아니라 '
+        + 'Y04S 체계에 자리가 없지만, 기관 소관이라 Y02E 30(원자력)을 근거로 함께 봅니다.' : '')
+    + ' 실제 조회는 각 갈래에 대응하는 IPC 코드로 합니다 — Y04S 는 CPC 에만 있어 '
+    + '검색으로는 잡히지 않기 때문입니다.';
+}
+
 function kpiHTML(){
   const n=FEED.news, p=FEED.patents;
   const nL = n.perDay.length? n.perDay[n.perDay.length-1] : {x:'-',y:0};
@@ -2085,7 +2114,7 @@ function kpiHTML(){
         ? '<span class="topap">'+flg(top.flag)+' '+esc(top.name)+'</span><small>'
           + top.total.toLocaleString()+'건 · 최근 '+lookback+'일 국내·해외 공개</small>'
         : '—',
-        '산출 근거: 최근 '+lookback+'일 사이 전력 8대 분야(IPC)로 공개된 문헌이 가장 많은 곳입니다. '
+        '산출 근거: 최근 '+lookback+'일 사이 '+catScopeText()+'로 공개된 문헌이 가장 많은 곳입니다. '
         + '지식재산처 KIPRISplus 로 국내 공보와 해외(미국·유럽·일본·중국) 공보를 조회하며, 출원인을 '
         + '미리 정해 두지 않고 분야와 기간에 맞는 것을 모두 담습니다. 다만 관청마다 수록 범위·시점이 '
         + '달라 최근 공개분에는 시차가 있을 수 있고, 출원인 이름 표기가 다르면 따로 세어질 수 있습니다 '
@@ -2096,9 +2125,10 @@ function kpiHTML(){
     // 툴팁은 모바일에서 뜨지 않는다 → 특허 수치의 산출 근거는 한 줄로도 항상 보이게.
     // 출원인 범위(40곳)는 바로 옆 '분석 출원인' 타일과 ⓘ 툴팁에 있어 여기선 뺀다.
     + '<p class="kpinote">특허 수치는 <b>국내 공보와 해외(미국·유럽·일본·중국) 공보</b>'
-    + '(지식재산처 KIPRISplus 수록 기준)입니다. 최근 '+lookback+'일 공개분을 전력 8대 분야(IPC)로 '
-    + '조회한 값입니다. 같은 발명이 여러 나라에 공개되면 각각 세므로 특허 패밀리 수가 아니라 '
-    + '공개 문헌 수입니다.</p>';
+    + '(지식재산처 KIPRISplus 수록 기준)입니다. 최근 '+lookback+'일 공개분을 '
+    + catScopeText()+'로 조회한 값입니다. 같은 발명이 여러 나라에 공개되면 각각 세므로 '
+    + '특허 패밀리 수가 아니라 공개 문헌 수입니다.</p>'
+    + '<p class="kpinote">'+catScopeNote()+'</p>';
 }
 
 
@@ -2156,79 +2186,11 @@ function todayLineHTML(){
   return '<div class="today">'+rows.join('')+'</div>';
 }
 
-// ② 오늘의 짝 — 뉴스와 특허가 만나는 자리.
-//
-// 이 아카이브의 존재 이유는 둘을 잇는 것인데, 홈에서 둘이 만나는 자리가 사분면
-// 차트 하나뿐이었다. 뉴스는 뉴스대로 특허는 특허대로 따로 흐른다.
-//
-// 무엇을 고르나: **뉴스에서 비중이 가장 많이 오른 분야**다. 건수가 많은 분야가
-// 아니라 움직인 분야다 — 원전은 늘 많지만 그게 '오늘' 은 아니다. 배율은 이미
-// 이슈 흐름에서 쓰는 값이라 두 패널이 같은 것을 가리킨다.
-// 그 뉴스 분류에 짝지어진 특허 분야를 찾아, 그 분야의 이번 주 공개 특허를 건다.
-const PAIR_N = 3;          // 분야마다 특허 몇 건
-const PAIR_MIN = 1.10;     // 이 배율은 넘어야 '올랐다' 고 말한다(이슈 흐름과 같은 경계)
-
-function pairRows(){
-  const T=FEED.trade||{}, NEWSMAP=T.newsMap||{};
-  const cm={}; (FEED.patents.categories||[]).forEach(c=>cm[c.key]=c);
-  const nm={}; (FEED.news.categories||[]).forEach(c=>nm[c.key]=c);
-  // 뉴스 분류 → 특허 분야 (짝짓기 표를 뒤집는다)
-  const back={};
-  Object.keys(NEWSMAP).forEach(pk=>(NEWSMAP[pk]||[]).forEach(nk=>{ back[nk]=pk; }));
-  const items=(FEED.patents.items||[]);
-  // 가장 최근 주의 공개분만 — '이번 주' 라고 말하려면 그래야 한다.
-  const week=items.length
-    ? items.map(i=>i.week).sort().slice(-1)[0] : '';
-  const out=[];
-  (FEED.insights.catTrend||[])
-    .filter(c=>c.ratio!=null && c.ratio>=PAIR_MIN && back[c.key] && cm[back[c.key]])
-    .sort((a,b)=>b.ratio-a.ratio)
-    .forEach(c=>{
-      const pk=back[c.key];
-      const pats=items.filter(i=>i.category===pk && (!week || i.week===week))
-        .slice(0, PAIR_N);
-      if(pats.length) out.push({news:nm[c.key]||{key:c.key,name:c.key,emoji:''},
-                                trend:c, cat:cm[pk], pats:pats, week:week});
-    });
-  return out.slice(0,2);
-}
-
-function pairHTML(){
-  const rows=pairRows();
-  if(!rows.length) return '';
-  const body=rows.map(r=>{
-    const lis=r.pats.map(p=>
-      '<li><a href="'+esc(safeUrl(p.url))+'" target="_blank" rel="noopener">'
-      + esc(p.title)+'</a>'
-      + '<span class="pw">'+flg(p.aFlag)+' '+esc(p.aName||'')+'</span></li>').join('');
-    return '<div class="prow">'
-      + '<div class="phead">'
-      +   '<span class="pn">'+r.news.emoji+' '+esc(r.news.name)
-      +     '<em>뉴스 비중 '+Math.round((r.trend.share||0)*100)+'% '
-      +     '▲'+r.trend.ratio.toFixed(1)+'배</em></span>'
-      +   '<span class="parr">→</span>'
-      +   '<button type="button" class="pc" data-catgo="'+esc(r.cat.key)+'">'
-      +     r.cat.emoji+' '+esc(r.cat.name)+'</button>'
-      + '</div>'
-      + '<ul class="plist">'+lis+'</ul></div>';
-  }).join('');
-  return '<div class="homepanel"><h3>🔗 오늘의 짝'
-    + '<span class="morelink" data-go="patents">특허 탭 →</span></h3>'
-    + '<p class="sub">뉴스에서 <b>비중이 오른</b> 분야와, 짝지어진 기술 분야의 '
-    + '<b>이번 주 공개 특허</b>를 나란히 놓습니다. 건수가 많은 분야가 아니라 '
-    + '<b>움직인</b> 분야를 고릅니다 — 원전은 늘 많지만 그게 오늘은 아닙니다. '
-    + '기술 분야를 누르면 거래 탭에서 누가 갖고 있는지까지 볼 수 있습니다.</p>'
-    + body + '</div>';
-}
-
 function renderHome(){
   const parts=[];
   parts.push(kpiHTML());
   const td=todayLineHTML(); if(td) parts.push(td);
   const ih=insightsHTML(); if(ih) parts.push('<div class="sec">🔎 트렌드 인사이트</div>'+ih);
-  // 짝은 인사이트 바로 뒤다. 위에서 '무엇이 움직였나' 를 본 다음, 그 움직임이
-  // 기술 쪽에서 무엇으로 나타나는지가 곧바로 이어져야 두 축이 한 이야기가 된다.
-  const ph=pairHTML(); if(ph) parts.push(ph);
 
   // 📰 뉴스 — 브리핑 전문 + 지난 브리핑 타임라인.
   // 지난 브리핑이 아직 없으면 2열 배치가 절반을 빈칸으로 남긴다 → 그땐 1열로.
@@ -2244,7 +2206,10 @@ function renderHome(){
   // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
   // 세부 기술은 패널을 따로 두지 않는다 — 같은 여덟 분야를 두 패널이 각각 한 번씩
   // 나열하면 한 분야의 그림을 맞추려고 위아래를 오가게 된다. 분야 카드 안에 넣었다.
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx=tradeSectionHTML();
+  // 분야별 경쟁 구도(지도·요약·카드)는 통째로 거래 탭에 있다. 홈은 '오늘 무슨
+  // 일인가' 를 말하는 자리고, 분야를 하나씩 견주는 일은 '누구와 부딪히나' 를 묻는
+  // 자리에서 필요하다 — 거기 창구가 바로 아래 있다.
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx='';
   if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
@@ -2764,16 +2729,25 @@ function tradeSectionHTML(where){
   // 홈의 '분야별 경쟁 구도' 가 이 표의 축소판이었다). 이 표는 '거래' 이전에
   // '지금 이 분야가 어떻게 생겼나' 를 말하므로 홈이 제자리다.
   // 홈에는 지도와 한 줄 요약까지, 거래 탭에는 분야 카드 여섯 장.
+  // 분야 분석은 **한자리에** 모은다. 전에는 지도·요약이 홈에, 카드가 여기,
+  // 매트릭스가 통계 탭에 흩어져 있어 한 분야의 그림을 맞추려면 탭을 오갔다.
+  // 순서는 넓은 것에서 좁은 것으로: 분야끼리 견주기(지도) → 한 줄 요약 →
+  // 분야마다 누가·무엇을(카드) → 기업 하나하나(매트릭스). 그다음이 창구다.
   if(where === 'trade')
     return '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
-      + '<p class="gdesc">분야마다 <b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>'
-      + '(세부 기술)입니다. 상대를 정하고 나서야 아래 창구가 뜻을 가지므로 여기 둡니다. '
-      + '분야끼리 견주는 지도는 <button type="button" class="golink" data-gohome="1">홈</button>'
-      + '에 있습니다.</p>'
+      + '<p class="gdesc">먼저 지도로 분야끼리 견주고, 그 아래 분야마다 '
+      + '<b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>(세부 기술)를 봅니다. '
+      + '맨 아래 매트릭스는 기업 하나하나가 어느 분야에 내는지입니다. '
+      + '상대를 정하고 나서야 아래 창구가 뜻을 가지므로 여기 둡니다.'
+      + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
+      + '</p>'
+      + quadChartHTML(rows)
+      + catSummaryHTML(rows)
       + body
       + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
       + (T.subsNote? '<p class="gnote">' + esc(T.subsNote) + '</p>' : '')
-      + '<p class="gnote">' + esc(T.note) + '</p>';
+      + '<p class="gnote">' + esc(T.note) + '</p>'
+      + matrixSectionHTML(FEED.patents.items||[]);
   return '<div class="homepanel" id="sec-analysis"><h3>🧭 분야별 경쟁 구도'
     + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
     + '<p class="sub">분야끼리 견주는 지도입니다. 그 아래 한 줄씩은 <b>규모</b>와 '
@@ -3191,6 +3165,26 @@ function _mtxGroups(list){
   return groups;
 }
 
+// 출원인 × 분야 매트릭스. 분야 분석의 가장 좁은 눈금이라 분야별 경쟁 구도의
+// 맨 아래에 온다(넓은 것 → 좁은 것). 전에는 통계 탭에 혼자 있어서, 카드에서 본
+// 분야를 기업 단위로 확인하려면 탭을 옮겨야 했다.
+function matrixSectionHTML(list){
+  if(!list.length) return '';
+  return '<div class="sec" id="sec-matrix">🧩 출원인 × 분야 매트릭스</div>'
+    + '<p class="gdesc">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, '
+    + '각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다. 칸을 누르면 그 출원인·분야 '
+    + '특허로 이동합니다. 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 '
+    + '출원), 각 특허 카드에 표시됩니다.<br>'
+    // 칸의 수는 표본이 아니라 실제 건수다(기간 안 모집단을 통째로 받는다).
+    // 옛 안내를 그대로 두면 맞는 수를 틀린 수로 의심하게 만든다.
+    + '※ 칸의 수는 <b>최근 '+(FEED.patents.lookbackDays||90)
+    + '일 공개분의 실제 건수</b>이며, 그 기업이 가진 특허 전체가 아닙니다. '
+    + '이 표는 <b>가로로</b>(이 기업이 어느 분야에 내나) 읽으세요 — '
+    + '<b>세로로</b>(이 분야를 누가 나눠 갖나)는 바로 위 분야 카드가 말합니다.</p>'
+    + '<div class="mtxwrap">'
+    + regionMatrixHTML(list, {total:true, top:MTX_TOP}) + '</div>';
+}
+
 function regionMatrixHTML(list, opts){
   opts = opts||{};
   const html=_mtxGroups(list).map(rg=>_rgSecHTML(rg, list, opts))
@@ -3356,7 +3350,7 @@ const CONC_MID = 50, CONC_WIDE = 100;
 const CONC_NAME = {hi:'상위권 쏠림', mid:'중간', lo:'고르게 분산'};
 function concLevel(ne){ return ne<CONC_MID ? 'hi' : ne<CONC_WIDE ? 'mid' : 'lo'; }
 const CONC_REL = '등급(상위권 쏠림·중간·고르게 분산)은 절대 기준이 아니라 이 아카이브의 '
-  + '여덟 분야를 서로 견준 상대 값입니다.';
+  + '이 분야들을 서로 견준 상대 값입니다.';
 function concentration(list){
   const ranked = _rankApplicants(list).filter(r=>r.name!=='(미상)');
   return (FEED.patents.categories||[]).map(c=>{
@@ -3592,19 +3586,6 @@ function renderStats(list){
       + '<div><div class="k">최다 출원인</div><div class="v">'+flg(topA.flag)+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.total+'건</span></div></div>'
       + '</div></div>'
-    + '<div class="panel wide"><h3>🧩 출원인 × 분야 매트릭스 <span style="color:var(--muted);font-weight:600;font-size:12px">출원인 국적별</span></h3>'
-      + '<p class="sub">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다. 칸을 누르면 해당 출원인·분야 특허로 이동. '
-      + '※ 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 출원), 각 특허 카드에 표시됩니다.<br>'
-      // OPS 때는 출원인별로 받아 올 수 있는 양에 한계가 있어 이 칸이 일부만
-      // 담고 있었고, 그래서 규모는 홈의 표에서 보라고 안내했다. 지금은 기간 안의
-      // 모집단을 통째로 받으므로 칸이 곧 실제 건수다 — 옛 단서를 그대로 두면
-      // 맞는 수를 틀린 수로 의심하게 만든다.
-      + '※ 칸의 수는 <b>최근 '+(FEED.patents.lookbackDays||90)
-      + '일 공개분의 실제 건수</b>이며, 그 기업이 가진 특허 전체가 아닙니다. '
-      + '이 표는 <b>가로로</b>(이 기업이 어느 분야에 내나) 읽으세요. '
-      + '<b>세로로</b>(이 분야를 누가 나눠 갖나) 보려면 국적으로 묶지 않은 '
-      + '<b>홈의 분야별 경쟁 구도</b>가 낫습니다.</p>'
-      + regionMatrixHTML(list, {total:true, top:MTX_TOP}) + '</div>'
     + krEntryHTML(list)
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
@@ -3771,8 +3752,15 @@ function wire(){
     // 카드나 특허 브리핑을 펼쳐 둔 상태가 날아가지 않게). 패널을 새로 그리면 그
     // 안에서 펼쳐 둔 항목은 닫히므로, 날짜를 기억했다가 되살린다.
     // 홈 요약 줄 → 거래 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
+    // 결론 한 줄의 다리 → 특허 탭에서 그 분야만 본다.
+    const cp=e.target.closest('[data-catpat]');
+    if(cp){ gotoTab('patents', {cat: cp.getAttribute('data-catpat')}); return; }
     const cg=e.target.closest('[data-catgo]');
-    if(cg){ gotoTab('guide'); const k=cg.getAttribute('data-catgo');
+    if(cg){ const k=cg.getAttribute('data-catgo');
+      // 요약줄과 카드가 이제 **같은 탭**에 있다. 그래도 gotoTab 을 부르는 이유:
+      // 이 처리기는 홈에도 남아 있고(다른 곳에서 부를 수 있다), 이미 그 탭이면
+      // gotoTab 이 아무 일도 하지 않는다.
+      gotoTab('guide');
       setTimeout(()=>{ const t=document.querySelector('.trow[data-cat="'+k+'"]');
         (t||document.getElementById('sec-analysis'))
           .scrollIntoView({behavior:'smooth', block:'start'});
@@ -3873,7 +3861,7 @@ function wire(){
 // 건수는 FEED.*.total 을 쓴다 — items 는 지연 로딩 중이면 최근분뿐이라,
 // items.length 로 적으면 '아카이브가 줄었다'로 읽힌다.
 $('#foot').innerHTML = '뉴스: Google 뉴스 RSS(매일 수집) · 특허: KIPRISplus 공식 API에서 '
-  + '전력 8대 분야(IPC)로 매주 수집 — 국내 공보와 해외(미국·유럽·일본·중국) 공보 '
+  + catScopeText()+'로 매주 수집 — 국내 공보와 해외(미국·유럽·일본·중국) 공보 '
   + '(1회 조회 범위 = 최근 '
   + (FEED.patents.lookbackDays||90) + '일 공개분, 새로 공개된 것만 누적). '
   + '제목·요약·링크는 원문으로 연결됩니다. 본 사이트는 이슈 아카이브용이며 특정 투자·정책 판단을 권유하지 않습니다.'
