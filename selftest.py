@@ -1007,6 +1007,11 @@ def _origin_checks() -> None:
           "Y04S 밖인 분야(원전)는 그 사실을 데이터에 달고 있다")
     check(all(c.get("en") for c in pcfg.CATEGORIES),
           "분야마다 공식 영문 표제를 함께 담는다 (옮긴 말이 표준을 대체하지 않게)")
+    # 화면까지 실려 가야 뜻이 있다. 피드에 빠지면 카드에 코드도 표제도 안 붙는다.
+    import site_render as _sr
+    js = _sr._JS
+    check('r.cat.cpc' in js and 'r.cat.en' in js and 'r.cat.outside' in js,
+          "카드가 표준 코드·공식 표제·'Y04S 밖' 을 실제로 그린다")
 
 
 def _foreign_checks() -> None:

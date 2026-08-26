@@ -509,7 +509,11 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
     # (주별 버킷 키는 '수집한 주'라서 공개 기간과 다르다 → 혼동 방지용으로 따로 계산)
     pubs = sorted(p["pub_date"] for p in items if p.get("pub_date"))
     return {
-        "categories": [{"key": c["key"], "emoji": c["emoji"], "name": c["name"]}
+        # en(공식 영문 표제)·outside(Y04S 밖) 를 함께 싣는다. 분야 이름은 우리가
+        # 옮긴 말이라, 표준 표제를 곁에 두지 않으면 옮긴 말이 표준인 것처럼 읽힌다.
+        "categories": [{"key": c["key"], "emoji": c["emoji"], "name": c["name"],
+                        "en": c.get("en", ""), "cpc": (c.get("cpc") or [""])[0],
+                        **({"outside": True} if c.get("outside") else {})}
                        for c in pcfg.CATEGORIES],
         "countries": [{"code": k, "emoji": v[0], "name": v[1]}
                       for k, v in pcfg.COUNTRY_LABEL.items()],
@@ -815,6 +819,12 @@ a{color:inherit}
 .trow.lv-hi{border-left-color:var(--q3)} .trow.lv-mid{border-left-color:var(--q2)}
 .trow.lv-lo{border-left-color:var(--q1)}
 .trow .th{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800}
+.trow .tcpc{font-size:10.5px;font-weight:700;color:var(--muted);cursor:help;
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:7px;
+  letter-spacing:.02em;white-space:nowrap}
+.trow .tout{font-size:10px;font-weight:800;color:var(--accent);cursor:help;
+  border:1px solid var(--accent);border-radius:999px;padding:1px 7px;margin-left:6px;
+  white-space:nowrap}
 .trow .thp{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .trow .tb{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700}
 .trow .tb span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);
@@ -2216,8 +2226,20 @@ function tradeSectionHTML(){
     // 카드 하나가 분야 하나다. 안은 두 토막 — 누가 갖고 있나 / 무엇을 내고 있나.
     // 토막에 이름을 붙이는 이유: 붙이지 않았을 때는 막대 두 개가 잇달아 나와
     // 둘 다 '지분' 처럼 보였다(하나는 출원인 지분, 하나는 기술 갈래 비중이다).
+    // 분야 이름 옆에 표준 코드를 단다. 이 분야들은 우리가 정한 것이 아니라 CPC
+    // Y04S(스마트그리드)가 정한 것이고, 이름은 우리가 옮긴 말이다 — 코드와 공식
+    // 표제를 곁에 두지 않으면 옮긴 말이 표준인 것처럼 읽힌다.
+    // 원전은 Y04S 밖이라 그 사실을 배지로 밝힌다(근거는 Y02E 30).
+    const code = r.cat.cpc
+      ? '<span class="tcpc mono"'+(r.cat.en? ' title="'+esc(r.cat.en)+'"' : '')
+        + '>'+esc(r.cat.cpc)+'</span>'
+      : '';
+    const outside = r.cat.outside
+      ? '<span class="tout" title="Y04S 는 계통에 ICT 를 붙인 것에만 부여됩니다 — '
+        + '원전은 그 체계에 자리가 없어, 기관 소관에 따라 Y02E 30(원자력)을 근거로 '
+        + '따로 둡니다.">Y04S 밖</span>' : '';
     return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
-      + r.cat.emoji+' '+esc(r.cat.name)
+      + r.cat.emoji+' '+esc(r.cat.name) + code + outside
       + '<div class="tb">'+badges.map(b=>'<span>'+b+'</span>').join('')+'</div></div>'
       + '<div class="blk">누가 갖고 있나<span class="blkd">'
       + r.n.toLocaleString()+'곳 중 상위 3곳이 '+pct+'%</span></div>'
