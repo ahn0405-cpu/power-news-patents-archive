@@ -6,13 +6,9 @@ name: 전력 이슈 뉴스 아카이브
 on:
   schedule:
     - cron: "0 23 * * *"   # 08:00 KST 매일
-  workflow_dispatch:       # Actions 탭에서 손으로 즉시 실행
-    inputs:
-      reset_patents:
-        description: "특허 아카이브를 버리고 새로 시작 (되돌릴 수 없음 — 분야 체계를 바꿀 때만)"
-        type: boolean
-        required: false
-        default: false
+  # 특허 아카이브 초기화(PATENT_RESET)는 **주간 워크플로**에 있다. 여기는
+  # --collect news 라 특허를 모으지 않아, 지우기만 하고 안 채운다(실측: 0건이 됐다).
+  workflow_dispatch: {}    # Actions 탭에서 손으로 즉시 실행
   push:
     branches: [main]
     paths:
@@ -71,7 +67,6 @@ jobs:
           # 백엔드를 명시해 기본값에 기대지 않는다.
           PATENT_MOCK: "off"
           PATENT_BACKEND: ${{ vars.PATENT_BACKEND || 'kipris' }}
-          PATENT_RESET: ${{ inputs.reset_patents }}
           KIPRIS_KEY: ${{ secrets.KIPRIS_KEY }}
           OPS_KEY: ${{ secrets.OPS_KEY }}        # PATENT_BACKEND=ops 로 되돌릴 때만 쓰인다
           OPS_SECRET: ${{ secrets.OPS_SECRET }}
