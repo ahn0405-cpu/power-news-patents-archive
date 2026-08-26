@@ -1248,13 +1248,11 @@ def _origin_checks() -> None:
             heads = lambda h: _re.findall(r'<div class="kap">(.*?)</div>', h)
             check(r3["boot"] == "cat",
                   f"저장해 둔 보기로 시작한다 (받은 값 {r3['boot']!r})")
-            # 걸러진 목록 위에서 '최근 90일 국내 공개' 라고 하면, 걸러 낸 몇 건을
-            # 아카이브 전체인 양 말하게 된다. 무엇을 센 값인지 말이 달라져야 한다.
-            _lead = lambda h: (_re.search(r'<p class="kalead">(.*?)</p>', h)
-                               or _re.match("", "")).group(1) if '"kalead"' in h else ""
-            check("최근" in _lead(r3["wide"]) and "걸러진 목록" not in _lead(r3["wide"])
-                  and "걸러진 목록" in _lead(r3["narrow"]),
-                  "검색·필터가 걸리면 분석 첫 줄이 '걸러진 목록' 이라고 밝힌다")
+            # 통계 탭의 이 패널은 걸러진 목록 위에서도 다시 그려진다. 그림이 여기
+            # 남아 있으면 걸러 낸 몇 건을 아카이브 전체인 양 말하게 되므로, 아예
+            # 그리지 않는 것이 맞다 — 그림은 필터가 없는 홈에만 있다.
+            check('"kalead"' not in r3["wide"] and '"kfrow"' not in r3["wide"],
+                  "통계 탭 패널이 실제로 그림 없이 그려진다 (문자열이 아니라 결과로 확인)")
             # 이 패널은 '해외 출원인이 국내에 공개한 것' 만 담는다.
             check("국내곳" not in r3["ap"] and "해외공개" not in r3["ap"],
                   "국내 출원인과 해외 공개분은 애초에 들어오지 않는다")
@@ -1489,13 +1487,25 @@ def _origin_checks() -> None:
           "홈이 매트릭스 축약판을 부르고 그 값을 화면에 넣는다")
     mh = js[js.find("function matrixHomeHTML"):]
     mh = mh[:mh.find("\n}")]
-    check("top:MTX_HOME" in mh and "const MTX_HOME = 3;" in js,
+    check("top:MTX_HOME" in mh and "const MTX_HOME = 3;" in js and "fixed:true" in mh,
           "홈 매트릭스는 국적마다 상위 세 곳만 낸다")
+    # 상위 N 만 자르는 것으로는 모자랐다. 실측(전체 자료)에서 홈 매트릭스에 펼치기
+    # 단추 여섯 개가 그대로 나왔고('나머지 3,162곳 펼치기'), 앞서 목업 자료로만
+    # 봤을 때는 항목이 넷뿐이라 단추가 안 나와서 놓쳤다.
+    _rs = js[js.find("function _rgSecHTML("):]
+    _rs = _rs[:_rs.find("\n}")]
+    check("&& !opts.fixed)" in _rs and "!opts.fixed && mtxOpen.has" in _rs,
+          "축약판은 펼치기 단추를 내지 않고 남이 펼쳐 둔 상태도 따르지 않는다")
     check('data-jump2="guide:sec-matrix"' in mh,
           "홈 축약판에서 전체 판본으로 가는 길이 있다")
     # 탭을 건너뛰는 이동은 data-jump 로는 안 된다(같은 화면 안에서만 움직인다).
-    check("'[data-jump2]'" in js and "gotoTab(v[0])" in js,
-          "'전체 보기' 가 탭을 건너뛰어 그 자리로 간다")
+    check("'[data-jump2]'" in js and "gotoTab(v[0], v[2]? {view:v[2]} : undefined)" in js,
+          "'전체 보기' 가 탭과 **보기**까지 건너뛴다 (통계는 탭만으로 닿지 않는다)")
+    # #home 에만 달면 홈 밖에 놓은 다리는 눌러도 아무 일이 없다(실측한 적 있다).
+    _j2 = js[max(0, js.find("[data-jump2]") - 400):]
+    check("document.addEventListener('click'" in js
+          and js.find("document.addEventListener('click'") < js.find("const j2=e.target.closest"),
+          "탭 건너뛰기 다리가 문서 전체에 달려 있다 (홈 밖에서도 눌린다)")
 
     # ── 통계 탭 차례: 요약을 먼저, 목록을 나중에 ───────────────────
     # 국내 공개는 개별 건 **목록**이고 위의 둘은 전체를 요약한 집계다.
@@ -1536,12 +1546,24 @@ def _origin_checks() -> None:
     # ── 해외 국내공개: 나열 위에 읽는 값을 올린다 ────────────────────
     kr = js[js.find("function krEntryHTML("):]
     kr = kr[:kr.find("\nfunction ", 10)]
-    # 소스 차례가 아니라 **돌려주는 문자열** 안의 차례를 본다(restHTML 이 위에서
-    # 미리 만들어지므로 소스 순서로 재면 헛짚는다).
-    krret = kr[kr.rfind("  return '<div class=\"panel wide krpanel\">"):]
-    check(krret.find("krAnalysisHTML(rows, krAll") > 0
-          and krret.find("krAnalysisHTML(rows, krAll") < krret.find('class="kalist"'),
-          "분석이 목록보다 **먼저** 온다 (뒤에 두면 292건을 훑고 나서야 감이 온다)")
+    # 그림은 홈에만, 목록은 통계 탭에만. 같은 그림을 두 곳에 그리면 둘 중 하나는
+    # 반드시 뒤처진다(홈 분야 카드에서 이미 겪었다).
+    check("krAnalysisHTML" not in kr,
+          "통계 탭의 국내 공개 패널은 그림을 그리지 않는다 (홈으로 갔다)")
+    khome = js[js.find("function krHomeHTML("):]
+    khome = khome[:khome.find("\n}")]
+    check("krAnalysisHTML(rows, krAll, cm)" in khome and "homepanel" in khome,
+          "홈 판본이 그림을 그린다")
+    check("const kr=FULL ? krHomeHTML(FEED.patents.items" in js
+          and "+ (kr? '<div class=\"homemx\">'+kr+'</div>' : '')" in js,
+          "홈이 그 판본을 부르고 그 값을 화면에 넣는다")
+    # 홈은 걸러진 목록이 아니라 **전체**를 센다 — filtered() 를 넘기면 검색 상태에
+    # 따라 홈의 수치가 흔들린다.
+    check("krHomeHTML(filtered())" not in js,
+          "홈은 걸러진 목록이 아니라 전체에서 센다")
+    # 목록이 맨 아래에 오려면 매트릭스 뒤에 놓여야 한다.
+    check(js.find("const mx=FULL ? matrixHomeHTML") < js.find("const kr=FULL ? krHomeHTML"),
+          "해외 국내공개가 홈 맨 아래에 온다")
     ka = js[js.find("function krAnalysisHTML("):]
     ka = ka[:ka.find("\nfunction ", 10)]
     # 분모가 핵심이다. 해외 건수만 세면 44건이 큰지 작은지 알 길이 없다 —

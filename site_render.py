@@ -2265,10 +2265,14 @@ function renderHome(){
   // 자리에서 필요하다 — 거기 창구가 바로 아래 있다.
   const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML();
   const mx=FULL ? matrixHomeHTML(FEED.patents.items||[]) : '';
-  if(pb||pk||mx){
+  // 해외 국내공개는 **맨 아래**다. 앞의 것들이 '우리 쪽에 무엇이 있나' 를 말하고
+  // 이것은 '밖에서 무엇이 들어와 있나' 를 말한다 — 안을 다 보고 밖을 보는 차례다.
+  const kr=FULL ? krHomeHTML(FEED.patents.items||[]) : '';
+  if(pb||pk||mx||kr){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
-      + (mx? '<div class="homemx">'+mx+'</div>' : ''));
+      + (mx? '<div class="homemx">'+mx+'</div>' : '')
+      + (kr? '<div class="homemx">'+kr+'</div>' : ''));
   }
   $('#home').innerHTML = parts.join('');
 }
@@ -3195,12 +3199,15 @@ function _rgSecHTML(rg, list, opts){
   if(!sub.length) return '';
   const all=_rankApplicants(sub);
   const cap=opts.top||0;
-  const open=mtxOpen.has(rg.code);
+  // opts.fixed 는 '늘어나지 않는 축약판' 이다(홈). 펼치기 단추를 내지 않고,
+  // 거래 탭에서 펼쳐 둔 상태(mtxOpen)도 따르지 않는다 — 따르면 홈이 남의 조작
+  // 때문에 수천 행으로 늘어난다. 홈은 언제 봐도 같은 높이여야 한다.
+  const open=!opts.fixed && mtxOpen.has(rg.code);
   const ranked=(cap && !open)? all.slice(0, cap) : all;
   const more=all.length-ranked.length;
   // 버튼은 '몇 곳이 더 있는지'를 숫자로 말한다. '더 보기' 만으로는 30곳이
   // 남았는지 3,000곳이 남았는지 몰라 누를지 말지를 고를 수 없다.
-  const btn = (cap && all.length>cap)
+  const btn = (cap && all.length>cap && !opts.fixed)
     ? '<button class="rgmore" data-mtx="'+esc(rg.code)+'" aria-expanded="'+open+'">'
       + (open? '상위 '+cap+'곳만 보기'
              : '나머지 '+more.toLocaleString()+'곳 펼치기')+'</button>'
@@ -3236,7 +3243,7 @@ function matrixHomeHTML(list){
     + (FEED.patents.lookbackDays||90)+'일 공개분의 실제 건수입니다. '
     + '전체 목록은 거래 탭에 있습니다.</p>'
     + '<div class="mtxwrap">'
-    + regionMatrixHTML(list, {total:true, top:MTX_HOME}) + '</div></div>';
+    + regionMatrixHTML(list, {total:true, top:MTX_HOME, fixed:true}) + '</div></div>';
 }
 
 function matrixSectionHTML(list){
@@ -3404,12 +3411,9 @@ function krAnalysisHTML(rows, krAll, cm){
   const share=rows.length? Math.round(ones*100/firms) : 0;
 
   const head=fld[0];
-  // 걸러진 목록 위에서도 이 칸은 다시 그려진다. 그때 '최근 90일 국내 공개' 라고
-  // 하면 걸러 낸 21건을 아카이브 전체인 양 말하게 된다 — 무엇을 센 값인지 밝힌다.
-  const narrowed = state.q || state.cats.size || state.countries.size || state.newonly
-    || state.period!=='all' || state.source || state.savedOnly || state.unreadOnly;
-  const lead=(narrowed? '<b>걸러진 목록</b> 안의 국내 공개 <b>'
-                      : '최근 '+(FEED.patents.lookbackDays||90)+'일 국내 공개 <b>')
+  // 이 칸은 홈에만 있고 홈에는 검색·필터가 없다 — 그래서 '최근 90일' 이라고 단정해도
+  // 된다. 걸러진 목록 위에 다시 놓게 되면 그때는 무엇을 센 값인지 밝혀야 한다.
+  const lead='최근 '+(FEED.patents.lookbackDays||90)+'일 국내 공개 <b>'
     + krAll.length.toLocaleString()+'건</b> 가운데 <b>'+rows.length.toLocaleString()+'건</b>('
     + (krAll.length? Math.round(rows.length*100/krAll.length):0)+'%)이 해외 출원인입니다.'
     + (head? ' 분야로는 <b>'+esc(head.c.name)+'</b>의 해외 비중이 '
@@ -3436,6 +3440,21 @@ function krAnalysisHTML(rows, krAll, cm){
            + '부딪힐 상대가 하나로 좁혀지지 않습니다.'
          : '소수의 출원인에 <b>몰려</b> 있습니다 — 상대가 좁아 개별 대응이 가능합니다.')
     + '</p></div>';
+}
+
+// 홈에 놓는 그림만의 판본. 목록은 통계 탭에 그대로 두고 **읽는 값만** 올린다 —
+// 홈에서 궁금한 것은 '얼마나·어디에·어디서' 이고, 개별 292건은 찾아갈 일이 있을 때
+// 보는 것이라 자리가 다르다. 홈에는 검색·필터가 없어 언제나 전체를 센다.
+function krHomeHTML(list){
+  const rows=list.filter(it=>it.office==='KR' && it.aCountry!=='KR');
+  if(!rows.length) return '';
+  const krAll=list.filter(it=>it.office==='KR');
+  const cm={}; FEED.patents.categories.forEach(c=>cm[c.key]=c);
+  return '<div class="homepanel"><h3>🇰🇷 해외 출원인의 국내 공개'
+    + '<span class="morelink" data-jump2="patents:sec-krlist:stats">건별로 보기 →</span></h3>'
+    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 '
+    + '한국이 포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다.</p>'
+    + krAnalysisHTML(rows, krAll, cm)+'</div>';
 }
 
 function krEntryHTML(list){
@@ -3513,17 +3532,17 @@ function krEntryHTML(list){
           + 'title="'+esc(s.it.title)+'">'+flg(s.flag)+' '+esc(s.name)+'</a>').join('')
       + '</div></details>'
     : '';
-  return '<div class="panel wide krpanel"><h3>🇰🇷 해외 출원인의 국내 공개'+seg+'</h3>'
-    + '<p class="sub">해외 출원인이 <b>한국에 공개</b>한 특허입니다. 여러 관할 구역 가운데 한국이 '
-    + '포함됐다는 점에서, 해당 기술의 국내 권리화를 함께 고려한 것으로 볼 수 있습니다.'
+  // 그림 둘(분야별 해외 비중·어디서 왔나)은 **홈 맨 아래**로 갔다. 여기는 개별 건을
+  // 찾아보는 자리라 목록만 둔다 — 같은 그림을 두 곳에 그리지 않는다.
+  return '<div class="panel wide krpanel" id="sec-krlist">'
+    + '<h3>🇰🇷 해외 출원인의 국내 공개'+seg+'</h3>'
+    + '<p class="sub">'+lead+' 해외 출원인이 <b>한국에 공개</b>한 특허입니다. '
+    + '여러 관할 구역 가운데 한국이 포함됐다는 점에서, 해당 기술의 국내 권리화를 '
+    + '함께 고려한 것으로 볼 수 있습니다. 제목을 누르면 원문으로 이동합니다. '
+    + '<span class="morelink" data-jump2="home:">분야·국적 요약은 홈에서 →</span>'
     + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
     + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
-    + krAnalysisHTML(rows, krAll, cm)
-    // 그림으로 본 다음에 개별 건을 본다. 목록이 먼저 오면 70건을 다 훑고 나서야
-    // 겨우 감이 오는데, 그 감이 바로 위 두 그림이 이미 재어 둔 것이다.
-    + '<div class="kalist"><div class="kah">건별로 보기'
-    + '<span class="kasub">'+lead+' 제목을 누르면 원문으로 이동합니다.</span></div>'
-    + '<div class="krwrap">'+blocks+'</div>'+restHTML+soloHTML+'</div></div>';
+    + '<div class="krwrap">'+blocks+'</div>'+restHTML+soloHTML+'</div>';
 }
 
 // ── 분야별 경쟁 구도 ───────────────────────────────────────────────
@@ -3923,6 +3942,21 @@ function wire(){
         if(t) t.scrollIntoView({block:'start'}); }
       return; }
   };
+  // '전체 보기 →' 같은 탭 건너뛰기 다리. data-jump 는 같은 화면 안에서만 움직이므로
+  // 탭 이름을 함께 싣는다 — '탭:앵커' 또는 '탭:앵커:보기'(특허 탭의 통계 보기처럼
+  // 탭만으로는 닿지 않는 자리가 있다). 앵커가 비면 탭 맨 위로 간다.
+  //
+  // **문서 전체**에 단다. 전에는 #home 에만 달려 있어서 홈 밖에 놓은 다리는 눌러도
+  // 아무 일이 없었다 — 바로 위 data-jump 주석이 같은 실수를 이미 적어 두고 있다.
+  document.addEventListener('click', e=>{
+    const j2=e.target.closest && e.target.closest('[data-jump2]');
+    if(!j2) return;
+    const v=(j2.getAttribute('data-jump2')||'').split(':');
+    gotoTab(v[0], v[2]? {view:v[2]} : undefined);
+    if(!v[1]) return;
+    setTimeout(()=>{ const t=document.getElementById(v[1]);
+      if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+  });
   // 공급자 칩은 role=button·tabindex=0 이라 키보드로도 눌려야 한다.
   $('#guide').addEventListener('keydown', e=>{
     if(e.key!=='Enter' && e.key!==' ') return;
@@ -3958,12 +3992,6 @@ function wire(){
     // 홈 요약 줄 → 거래 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
     // '전체 보기' → 다른 탭의 특정 자리로. data-jump 는 같은 화면 안에서만
     // 움직이므로 탭을 건너뛰려면 탭 이름을 함께 실어야 한다('탭:앵커').
-    const j2=e.target.closest('[data-jump2]');
-    if(j2){ const v=(j2.getAttribute('data-jump2')||'').split(':');
-      gotoTab(v[0]);
-      setTimeout(()=>{ const t=document.getElementById(v[1]);
-        if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
-      return; }
     // 결론 한 줄의 다리 → 특허 탭에서 그 분야만 본다.
     const cp=e.target.closest('[data-catpat]');
     if(cp){ gotoTab('patents', {cat: cp.getAttribute('data-catpat')}); return; }
