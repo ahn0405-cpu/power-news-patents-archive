@@ -489,6 +489,8 @@ KIPRIS_CPC_KEYPARAM = os.getenv("KIPRIS_CPC_KEYPARAM", "accessKey")
 KIPRIS_CPC_LIMIT = int(os.getenv("KIPRIS_CPC_LIMIT", "5000"))  # 0 이면 끔
 
 _MAIN_GROUP = re.compile(r"^[A-H][0-9]{2}[A-Z]([0-9]+)")
+# 'H02J1'·'Y04S10' 처럼 메인그룹 번호까지 딱 떨어지는 접두. Y 섹션도 쓰므로 [A-Z].
+_MAIN_GROUP_PREF = re.compile(r"[A-Z][0-9]{2}[A-Z][0-9]+")
 
 
 def is_index_code(code: str) -> bool:
@@ -507,6 +509,32 @@ def is_index_code(code: str) -> bool:
     return bool(m) and int(m.group(1).split("/")[0]) >= 2000
 
 
+def code_matches(code: str, pref: str) -> bool:
+    """분류 코드가 접두에 걸리는가 — **코드 경계를 지켜서**.
+
+    글자만 앞에서 맞춰 보면 메인그룹 자리에서 번호가 새어 든다:
+    'H02J101/24'.startswith('H02J1') 이 참이라, 직류 계통(H02J 1/00)을 찾는 접두가
+    IPC 색인 코드 H02J 101/00(전원의 성질)까지 끌고 왔다. 실측 29건이 그렇게
+    분야가 정해져 있었다.
+
+    그래서 접두가 어디서 끝나느냐로 나눈다.
+      · 메인그룹까지 딱 떨어지는 접두('H02J1' = 서브클래스+번호) → 뒤에 '/' 가
+        오거나 끝나야 한다. H02J 1/10 은 잡고 H02J 101/24 는 놓아준다.
+      · 그보다 짧은 접두('G21' 섹션+클래스, 'H02G' 서브클래스) → 뒤는 무엇이든
+        온다. 여기서 끊으면 G21C 1/00 까지 놓쳐 버린다.
+      · 그보다 긴 접두('H02J7/34' 서브그룹) → 숫자가 더 와도 된다. IPC 에서
+        7/345 는 7/34 의 **하위 갈래**라 잘라 내면 자식들을 잃는다.
+    """
+    c = (code or "").replace(" ", "")
+    p = (pref or "").replace(" ", "")
+    if not p or not c.startswith(p):
+        return False
+    if not _MAIN_GROUP_PREF.fullmatch(p):
+        return True
+    rest = c[len(p):]
+    return rest == "" or rest[0] == "/"
+
+
 def classify(codes: list[str], fallback: str = "") -> str:
     """분류 코드 목록 → 분야 키(CATEGORIES 순서 = 우선순위).
 
@@ -520,7 +548,7 @@ def classify(codes: list[str], fallback: str = "") -> str:
     real = [c for c in codes if not is_index_code(c)] or list(codes)
     for cat in CATEGORIES:
         for pref in cat["match"]:
-            if any(c.startswith(pref) for c in real):
+            if any(code_matches(c, pref) for c in real):
                 return cat["key"]
     return fallback
 
