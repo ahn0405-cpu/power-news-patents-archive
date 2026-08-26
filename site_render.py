@@ -1028,17 +1028,6 @@ a{color:inherit}
 /* minmax(300px,…) 는 화면이 300px 보다 좁아도 칸을 300px 밑으로 못 줄인다
    → 320px 화면에서 칸이 화면 밖으로 나갔다. min() 으로 '300px 또는 100% 중
    작은 쪽' 을 최소폭으로 준다. */
-/* Sankey. 폭이 좁아지면 띠가 겹쳐 못 읽으므로 제 상자 안에서 가로로 넘긴다
-   (표와 같은 처리 — .stats>.panel{min-width:0} 이 있어야 실제로 작동한다). */
-.snkwrap{overflow-x:auto}
-.snk{width:100%;min-width:700px;height:auto;display:block}
-.snkl{opacity:.34;transition:opacity .12s}
-.snkl:hover{opacity:.72}
-.snk:hover .snkl{opacity:.18}
-.snk:hover .snkl:hover{opacity:.8}
-.snkn{opacity:.9}
-.snkt{font-size:10.5px;font-weight:600;fill:var(--ink)}
-.snkh{font-size:10.5px;font-weight:700;fill:var(--muted);letter-spacing:.02em}
 /* 홈 한 줄 요약. 여섯 줄이 같은 격자에 서야 눈이 세로로 훑을 수 있다 —
    줄마다 폭이 다르면 규모 막대끼리 견주는 일이 불가능해진다. */
 .csum{display:flex;flex-direction:column;gap:2px;margin-top:12px}
@@ -3010,174 +2999,6 @@ function krEntryHTML(list){
     + '<div class="krwrap">'+blocks+'</div></div>';
 }
 
-// ── 출원인국 → 기술 → 공개국 (Sankey) ────────────────────────────
-// 나라별 건수 표만으로는 '누가 어디에 권리를 거는가' 가 안 보인다. 같은 100건도
-// 자국에만 낸 것과 다섯 특허청에 나눠 낸 것은 전혀 다른 이야기인데, 표는 둘을
-// 같은 숫자로 적는다. 세 축(출원인 국적 · 기술 분야 · 공개 특허청)을 한 그림에
-// 이으면 그 차이가 띠의 굵기로 보인다.
-//
-// **국적 미상을 지우지 않는다.** 실측: 10,582건 중 국적을 아는 것은 3,970건(38%)
-// 뿐이고, 모르는 6,612건은 **전부 해외 공보**다(CN 4,276 · US 899 · EP 724 ·
-// JP 713 · 국내 공보는 0건). 중국 공보가 출원인 국적 칸을 아예 비워 보내기
-// 때문이다. 아는 것만 그리면 'KR 압도적' 이라는 그림이 나오는데 그건 우리가
-// 확인한 범위의 모양일 뿐이다 → 미상을 회색 띠로 같은 그림에 둔다.
-const SNK = {w:940, h:430, pad:{l:76, r:76, t:26, b:14}, nw:11, gap:5};
-// 출원인 국적 5갈래. 이 색은 눈으로 고르지 않고 검사기를 돌려 맞췄다 —
-// 밝은 화면·어두운 화면 양쪽에서 명도대·채도·색각 이상 시 인접 색 구분·대비를
-// 모두 통과하는 조합이다. 미상은 범주가 아니라 '없음' 이라 회색으로 따로 둔다.
-const SNK_COL = {KR:'#2F6FB5', CN:'#D1562C', JP:'#1F8A6D', EU:'#A24BA0', US:'#B98A1E'};
-const SNK_NA = 'var(--muted)';
-const SNK_MIN = 7;          // 이보다 얇은 칸에는 이름을 넣지 않는다(글자가 겹친다)
-let SNK_MIN_TOTAL = 200;    // 이보다 적으면 띠가 아니라 실오라기가 된다
-const SNK_SEP = '';   // 키 구분자 — 나라·분야·특허청 코드에 안 나오는 글자
-
-// 보기: 'all' 전부(미상 포함) | 'known' 국적을 확인한 것만.
-// 기본은 'all' 이다. 확인된 것만 먼저 보이면 그게 전체인 줄 읽힌다 — 62%가
-// 빠진 그림이라 국내 비중이 실제보다 커 보인다. 다만 회색이 그림을 덮어
-// 나라끼리 견주기가 어려우므로, 눌러서 좁혀 볼 수 있게 둔다.
-const SNK_MODES = ['all','known'];
-let snkMode = SNK_MODES.indexOf(localStorage.getItem('pnp_snkMode'))>=0
-  ? localStorage.getItem('pnp_snkMode') : 'all';
-
-function snkFlows(mode){
-  const cm={}; (FEED.patents.categories||[]).forEach(c=>cm[c.key]=c);
-  const om={}; (FEED.patents.offices||[]).forEach(o=>om[o.code]=o);
-  const f={}; let na=0;
-  (FEED.patents.items||[]).forEach(it=>{
-    if(!cm[it.category] || !om[it.office]) return;
-    if(!it.aCountry){ na++; if(mode==='known') return; }
-    const k=(it.aCountry||'')+SNK_SEP+it.category+SNK_SEP+it.office;
-    f[k]=(f[k]||0)+1;
-  });
-  return {flows:f, cm, om, na:na};
-}
-
-// idx: 0=출원인국 1=분야 2=공개국. order 를 주면 그 순서로, 없으면 건수순.
-function snkNodes(flows, idx, order){
-  const tot={};
-  Object.entries(flows).forEach(([k,v])=>{
-    const p=k.split(SNK_SEP); tot[p[idx]]=(tot[p[idx]]||0)+v; });
-  let ks=Object.keys(tot);
-  if(order) ks.sort((a,b)=> order.indexOf(a)-order.indexOf(b));
-  else ks.sort((a,b)=> tot[b]-tot[a] || a.localeCompare(b));
-  // 미상은 늘 맨 아래. 위에 두면 그림의 첫인상을 '모름' 이 차지한다.
-  ks = ks.filter(k=>k!=='').concat(ks.indexOf('')>=0? ['']:[]);
-  return ks.map(k=>({key:k, v:tot[k]}));
-}
-
-function sankeyHTML(){
-  const mode=snkMode;
-  const {flows, cm, om, na} = snkFlows(mode);
-  const total=Object.keys(flows).reduce((s,k)=>s+flows[k],0);
-  if(total < SNK_MIN_TOTAL) return '';
-  const cols=[
-    snkNodes(flows,0),
-    snkNodes(flows,1,(FEED.patents.categories||[]).map(c=>c.key)),
-    snkNodes(flows,2),
-  ];
-  const {w,h,pad,nw,gap}=SNK;
-  const inner=h-pad.t-pad.b;
-  // 세로 배율은 **세 열이 같아야** 한다. 열마다 따로 잡으면 굵기를 열끼리
-  // 견줄 수 없다(같은 100건이 왼쪽에선 굵고 오른쪽에선 얇아진다).
-  const maxGaps=Math.max.apply(null, cols.map(c=>c.length-1));
-  const scale=(inner-maxGaps*gap)/total;
-  const lay=cols.map(nodes=>{
-    let y=pad.t; const m={};
-    nodes.forEach(n=>{ const nh=Math.max(1.5, n.v*scale); m[n.key]={y:y, h:nh, v:n.v}; y+=nh+gap; });
-    return m;
-  });
-  const xs=[pad.l, (w-nw)/2, w-pad.r-nw];
-  const colOf=o=> o? (SNK_COL[o]||'var(--q2)') : SNK_NA;
-  const coName=k=>{ const c=(FEED.patents.countries||[]).filter(x=>x.code===k)[0];
-                    return c? c.name : k; };
-  const coFlag=k=>{ const c=(FEED.patents.countries||[]).filter(x=>x.code===k)[0];
-                    return c? c.emoji : ''; };
-  const nameOf=(i,k)=> i===0 ? (k? coName(k) : '국적 미상')
-                    : i===1 ? cm[k].name : om[k].name;
-  const flagOf=(i,k)=> i===0 ? (k? coFlag(k) : '') : i===1 ? cm[k].emoji : om[k].emoji;
-
-  const cur=[{},{},{}];      // 각 열 노드 안에서 지금까지 쓴 높이
-  const eat=(ci,k,hh)=>{ const o=cur[ci][k]||0; cur[ci][k]=o+hh; return lay[ci][k].y+o; };
-  const ribbon=(x1,y1,x2,y2,hh,col,tip)=>{
-    const mx=(x1+x2)/2;
-    return '<path class="snkl" fill="'+col+'" d="M'+x1+' '+y1.toFixed(1)
-      + 'C'+mx+' '+y1.toFixed(1)+','+mx+' '+y2.toFixed(1)+','+x2+' '+y2.toFixed(1)
-      + 'v'+hh.toFixed(1)
-      + 'C'+mx+' '+(y2+hh).toFixed(1)+','+mx+' '+(y1+hh).toFixed(1)+','+x1+' '+(y1+hh).toFixed(1)
-      + 'Z"><title>'+esc(tip)+'</title></path>';
-  };
-  // 분야 노드 안에서 왼쪽 띠와 오른쪽 띠가 **같은 순서로** 쌓여야 꼬이지 않는다.
-  const keys=Object.keys(flows).map(k=>{
-    const p=k.split(SNK_SEP); return {o:p[0], c:p[1], f:p[2], v:flows[k]}; });
-  const ordO=cols[0].map(n=>n.key), ordC=cols[1].map(n=>n.key), ordF=cols[2].map(n=>n.key);
-  const ix=(a,k)=>a.indexOf(k);
-  let s='';
-  keys.slice().sort((a,b)=> ix(ordO,a.o)-ix(ordO,b.o) || ix(ordC,a.c)-ix(ordC,b.c)
-      || ix(ordF,a.f)-ix(ordF,b.f))
-    .forEach(k=>{
-      const hh=k.v*scale; if(hh<0.4) return;
-      const y1=eat(0,k.o,hh), y2=eat(1,k.c,hh);
-      s+=ribbon(xs[0]+nw, y1, xs[1], y2, hh, colOf(k.o),
-        nameOf(0,k.o)+' → '+nameOf(1,k.c)+' · '+k.v.toLocaleString()+'건');
-    });
-  const cur2={};
-  keys.slice().sort((a,b)=> ix(ordC,a.c)-ix(ordC,b.c) || ix(ordO,a.o)-ix(ordO,b.o)
-      || ix(ordF,a.f)-ix(ordF,b.f))
-    .forEach(k=>{
-      const hh=k.v*scale; if(hh<0.4) return;
-      const o1=cur2[k.c]||0; cur2[k.c]=o1+hh;
-      const y1=lay[1][k.c].y+o1, y2=eat(2,k.f,hh);
-      s+=ribbon(xs[1]+nw, y1, xs[2], y2, hh, colOf(k.o),
-        nameOf(1,k.c)+' → '+nameOf(2,k.f)+' · '+k.v.toLocaleString()+'건'
-        + ' (출원인 '+nameOf(0,k.o)+')');
-    });
-  // 노드 막대와 이름. 이름은 바깥쪽에 두어 띠를 안 가린다.
-  cols.forEach((nodes,ci)=>{
-    nodes.forEach(n=>{
-      const L=lay[ci][n.key];
-      const col = ci===0 ? colOf(n.key) : 'var(--ink)';
-      s+='<rect class="snkn" x="'+xs[ci]+'" y="'+L.y.toFixed(1)+'" width="'+nw
-        + '" height="'+L.h.toFixed(1)+'" fill="'+col+'"><title>'
-        + esc(nameOf(ci,n.key)+' · '+n.v.toLocaleString()+'건 ('
-              + Math.round(n.v/total*100)+'%)')+'</title></rect>';
-      if(L.h>=SNK_MIN){
-        const anc = ci===2 ? 'start' : 'end';
-        const tx  = ci===2 ? xs[ci]+nw+6 : (ci===0 ? xs[0]-6 : xs[1]-6);
-        s+='<text class="snkt" x="'+tx+'" y="'+(L.y+L.h/2+3.4).toFixed(1)
-          + '" text-anchor="'+anc+'">'
-          + esc((flagOf(ci,n.key)? flagOf(ci,n.key)+' ':'')+nameOf(ci,n.key))+'</text>';
-      }
-    });
-  });
-  const heads=['출원인 국적','기술 분야','공개 특허청'].map(function(t,i){
-    return '<text class="snkh" x="'+(i===0? xs[0]+nw : i===1? xs[1]+nw/2 : xs[2])
-      + '" y="14" text-anchor="'+(i===0?'end':i===1?'middle':'start')+'">'+t+'</text>';
-  }).join('');
-  const seg='<span class="rankseg">'
-    + '<button data-snk="all" aria-pressed="'+(mode==='all')+'" '
-    + 'title="국적을 확인하지 못한 건까지 전부">전체</button>'
-    + '<button data-snk="known" aria-pressed="'+(mode==='known')+'" '
-    + 'title="출원인 국적을 확인한 건만 — 62%가 빠진 그림입니다">국적 확인분</button></span>';
-  const pct=na? Math.round(na/(total+(mode==='known'? na:0))*100) : 0;
-  const note = mode==='known'
-    ? '<br>※ <b>국적을 확인한 '+total.toLocaleString()+'건만</b> 그린 그림입니다. '
-      + '확인하지 못한 '+na.toLocaleString()+'건('+pct+'%)이 빠져 있고 그것이 전부 '
-      + '해외 공보라, <b>이 그림은 국내 비중을 실제보다 크게 보입니다.</b> '
-      + '나라끼리 견주는 용도로만 보세요.'
-    : (na? '<br>※ <b>국적 미상 '+na.toLocaleString()+'건('+pct+'%)을 지우지 않고 회색 띠로 '
-         + '함께 둡니다.</b> 전부 해외 공보이고 국내 공보는 한 건도 없습니다 — 중국 공보가 '
-         + '출원인 국적 칸을 비워 보내기 때문입니다. 회색이 가려 나라끼리 견주기 어려우면 '
-         + '[국적 확인분]으로 좁혀 보세요.' : '');
-  return '<div class="panel wide snkpanel"><h3>🌏 출원인국 → 기술 → 공개 특허청'+seg+'</h3>'
-    + '<p class="sub">같은 100건도 <b>자국에만</b> 낸 것과 <b>여러 특허청에 나눠</b> 낸 것은 다른 '
-    + '이야기인데, 나라별 건수 표는 둘을 같은 숫자로 적습니다. 세 축을 이어 띠의 굵기로 봅니다. '
-    + '띠 색은 출원인 국적이고, 띠에 마우스를 올리면 건수가 나옵니다.'
-    + note
-    + '</p><div class="snkwrap"><svg class="snk" viewBox="0 0 '+w+' '+h+'" role="img" '
-    + 'aria-label="출원인 국적에서 기술 분야를 거쳐 공개 특허청으로 가는 흐름">'
-    + heads + s + '</svg></div></div>';
-}
-
 // ── 분야별 경쟁 구도 ───────────────────────────────────────────────
 // 표본을 그대로 세면 안 된다. 수집은 출원인당 상한(PER_APPLICANT_LIMIT)이 있어
 // 큰 기업일수록 잘려 나가고, 잘린 곳들이 표본의 대부분을 차지한다. 실측하면
@@ -3453,7 +3274,6 @@ function renderStats(list){
       + '<b>세로로</b>(이 분야를 누가 나눠 갖나) 보려면 국적으로 묶지 않은 '
       + '<b>홈의 분야별 경쟁 구도</b>가 낫습니다.</p>'
       + regionMatrixHTML(list, {total:true, top:MTX_TOP}) + '</div>'
-    + sankeyHTML()
     + krEntryHTML(list)
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
@@ -3651,15 +3471,6 @@ function wire(){
     const rb=e.target.closest('[data-rank]');
     if(rb){ rankMode=rb.getAttribute('data-rank');
       localStorage.setItem('pnp_rankMode', rankMode); render(); return; }
-    // Sankey 보기(전체/국적 확인분) — 그 패널만 갈아 끼운다.
-    const nb=e.target.closest('[data-snk]');
-    if(nb){ snkMode=nb.getAttribute('data-snk');
-      localStorage.setItem('pnp_snkMode', snkMode);
-      const cur=document.querySelector('.snkpanel');
-      if(cur){ const tmp=document.createElement('div'); tmp.innerHTML=sankeyHTML();
-        const next=tmp.firstElementChild; if(next) cur.replaceWith(next); }
-      else render();
-      return; }
     // 국내 공개 보기 방식(회사별/기술별) — 패널 하나만 갈아 끼운다.
     // 통계 전체를 다시 그리면 위에서 펼쳐 둔 국적 묶음이 그대로 있어도 스크롤이 튄다.
     const kb=e.target.closest('[data-kr]');
