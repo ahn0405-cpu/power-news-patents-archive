@@ -1,0 +1,42 @@
+# EPO OPS 로 중국·일본 공보의 출원인 국적을 얻을 수 있는지 확인 (수동 실행 전용).
+#
+# 우리 아카이브에서 국적이 비어 있는 4,848건은 거의 전부 중국·일본 공보다.
+# KIPRIS 안에서 메울 길은 실측으로 다 막혀 있다 — 남은 수가 OPS 이고, 중·일
+# 공보에서도 값이 오는지는 확인된 적이 없다. 추측으로 수집기를 고치고 일주일을
+# 기다리는 대신 여기서 한 번 확인한다.
+#
+# 정기 실행이 아니다. 필요할 때만 손으로 돌린다(OPS 무료 쿼터를 아낀다).
+name: OPS 출원인 국적 확인 (수동)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v5
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # 시크릿이 비어 오면 원인을 로그만으로 못 가린다(이름이 다른지, Environment
+      # 시크릿으로 들어갔는지). 값은 찍지 않고 **길이만** 본다.
+      - name: 시크릿 확인 (값은 찍지 않음)
+        env:
+          K: ${{ secrets.OPS_KEY }}
+          S: ${{ secrets.OPS_SECRET }}
+        run: |
+          echo "OPS_KEY 길이=${#K}  OPS_SECRET 길이=${#S}"
+          if [ -z "$K" ] || [ -z "$S" ]; then
+            echo "::error::OPS_KEY/OPS_SECRET 이 비어 있습니다"; exit 1
+          fi
+
+      - name: 프로브 실행
+        env:
+          OPS_KEY: ${{ secrets.OPS_KEY }}
+          OPS_SECRET: ${{ secrets.OPS_SECRET }}
+        run: python probe_ops_origin.py
