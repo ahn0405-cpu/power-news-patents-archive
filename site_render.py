@@ -541,11 +541,10 @@ def _patent_feed(patent_weeks: dict[str, dict], stats: dict | None = None) -> di
         "originsBlocked": origins_blocked,
         "offices": [{"code": o["code"], "emoji": o["emoji"], "name": o["name"]}
                     for o in pcfg.OFFICES],
+        # 카드·안내문의 "최근 N일" 문구가 설정과 어긋나지 않게 값으로 넘긴다.
         "lookbackDays": pcfg.LOOKBACK_DAYS,
         "krLimit": pcfg.KR_LIMIT,
         "perApplicantLimit": pcfg.PER_APPLICANT_LIMIT,   # 표본 상한(랭킹의 '이상' 표기용)
-        # 공급자 절의 "최근 N일" 문구가 설정과 어긋나지 않게 값으로 넘긴다.
-        "lookbackDays": pcfg.LOOKBACK_DAYS,
         "applicants": len(pcfg.APPLICANTS),
         # 카드마다 붙는 조회 창구(Espacenet·Google Patents 등). 공개번호만 있으면
         # 되므로 항목별로 URL 을 저장하지 않고 템플릿만 한 번 내려보낸다.
@@ -611,7 +610,12 @@ def render_all(site_dir: Path, news_days: dict[str, dict],
         "guideNote": ip_guide.NOTE,
         "staown": staown or None,
         "staownNote": ip_guide.STAOWN_NOTE,
-        "trade": {"map": ip_guide.FIELD_MAP, "unpaired": ip_guide.UNPAIRED,
+        # newsMap 이지 news 가 아니다 — 이 dict 에는 이미 "news"(READ_NEWS,
+        # 해석 문구)가 있어서 처음에 "news" 로 넣었더니 뒤에 오는 쪽이 이기며
+        # 통째로 덮였다. 화면에서는 짝이 하나도 안 잡혀 여섯 분야가 전부
+        # '뉴스 짝 없음' 으로 나왔다(오류는 안 났다).
+        "trade": {"map": ip_guide.FIELD_MAP, "newsMap": ip_guide.FIELD_NEWS,
+                  "unpaired": ip_guide.UNPAIRED,
                   "conc": ip_guide.READ_CONC, "news": ip_guide.READ_NEWS,
                   "kr": ip_guide.READ_KR, "note": ip_guide.TRADE_NOTE,
                   "quadLead": ip_guide.QUAD_GUIDE_LEAD,
@@ -1980,14 +1984,23 @@ function tradeRows(){
   // 분야는 전부 싣는다. 뉴스 쪽에 짝이 없는 분야(계량·스마트그리드)는 뉴스 칸만
   // 비우고 권리 구조는 그대로 보인다 — 한전·State Grid·LS일렉트릭이 있는 분야라
   // '뉴스 분류가 없다' 는 이유로 통째로 빼면 화면이 사실보다 좁아진다.
+  // 한 특허 분야가 여러 뉴스 분류에 걸린다(Y04S 10 = 송·변전 + 재생에너지 +
+  // 전력설비). catTrend 의 share·prevShare 는 **같은 분모**를 쓰는 비중이라
+  // 그대로 더할 수 있다 — 배율은 더한 비중끼리 나눈다.
+  const NEWSMAP=T.newsMap||{};
   return conc.map(r=>{
-    const paired = r.cat.key in MAP;
-    const c=paired? ct[r.cat.key] : null;
-    const ratio=(c&&c.ratio!=null)?c.ratio:null;
+    const keys = NEWSMAP[r.cat.key]||[];
+    const paired = keys.length>0;
+    const rows = keys.map(k=>ct[k]).filter(Boolean);
+    const share = rows.reduce((s,c)=>s+(c.share||0), 0);
+    const prev  = rows.reduce((s,c)=>s+(c.prevShare||0), 0);
+    const c = rows.length? {share, prevShare:prev,
+                            recent: rows.reduce((s,x)=>s+(x.recent||0),0)} : null;
+    const ratio = (paired && prev>0) ? share/prev : null;
     const dir = (!cmp||ratio==null) ? 'flat'
       : ratio>=1.10 ? 'up' : ratio<=0.90 ? 'down' : 'flat';
     const lv = r.n<CONC_MIN ? null : concLevel(r.neff);
-    return {r, news:c||null, ratio, dir, lv, paired,
+    return {r, news:c||null, ratio, dir, lv, paired, newsKeys:keys,
             kr:[...(kr[r.cat.key]||new Map())].map(([name,v])=>({name, flag:v.flag, n:v.n}))
                  .sort((a,b)=> b.n-a.n || a.name.localeCompare(b.name)),
             note: MAP[r.cat.key]||''};
@@ -2147,7 +2160,11 @@ function krLineHTML(kr){
 const STAOWN_HEAD=6;        // 처음에 보일 국유특허 건수
 let staownAll=false;
 let _shareCache=null;
-function catShareSeries(key, days){
+// 뉴스 분류 **여러 개**의 비중 합. 한 특허 분야가 여러 뉴스 분류에 걸리므로
+// 키 하나만 받으면 Y04S 10 의 흐름이 송·변전 한 갈래로만 그려진다.
+function catShareSeries(keys, days){
+  keys = Array.isArray(keys)? keys : (keys? [keys] : []);
+  if(!keys.length) return [];
   if(!_shareCache){
     const byDay={}, tot={};
     (FEED.news.items||[]).forEach(it=>{ const d=it.date; if(!d) return;
@@ -2156,8 +2173,9 @@ function catShareSeries(key, days){
     _shareCache={byDay, tot, days:Object.keys(tot).sort()};
   }
   const ds=_shareCache.days.slice(-days);
-  return ds.map(d=>{ const t=_shareCache.tot[d]||0;
-    return t? ((_shareCache.byDay[d]||{})[key]||0)/t : 0; });
+  return ds.map(d=>{ const t=_shareCache.tot[d]||0; if(!t) return 0;
+    const m=_shareCache.byDay[d]||{};
+    return keys.reduce((s,k)=>s+(m[k]||0), 0)/t; });
 }
 function sparkShare(vals){
   if(vals.length<3) return '';
@@ -2244,9 +2262,16 @@ function tradeSectionHTML(){
     // 배지는 이미 이스케이프한 HTML 로 담는다 — 스파크라인(SVG)이 섞이기 때문.
     const badges=[];
     if(d.lv) badges.push(esc('실질 '+r.neff.toFixed(1)+'곳 / '+r.n+'곳'));
-    if(hasNews)
-      badges.push(esc('뉴스 비중 '+Math.round(d.ratio*100)+'%')
-        + sparkShare(catShareSeries(r.cat.key, 14)));
+    // 예전에는 '뉴스 비중 '+ratio*100+'%' 였다. ratio 는 비중이 아니라 **이전
+    // 기간 대비 배율**이라 원전 카드가 '뉴스 비중 121%' 로 나왔다 — 비중은
+    // 100%를 넘을 수 없으니 읽는 사람에게는 그냥 틀린 수다. 둘을 갈라 적는다:
+    // 비중은 지금 이 분야가 뉴스에서 차지한 몫, 배율은 그 몫의 변화.
+    if(hasNews){
+      const chg = d.ratio>=1.10 ? ' ▲'+d.ratio.toFixed(1)+'배'
+                : d.ratio<=0.90 ? ' ▼'+d.ratio.toFixed(1)+'배' : '';
+      badges.push(esc('뉴스 비중 '+Math.round((d.news.share||0)*100)+'%'+chg)
+        + sparkShare(catShareSeries(d.newsKeys||[], 14)));
+    }
     else if(d.paired===false) badges.push(esc('뉴스 짝 없음'));
     // 국내 지분 — 이 분야에 국내 협상 상대가 있는지. 없으면 도입 말고는 길이 없다.
     badges.push(esc('🇰🇷 국내 '+Math.round(r.krShare*100)+'%'));

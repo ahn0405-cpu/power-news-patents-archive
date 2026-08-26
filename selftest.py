@@ -1100,6 +1100,50 @@ def _origin_checks() -> None:
     check("more.toLocaleString()" in js and "곳 펼치기" in js,
           "펼침 버튼이 남은 곳 수를 숫자로 말한다")
 
+    # ── 뉴스 ↔ 특허 분야 잇기 ──────────────────────────────────────
+    # 두 축은 다른 것을 잰다(뉴스=무슨 일이 벌어지나, 특허=어떤 기술에 권리가
+    # 걸렸나). 합치지 않고 겹치는 자리만 잇는데, 한쪽 분류가 바뀌면 이 표가
+    # 조용히 죽는다 — 실제로 특허 분야를 Y04S 로 다시 세우자 여섯 분야가 전부
+    # '뉴스 짝 없음' 으로 나왔다(오류 없이). 양쪽 키가 살아 있는지 못 박는다.
+    print("\n· 뉴스 ↔ 특허 분야 잇기")
+    import ip_guide as _ig
+    import news_config as _nc
+    pat_keys = {c["key"] for c in pcfg.CATEGORIES}
+    news_keys = {c["key"] for c in _nc.CATEGORIES}
+    bad_l = sorted(set(_ig.FIELD_NEWS) - pat_keys)
+    check(not bad_l, "왼쪽 키가 전부 실재하는 특허 분야다 "
+                     + (f"(없는 분야: {bad_l})" if bad_l else f"({len(_ig.FIELD_NEWS)}개)"))
+    bad_r = sorted({k for v in _ig.FIELD_NEWS.values() for k in v} - news_keys)
+    check(not bad_r, "오른쪽 키가 전부 실재하는 뉴스 분류다 "
+                     + (f"(없는 분류: {bad_r})" if bad_r else ""))
+    check(set(_ig.FIELD_MAP) <= pat_keys,
+          "단서(FIELD_MAP)도 특허 분야 키를 쓴다")
+    check(len(_ig.FIELD_NEWS) >= 2,
+          f"실제로 이어지는 분야가 있다 ({len(_ig.FIELD_NEWS)}개 — 0개면 표가 죽은 것이다)")
+    # 비중과 배율은 다른 수다. ratio 를 비중으로 적어 원전이 '뉴스 비중 121%' 로
+    # 나왔다 — 비중은 100%를 넘을 수 없으니 읽는 사람에게는 그냥 틀린 수다.
+    check("d.news.share" in js and "'배'" in js,
+          "비중은 share 로, 변화는 '배' 로 따로 적는다 (121% 가 다시 나오지 않게)")
+    check("catShareSeries(d.newsKeys" in js,
+          "흐름 그래프도 이어진 뉴스 분류를 전부 합쳐 그린다")
+
+    # 한 dict 리터럴에 같은 키를 두 번 적으면 파이썬은 **조용히 뒤엣것만** 남긴다.
+    # FIELD_NEWS 를 "news" 로 넣었다가 먼저 있던 "news"(해석 문구)에 덮여, 화면이
+    # 오류 없이 짝을 전부 잃었다. 사람 눈으로는 안 보이는 종류의 실수라 기계가 본다.
+    import ast as _ast
+    dups = []
+    for path in ("site_render.py", "ip_guide.py", "patent_config.py"):
+        for node in _ast.walk(_ast.parse(open(path, encoding="utf-8").read())):
+            if not isinstance(node, _ast.Dict):
+                continue
+            names = [k.value for k in node.keys
+                     if isinstance(k, _ast.Constant) and isinstance(k.value, str)]
+            for n in names:
+                if names.count(n) > 1 and (path, n) not in dups:
+                    dups.append((path, n))
+    check(not dups, "한 dict 안에 같은 키를 두 번 적지 않는다 "
+                    + (f"(덮인 키: {dups})" if dups else "(3개 파일)"))
+
 
 def _foreign_checks() -> None:
     """해외 수집기. 국내와 규칙이 뒤집힌 자리가 많아 회귀 검사가 특히 중요하다."""
