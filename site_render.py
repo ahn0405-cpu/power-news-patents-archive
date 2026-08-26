@@ -2209,7 +2209,8 @@ function renderHome(){
   // 분야별 경쟁 구도(지도·요약·카드)는 통째로 거래 탭에 있다. 홈은 '오늘 무슨
   // 일인가' 를 말하는 자리고, 분야를 하나씩 견주는 일은 '누구와 부딪히나' 를 묻는
   // 자리에서 필요하다 — 거기 창구가 바로 아래 있다.
-  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML(), mx='';
+  const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML();
+  const mx=FULL ? matrixHomeHTML(FEED.patents.items||[]) : '';
   if(pb||pk||mx){
     parts.push('<div class="sec">📄 특허</div>'
       + ((pb||pk)? '<div class="homebot'+((pb&&pk)?'':' single')+'">'+(pb||'')+(pk||'')+'</div>' : '')
@@ -3168,6 +3169,22 @@ function _mtxGroups(list){
 // 출원인 × 분야 매트릭스. 분야 분석의 가장 좁은 눈금이라 분야별 경쟁 구도의
 // 맨 아래에 온다(넓은 것 → 좁은 것). 전에는 통계 탭에 혼자 있어서, 카드에서 본
 // 분야를 기업 단위로 확인하려면 탭을 옮겨야 했다.
+// 홈에 놓는 축약판. 국적 묶음마다 **상위 세 곳**만 보이고 펼치지 않는다 —
+// 홈은 '한눈에' 가 전부인 자리라, 거래 탭의 상위 10곳 + 펼치기를 그대로 가져오면
+// 홈이 다시 길어진다. 전체는 거래 탭에 그대로 있고 링크로 잇는다.
+const MTX_HOME = 3;
+function matrixHomeHTML(list){
+  if(!list.length) return '';
+  return '<div class="homepanel"><h3>🧩 출원인 × 분야 매트릭스'
+    + '<span class="morelink" data-jump2="guide:sec-matrix">전체 보기 →</span></h3>'
+    + '<p class="sub">국적별로 <b>가장 많이 낸 세 곳</b>이 어느 분야에 내는지입니다. '
+    + '칸을 누르면 그 출원인·분야 특허로 이동합니다. 칸의 수는 최근 '
+    + (FEED.patents.lookbackDays||90)+'일 공개분의 실제 건수입니다. '
+    + '전체 목록은 거래 탭에 있습니다.</p>'
+    + '<div class="mtxwrap">'
+    + regionMatrixHTML(list, {total:true, top:MTX_HOME}) + '</div></div>';
+}
+
 function matrixSectionHTML(list){
   if(!list.length) return '';
   return '<div class="sec" id="sec-matrix">🧩 출원인 × 분야 매트릭스</div>'
@@ -3586,7 +3603,6 @@ function renderStats(list){
       + '<div><div class="k">최다 출원인</div><div class="v">'+flg(topA.flag)+' '+esc(topA.name)
         + ' <span style="font-size:14px;color:var(--muted)" class="mono">'+topA.total+'건</span></div></div>'
       + '</div></div>'
-    + krEntryHTML(list)
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
       + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수입니다(출원인이 35곳이어도 셋이 대부분을 가져가면 4곳 수준으로 나옵니다). '
@@ -3601,6 +3617,9 @@ function renderStats(list){
       + '<button data-rank="all" aria-pressed="'+(rankMode==='all')+'">전체</button></span></h3>'
       + '<p class="sub">'+rankSub+'</p>'
       + '<div class="lead">'+leadRows+'</div></div>'
+    // 국내 공개는 **목록**이라 아래로 내린다. 위의 둘은 전체를 요약한 집계고,
+    // 요약을 먼저 보고 개별 건으로 내려가는 것이 읽는 차례다.
+    + krEntryHTML(list)
     + '</div>';
 }
 
@@ -3752,6 +3771,14 @@ function wire(){
     // 카드나 특허 브리핑을 펼쳐 둔 상태가 날아가지 않게). 패널을 새로 그리면 그
     // 안에서 펼쳐 둔 항목은 닫히므로, 날짜를 기억했다가 되살린다.
     // 홈 요약 줄 → 거래 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
+    // '전체 보기' → 다른 탭의 특정 자리로. data-jump 는 같은 화면 안에서만
+    // 움직이므로 탭을 건너뛰려면 탭 이름을 함께 실어야 한다('탭:앵커').
+    const j2=e.target.closest('[data-jump2]');
+    if(j2){ const v=(j2.getAttribute('data-jump2')||'').split(':');
+      gotoTab(v[0]);
+      setTimeout(()=>{ const t=document.getElementById(v[1]);
+        if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+      return; }
     // 결론 한 줄의 다리 → 특허 탭에서 그 분야만 본다.
     const cp=e.target.closest('[data-catpat]');
     if(cp){ gotoTab('patents', {cat: cp.getAttribute('data-catpat')}); return; }

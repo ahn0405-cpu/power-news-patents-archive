@@ -1464,6 +1464,34 @@ def _origin_checks() -> None:
           and pb.find("bpoints") < pb.find("pbfull"),
           "홈 특허 브리핑은 짚은 점을 펴 두고 긴 본문만 접는다")
 
+    # ── 홈의 매트릭스는 축약판이다 ─────────────────────────────────
+    # 거래 탭 판본(상위 10곳 + 펼치기)을 그대로 홈에 놓으면 홈이 다시 길어진다.
+    # 정의만 보면 안 된다 — 부르는 줄이 있어야 화면에 뜬다.
+    # 부르기만 해서는 모자란다 — 부른 값이 홈 마크업에 **들어가야** 뜬다.
+    # (변이시험: 'FULL ?' 를 'false ?' 로 바꿔도 '부른다' 만 보면 통과했다.)
+    check("const mx=FULL ? matrixHomeHTML(FEED.patents.items" in js
+          and "+mx+" in js,
+          "홈이 매트릭스 축약판을 부르고 그 값을 화면에 넣는다")
+    mh = js[js.find("function matrixHomeHTML"):]
+    mh = mh[:mh.find("\n}")]
+    check("top:MTX_HOME" in mh and "const MTX_HOME = 3;" in js,
+          "홈 매트릭스는 국적마다 상위 세 곳만 낸다")
+    check('data-jump2="guide:sec-matrix"' in mh,
+          "홈 축약판에서 전체 판본으로 가는 길이 있다")
+    # 탭을 건너뛰는 이동은 data-jump 로는 안 된다(같은 화면 안에서만 움직인다).
+    check("'[data-jump2]'" in js and "gotoTab(v[0])" in js,
+          "'전체 보기' 가 탭을 건너뛰어 그 자리로 간다")
+
+    # ── 통계 탭 차례: 요약을 먼저, 목록을 나중에 ───────────────────
+    # 국내 공개는 개별 건 **목록**이고 위의 둘은 전체를 요약한 집계다.
+    # 목록이 먼저 오면 요약 둘을 보기까지 한참 내려가야 한다.
+    st = js[js.find("function renderStats("):]
+    st = st[:st.find("\nfunction ", 10)]
+    i_cmp, i_rank, i_kr = (st.find("🧭 분야별 경쟁 구도"),
+                           st.find("🏆 출원인 랭킹"), st.find("+ krEntryHTML(list)"))
+    check(min(i_cmp, i_rank, i_kr) > 0 and i_cmp < i_rank < i_kr,
+          "통계 탭이 경쟁 구도 → 출원인 랭킹 → 국내 공개 차례로 선다")
+
     # ── 좁은 화면에서 본문이 가로로 넘치지 않는다 ──────────────────
     # 통계 탭이 430px 화면에서 본문 536px 이었다(배포본에서도 그랬다). 원인은
     # 세 가지가 겹친 것이고, 셋 다 '줄어들 수 없어서' 생긴다:
