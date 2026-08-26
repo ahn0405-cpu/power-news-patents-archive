@@ -1014,6 +1014,13 @@ def _origin_checks() -> None:
     leak = [(c, pcfg.classify([c], "")) for c, _ in OUT if pcfg.classify([c], "")]
     check(not leak, "스마트그리드가 아닌 것은 들어오지 않는다 "
                     + (f"(샌 것: {leak})" if leak else f"({len(OUT)}종 모두 범위 밖)"))
+    # 목록 순서가 곧 우선순위다. 원전이 뒤에 있으면 원전 특허가 다른 코드에 먼저
+    # 걸려 밀려난다(실측 7건: G21D3/04 가 G06Q50/06 에 걸려 시장·거래로 갔다).
+    check(pcfg.CATEGORIES[0]["key"] == "nuclear",
+          "원전이 목록 맨 앞이다 (따로 관리하기로 한 분야가 다른 코드에 안 밀리게)")
+    check(pcfg.classify(["G06Q50/06", "G21D3/04"], "") == "nuclear"
+          and pcfg.classify(["H02J9/062", "G21D3/06"], "") == "nuclear",
+          "원전 코드가 있으면 원전으로 간다 (다른 코드가 먼저 와도)")
     check(any(c.get("outside") for c in pcfg.CATEGORIES),
           "Y04S 밖인 분야(원전)는 그 사실을 데이터에 달고 있다")
     check(all(c.get("en") for c in pcfg.CATEGORIES),
@@ -1340,8 +1347,21 @@ def _origin_checks() -> None:
     check("LEAD_GAP" in js and "gap >= LEAD_GAP" in js
           and "함께 이슈입니다" in js and "뚜렷한 쏠림이 없습니다" in js,
           "격차가 좁으면 결론 문장이 바뀐다 (단정하지 않는다)")
-    check("leadLineHTML(ct)" in ins2 and "trendChartHTML(ct)" in ins2,
+    check("leadLineHTML(ct, cmp)" in ins2 and "trendChartHTML(ct)" in ins2,
           "결론 한 줄과 30일 그래프를 실제로 그린다")
+    # comparable=false 는 '비교할 이전 기간이 아직 얇다' 는 뜻이다. 표는 그 값을
+    # 보는데 결론 한 줄만 안 봐서, '증감은 표시하지 않습니다' 라고 적힌 화면에서
+    # 이 줄만 '▲1.1배' 를 말하고 있었다.
+    ld = js[js.find("function leadLineHTML"):]
+    ld = ld[:ld.find("\n}")]
+    check("(!cmp||r.ratio==null)" in ld and "const up=cmp?" in ld and "const dn=cmp?" in ld,
+          "비교 기간이 얇으면 결론 한 줄도 배율을 말하지 않는다")
+    # 머리글이 부른 분야를 아래에서 또 부르면 같은 말을 두 번 한다
+    # (1위가 식는 날 '지금은 원전입니다 ▼0.8배 … 식은 곳 원전 0.8배').
+    check("named.indexOf(r) < 0" in ld and "named.push(a, b)" in ld,
+          "머리글이 부른 분야는 '오른 곳·식은 곳' 에서 뺀다 (한쪽만 빼던 비대칭)")
+    check("_josaOnly(b.name" in ld,
+          "조사를 받침으로 고른다 (_josa 는 낱말까지 붙여 돌려준다)")
     # 그래프의 세로축은 비중이다 — 일별 기사 수가 23~180건으로 널뛰어 건수로
     # 그리면 그 널뜀이 곡선을 다 먹는다.
     tc = js[js.find("function trendChartHTML"):]
@@ -1355,6 +1375,10 @@ def _origin_checks() -> None:
     # 선 끝 이름이 겹치면 둘 다 못 읽는다(실측: 15%와 13% 곡선이 붙었다).
     check("LBL_GAP" in tc and "L.y = lab[k-1].y + LBL_GAP" in tc,
           "선 끝 이름이 겹치면 밀어낸다")
+    # 오른쪽 여백이 붙박이면 조금만 긴 이름이 상위 넷에 들 때 잘린다
+    # (실측: '반도체 클러스터·메가프로젝트' 가 730/660 으로 나갔다).
+    check("const padR = Math.max(pad.r" in tc and "(r.name||'').length" in tc,
+          "선 끝 이름 길이에 맞춰 오른쪽 여백을 잡는다")
     # 같은 이름의 규칙을 **같은 층에** 둘 두면 세기가 같아 순서로 진다 — 전에
     # 물린 자리다(.shns .inb 가 뒤에 오는 .shns .sbn 에 졌다). 미디어 쿼리 안의
     # 재정의는 다른 이야기라 세지 않는다 → 중괄호 깊이로 가른다.
@@ -1381,8 +1405,16 @@ def _origin_checks() -> None:
     # 무슨 일이 벌어지나' 를 한눈에 보이는 자리라 카드가 너무 무겁다 → 지도와
     # 한 줄 요약만 남기고, 상세는 '누구와 부딪히나' 를 묻는 거래 탭으로 보낸다.
     print("\n· 홈은 요약, 거래 탭은 상세")
-    check("tradeSectionHTML('trade')" in js,
-          "거래 탭이 분야 카드를 **실제로** 그린다 (홈으로 보내는 안내만 두지 않는다)")
+    # 부르는 것만 보면 그 분기가 죽어도 통과한다(변이시험에서 통과했다) —
+    # where==='trade' 를 false 로 바꾸면 거래 탭이 홈 판본을 그리는데도 검사가
+    # 조용했다. 분기가 **있고 그 안에서 body 를 낸다**는 것까지 본다.
+    check("tradeSectionHTML('trade')" in js, "거래 탭이 'trade' 로 부른다")
+    ts = js[js.find("function tradeSectionHTML"):]
+    ts = ts[:ts.find("\n}")]
+    br = ts[ts.find("if(where === 'trade')"):]
+    br = br[:br.find("return '<div class=\"homepanel\"")]
+    check("if(where === 'trade')" in ts and "+ body" in br,
+          "거래 분기가 분야 카드(body)를 낸다 (분기가 죽으면 홈 판본이 나온다)")
     # 정의만 보면 안 된다 — 'function catSummaryHTML(rows){' 자체가 그 글자를
     # 담고 있어서, 부르는 줄을 지워도 통과한다(변이시험에서 실제로 통과했다).
     check("+ catSummaryHTML(rows)" in js and "class=\"crow2" in js,

@@ -283,6 +283,18 @@ APPLICANTS = [
 #   epc= 는 색인이 비어 0건 · 해외 서지상세 cpcInfo/cpcCd 도 빈값(3건 표본).
 #   그래서 IPC 로 모으고, 실제 Y04S 코드가 붙어 있으면 그것을 우선한다(match).
 CATEGORIES = [
+    # 원전이 **맨 앞이다.** 이 목록은 순서가 곧 우선순위라(먼저 걸리는 분야가
+    # 이긴다), 뒤에 두면 원전 특허가 다른 코드에 먼저 걸려 밀려난다 — 실측 7건이
+    # 그랬다: '소형모듈형 원자로 방사능 방재'(G21D3/04)가 G06Q50/06 에 걸려
+    # 시장·거래로, '원자력 발전소 순환수 펌프'(G21D3/06)가 H02J9 에 걸려
+    # 수용가로 갔다. 원전은 따로 관리하기로 한 분야라 그렇게 새면 안 된다.
+    # 앞으로 옮겨도 다른 분야는 그 7건 말고 움직이지 않는다(실측으로 확인).
+    # Y04S 밖이라는 것은 화면에도 밝힌다(근거는 Y02E 30).
+    {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
+     "en": "Nuclear fission reactors (Y02E 30/30) — outside the Y04S scheme",
+     "outside": True,
+     "cpc": ["Y02E30", "G21C", "G21D"], "ipc": ["G21C", "G21D"],
+     "match": ["Y02E30", "G21"]},
     {"key": "y04s10", "emoji": "⚡", "name": "발전·송배전 지원",
      "en": "Systems supporting electrical power generation, transmission or distribution",
      "cpc": ["Y04S10"],
@@ -337,12 +349,6 @@ CATEGORIES = [
      # G06Q50/06 = 전력·가스·수도 사업. G06Q 전체나 G06Q30(상거래)은 범용이라 안 쓴다.
      "ipc": ["G06Q50/06"],
      "match": ["Y04S50", "G06Q50/06"]},
-    # 예외. Y04S 밖이라는 것을 화면에도 밝힌다(근거는 Y02E 30).
-    {"key": "nuclear", "emoji": "☢️", "name": "원전·SMR",
-     "en": "Nuclear fission reactors (Y02E 30/30) — outside the Y04S scheme",
-     "outside": True,
-     "cpc": ["Y02E30", "G21C", "G21D"], "ipc": ["G21C", "G21D"],
-     "match": ["Y02E30", "G21"]},
 ]
 
 # ── KIPRISplus (국내 공보) ────────────────────────────────────────

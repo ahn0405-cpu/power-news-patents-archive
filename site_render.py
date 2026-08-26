@@ -1549,10 +1549,18 @@ function hydrate(){
 // 받침 유무로 조사를 고른다. 한글 음절은 0xAC00 부터 28개씩 한 묶음이고 그 안에서
 // 종성이 0이면 받침이 없다. '기관 목록을 / 집중도를' 처럼 문구가 자연스러워야
 // 안내가 기계가 뱉은 것처럼 읽히지 않는다.
-function _josa(w, withBatchim, without){
+function _batchim(w){
   const c = (w||'').charCodeAt((w||'').length-1);
-  const has = c>=0xAC00 && c<=0xD7A3 ? ((c-0xAC00)%28)!==0 : false;
-  return w + (has? withBatchim : without);
+  return c>=0xAC00 && c<=0xD7A3 ? ((c-0xAC00)%28)!==0 : false;
+}
+// 낱말에 조사를 붙여 돌려준다.
+function _josa(w, withBatchim, without){
+  return w + (_batchim(w)? withBatchim : without);
+}
+// 조사만 돌려준다 — 낱말이 이미 태그 안에 있어 뒤에 조사만 이어 붙일 때 쓴다.
+// (_josa 를 그대로 쓰면 낱말이 한 번 더 찍힌다 — 실제로 그렇게 찍혔다.)
+function _josaOnly(w, withBatchim, without){
+  return _batchim(w)? withBatchim : without;
 }
 
 // 못 받은 이유를 짐작해서 쓰면 안 된다. file:// 은 브라우저가 구조적으로 막는
@@ -1797,25 +1805,39 @@ function catKeywords(){
 
 // 결론 한 줄. **격차를 보고 말을 바꾼다** — 1위가 뚜렷할 때만 '지금은 X 다' 라고
 // 말한다. 어느 날 1·2위가 20%:19% 인데도 같은 문장을 쓰면 그건 거짓말이 된다.
-function leadLineHTML(rows){
+// cmp 를 반드시 받는다. insights 의 comparable 은 '비교할 이전 기간이 아직
+// 얇다' 는 뜻이고, 그때는 배율을 말하면 안 된다 — 아래 표는 그 값을 보는데
+// 이 줄만 안 봐서, '증감은 표시하지 않습니다' 라고 적힌 화면에서 이 줄만
+// '▲1.1배' 를 말하고 있었다(실측). 비중은 그대로 말한다(그건 지금 값이다).
+function leadLineHTML(rows, cmp){
   if(!rows.length) return '';
   const a=rows[0], b=rows[1];
   const gap = b && b.share>0 ? a.share/b.share : 99;
   const pct=v=>Math.round(v*100)+'%';
-  const mul=r=>r.ratio==null? '' : (r.ratio>=1.10? ' ▲'+r.ratio.toFixed(1)+'배'
+  const mul=r=>(!cmp||r.ratio==null)? '' : (r.ratio>=1.10? ' ▲'+r.ratio.toFixed(1)+'배'
                                   : r.ratio<=0.90? ' ▼'+r.ratio.toFixed(1)+'배' : '');
   let head, sub;
+  // named — 머리글이 이미 이름을 부른 분야들. 아래 '함께 오른 곳 / 식은 곳' 에서
+  // 뺀다. 안 빼면 같은 분야를 두 번 말한다: 1위가 식는 날이면 '지금은 원전입니다
+  // ▼0.8배 … 식은 곳 원전 0.8배' 가 되어 스스로 겹친다(실측으로 재현했다).
+  // 전에는 '오른 곳' 만 1위를 빼고 '식은 곳' 은 안 뺐다 — 한쪽만 고친 비대칭이었다.
+  const named = [];
   if(gap >= LEAD_GAP){
     head = a.emoji+' 지금은 <b>'+esc(a.name)+'</b> 입니다';
     sub  = '최근 뉴스의 '+pct(a.share)+''+mul(a);
+    named.push(a);
   } else if(b){
-    head = a.emoji+b.emoji+' <b>'+esc(a.name)+'·'+esc(b.name)+'</b> 이 함께 이슈입니다';
+    // 조사는 받침으로 고른다 — '가·나 이 함께' 는 틀리고 '나' 는 받침이 없어 '가' 다.
+    head = a.emoji+b.emoji+' <b>'+esc(a.name)+'·'+esc(b.name)+'</b>'
+         + _josaOnly(b.name,'이','가')+' 함께 이슈입니다';
     sub  = pct(a.share)+mul(a)+' · '+pct(b.share)+mul(b)+' — 1·2위가 가깝습니다';
+    named.push(a, b);
   } else {
     head = '뚜렷한 쏠림이 없습니다'; sub = '';
   }
-  const up=rows.filter(r=>r.ratio!=null && r.ratio>=1.10 && r!==rows[0]).slice(0,2);
-  const dn=rows.filter(r=>r.ratio!=null && r.ratio<=0.90).slice(0,2);
+  const other = r => named.indexOf(r) < 0;
+  const up=cmp? rows.filter(r=>r.ratio!=null && r.ratio>=1.10 && other(r)).slice(0,2) : [];
+  const dn=cmp? rows.filter(r=>r.ratio!=null && r.ratio<=0.90 && other(r)).slice(0,2) : [];
   const side=[];
   if(up.length) side.push('<span class="lu">함께 오른 곳 '
     + up.map(r=>r.emoji+esc(r.name)+' '+r.ratio.toFixed(1)+'배').join(' · ')+'</span>');
@@ -1836,7 +1858,15 @@ function trendChartHTML(rows){
   if(days.length<7) return '';
   const series=top.map(r=>catShareSeries([r.key], TREND_DAYS));
   const {w,h,pad}=TCHART;
-  const x0=pad.l, x1=w-pad.r, y0=pad.t, y1=h-pad.b;
+  // 오른쪽 여백은 **이름 길이에 맞춰 잡는다.** 붙박이 96px 로 뒀더니 지금 이름들이
+  // 657/660 으로 3px 만 남기고 겨우 들어가 있었고, 조금만 긴 이름이 상위 넷에
+  // 들면 그대로 잘렸다(실측: '반도체 클러스터·메가프로젝트' 730/660).
+  // SVG 는 글자 폭을 그리기 전에 못 재므로 어림한다 — 한글은 글자 크기(10.5px)를
+  // 거의 그대로 먹고, 앞의 이모지와 사이 여백까지 더한다. 넉넉하게 잡아도
+  // 손해는 그림이 조금 좁아지는 것뿐이다.
+  const nameW = Math.max.apply(null, top.map(r=>(r.name||'').length)) * 10.5 + 30;
+  const padR = Math.max(pad.r, Math.min(nameW, w * 0.42));
+  const x0=pad.l, x1=w-padR, y0=pad.t, y1=h-pad.b;
   const max=Math.max(0.1, Math.max.apply(null, series.map(s=>Math.max.apply(null, s))));
   const px=i=>x0+(i/Math.max(1,days.length-1))*(x1-x0);
   const py=v=>y1-(v/max)*(y1-y0);
@@ -1959,7 +1989,7 @@ function insightsHTML(){
   return '<div class="insights"><div class="ipanel wide">'
     + '<h3>📈 뉴스 트렌드'
     + '<span class="morelink" data-go="news">뉴스 탭 →</span></h3>'
-    + leadLineHTML(ct)
+    + leadLineHTML(ct, cmp)
     + trendChartHTML(ct)
     + '<p class="isub">'+sub+'</p>'
     + '<div class="trend">'+ctHtml+'</div></div></div>';
