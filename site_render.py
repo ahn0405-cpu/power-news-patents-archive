@@ -832,6 +832,9 @@ a{color:inherit}
    ④ 왼쪽 색 띠로 집중도 단계를 표시해 스크롤 스캔이 되게 한다 */
 .trow{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
   background:var(--card);padding:12px 14px;margin-top:10px}
+/* 홈에서 눌러 온 카드를 잠깐 표시한다. 표시가 없으면 탭이 바뀌고 스크롤만
+   움직여서 '내가 고른 것이 어느 것인지' 를 놓친다. */
+.trow.hit{box-shadow:0 0 0 2px var(--accent2)}
 .trow.lv-hi{border-left-color:var(--q3)} .trow.lv-mid{border-left-color:var(--q2)}
 .trow.lv-lo{border-left-color:var(--q1)}
 .trow .th{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:800}
@@ -1036,6 +1039,35 @@ a{color:inherit}
 .snkn{opacity:.9}
 .snkt{font-size:10.5px;font-weight:600;fill:var(--ink)}
 .snkh{font-size:10.5px;font-weight:700;fill:var(--muted);letter-spacing:.02em}
+/* 홈 한 줄 요약. 여섯 줄이 같은 격자에 서야 눈이 세로로 훑을 수 있다 —
+   줄마다 폭이 다르면 규모 막대끼리 견주는 일이 불가능해진다. */
+.csum{display:flex;flex-direction:column;gap:2px;margin-top:12px}
+.crow2{display:grid;grid-template-columns:minmax(150px,1.15fr) minmax(60px,1fr) 58px 92px 62px auto;
+  align-items:center;gap:10px;width:100%;text-align:left;font:inherit;cursor:pointer;
+  background:none;border:0;border-left:3px solid var(--line);border-radius:0 8px 8px 0;
+  padding:8px 10px}
+.crow2:hover{background:var(--bg)}
+.crow2.lv-hi{border-left-color:var(--q3)} .crow2.lv-mid{border-left-color:var(--q2)}
+.crow2.lv-lo{border-left-color:var(--q1)}
+.crow2 .cnm{font-size:13px;font-weight:700;color:var(--ink);display:flex;align-items:center;
+  gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow2 .cbar2{height:9px;background:var(--line);border-radius:5px;overflow:hidden}
+.crow2 .cbar2 i{display:block;height:100%;background:var(--q2);border-radius:5px}
+.crow2 .cval{font-size:12px;font-weight:700;color:var(--muted);text-align:right;
+  font-variant-numeric:tabular-nums}
+.crow2 .cspk{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted)}
+.crow2 .cspk b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums}
+.crow2 .cspk.none{font-size:10.5px;opacity:.7}
+.crow2 .ckr{font-size:11.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.crow2 .cgo{font-size:11px;font-weight:700;color:var(--accent2);white-space:nowrap;opacity:0}
+.crow2:hover .cgo,.crow2:focus-visible .cgo{opacity:1}
+@media (max-width:820px){
+  .crow2{grid-template-columns:1fr auto;gap:5px 9px;padding:9px 10px}
+  .crow2 .cnm{grid-column:1 / -1}
+  .crow2 .cbar2{grid-column:1} .crow2 .cval{grid-column:2}
+  .crow2 .cspk{grid-column:1} .crow2 .ckr{grid-column:2;text-align:right}
+  .crow2 .cgo{display:none}
+}
 .krwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px}
 .krow{min-width:0}
 .kap{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;
@@ -1054,6 +1086,12 @@ a{color:inherit}
 .brief .bsec:last-child{margin-bottom:0}
 .brief .bsl{font-size:12px;font-weight:800;color:var(--accent2);letter-spacing:.02em;
   margin:0 0 5px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+/* 긴 본문은 접는다. 여는 장치는 '지난 특허 브리핑'(.pbpast)과 같은 모양으로
+   둔다 — 한 패널 안에 서로 다르게 생긴 접기 두 개가 있으면 다른 일을 하는
+   것처럼 읽힌다. */
+.pbfull{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.pbfull summary{font-size:12px;font-weight:700;color:var(--accent2);cursor:pointer}
+.pbfull .bbody{margin-top:9px}
 .pbpast{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .pbpast summary{font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
 .pbpast summary:hover{color:var(--ink)}
@@ -1724,7 +1762,9 @@ function patentPickPanelHTML(){
     + '<div class="ppick">'+pkHtml+'</div></div>';
 }
 
-// 홈에서는 특허 브리핑을 접기 없이 전문으로 보여준다(특허 탭 배너와 달리 토글 없음).
+// 홈의 특허 브리핑. 머리글과 분야별 짚은 점은 펴 두고, **긴 본문은 접는다** —
+// 실측 780px 이라 그것 하나가 홈 한 화면을 통째로 먹었다. 접는 쪽은 서술이고
+// 펴 두는 쪽은 결론이라, 접어도 '무슨 일이 있었나' 는 그대로 읽힌다.
 function patentBriefHomeHTML(){
   const b=FEED.patentBrief;
   if(!b || !(b.headline || (b.sections&&b.sections.length) || (b.body&&b.body.length))) return '';
@@ -1738,8 +1778,9 @@ function patentBriefHomeHTML(){
     + (b.week? '<span class="pbw">'+esc(b.week)+' 수집분</span>':'')
     + '<span class="morelink" data-go="patents">특허 탭 →</span></h3>'
     + (b.headline?'<h4 class="pbh">'+esc(b.headline)+'</h4>':'')
-    + '<div class="bbody">'+body+'</div>'
     + (pts?'<div class="bpoints">'+pts+'</div>':'')
+    + (body? '<details class="pbfull"><summary>전문 읽기</summary>'
+           + '<div class="bbody">'+body+'</div></details>' : '')
     + pastPatentBriefsHTML()
     + (b.basis?'<p class="pbfoot">'+esc(b.basis)+'</p>':'')
     + '</div>';
@@ -2215,7 +2256,44 @@ function sparkShare(vals){
     + '" r="2"/></svg>';
 }
 
-function tradeSectionHTML(){
+// 홈의 한 줄 요약. 분야마다 [규모 막대 · 뉴스 비중 30일 흐름 · 국내 지분] 만
+// 남기고, 상세(누가 갖고 있나 / 무엇을 내고 있나 / Y04S 갈래 / 국내 권리)는
+// 거래 탭으로 보낸다.
+//
+// 왜 나누나: 이 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 차지하고 있었다.
+// 홈은 '지금 무슨 일이 벌어지나' 를 한눈에 보여야 하는 자리인데, 거기서 분야
+// 하나하나의 출원인 지분까지 읽게 만들면 첫 화면이 끝나기 전에 스크롤이 시작된다.
+// 상세는 '누구와 부딪히나' 를 묻는 자리 — 곧 거래 탭 — 에서 필요하다.
+function catSummaryHTML(rows){
+  const maxTot=Math.max.apply(null, rows.map(d=>d.r.tot||0)) || 1;
+  return '<div class="csum">' + rows.map(d=>{
+    const r=d.r;
+    const w=Math.max(2, (r.tot/maxTot)*100);
+    const code = r.cat.cpc
+      ? '<span class="tcpc mono"'+(r.cat.en? ' title="'+esc(r.cat.en)+'"' : '')
+        + '>'+esc(r.cat.cpc)+'</span>' : '';
+    // 뉴스 흐름은 '짝이 있는 분야만' 그린다. 짝이 없는데 빈 자리를 두면 값이
+    // 0인 것처럼 읽힌다 → 그 자리에 이유를 적는다.
+    const spark = d.paired
+      ? '<span class="cspk">'+sparkShare(catShareSeries(d.newsKeys||[], 14))
+        + '<b>'+Math.round((d.news&&d.news.share||0)*100)+'%</b></span>'
+      : '<span class="cspk none" title="이 분야에 대응하는 뉴스 분류가 없습니다">뉴스 짝 없음</span>';
+    return '<button type="button" class="crow2 lv-'+(d.lv||'na')+'" data-catgo="'
+      + esc(r.cat.key)+'" title="'+esc(r.cat.name+' 자세히 보기 — 누가 갖고 있나·무엇을 내고 있나')+'">'
+      + '<span class="cnm">'+r.cat.emoji+' '+esc(r.cat.name)+code+'</span>'
+      + '<span class="cbar2"><i style="width:'+w.toFixed(1)+'%"></i></span>'
+      // tot 는 표본 구성비로 되돌린 **추정** 총계라 실수다. 그대로 찍으면
+      // '8,282.095' 처럼 천 단위 쉼표와 소수점이 한 줄에 섞여 읽히지 않는다.
+      + '<span class="cval mono" title="'+esc('추정 공개 규모 — 표본 구성비로 되돌린 값입니다')
+      + '">'+Math.round(r.tot).toLocaleString()+'</span>'
+      + spark
+      + '<span class="ckr" title="이 분야 권리 중 국내 출원인 몫">🇰🇷 '
+      + Math.round(r.krShare*100)+'%</span>'
+      + '<span class="cgo">자세히 →</span></button>';
+  }).join('') + '</div>';
+}
+
+function tradeSectionHTML(where){
   const T=FEED.trade; if(!T) return '';
   // 이 표는 분야별 권리 집중도(CR3)를 항목에서 직접 센다 → 다 받기 전에는
   // 내보내지 않는다. 부분집합으로 세면 집중도가 실제보다 높게 나온다
@@ -2316,7 +2394,7 @@ function tradeSectionHTML(){
       ? '<span class="tout" title="Y04S 는 계통에 ICT 를 붙인 것에만 부여됩니다 — '
         + '원전은 그 체계에 자리가 없어, 기관 소관에 따라 Y02E 30(원자력)을 근거로 '
         + '따로 둡니다.">Y04S 밖</span>' : '';
-    return '<div class="trow lv-'+(d.lv||'na')+'"><div class="th">'
+    return '<div class="trow lv-'+(d.lv||'na')+'" data-cat="'+esc(r.cat.key)+'"><div class="th">'
       + r.cat.emoji+' '+esc(r.cat.name) + code + outside
       + '<div class="tb">'+badges.map(b=>'<span>'+b+'</span>').join('')+'</div></div>'
       + '<div class="blk">누가 갖고 있나<span class="blkd">'
@@ -2331,17 +2409,27 @@ function tradeSectionHTML(){
   // 홈에 놓는다 — 거래 탭에도 같은 표를 두면 약한 판본이 하나 더 생긴다(전에
   // 홈의 '분야별 경쟁 구도' 가 이 표의 축소판이었다). 이 표는 '거래' 이전에
   // '지금 이 분야가 어떻게 생겼나' 를 말하므로 홈이 제자리다.
+  // 홈에는 지도와 한 줄 요약까지, 거래 탭에는 분야 카드 여섯 장.
+  if(where === 'trade')
+    return '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
+      + '<p class="gdesc">분야마다 <b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>'
+      + '(세부 기술)입니다. 상대를 정하고 나서야 아래 창구가 뜻을 가지므로 여기 둡니다. '
+      + '분야끼리 견주는 지도는 <button type="button" class="golink" data-gohome="1">홈</button>'
+      + '에 있습니다.</p>'
+      + body
+      + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
+      + (T.subsNote? '<p class="gnote">' + esc(T.subsNote) + '</p>' : '')
+      + '<p class="gnote">' + esc(T.note) + '</p>';
   return '<div class="homepanel" id="sec-analysis"><h3>🧭 분야별 경쟁 구도'
     + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
-    + '<p class="sub">여덟 분야를 하나씩 봅니다. 먼저 지도로 분야끼리 견주고, 그 아래 '
-    + '분야마다 <b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>(세부 기술)를 '
-    + '한자리에 놓았습니다.'
+    + '<p class="sub">분야끼리 견주는 지도입니다. 그 아래 한 줄씩은 <b>규모</b>와 '
+    + '<b>최근 2주 뉴스 비중</b>, <b>국내 출원인 몫</b>입니다. 줄을 누르면 거래 탭에서 '
+    + '그 분야를 누가 갖고 있는지까지 볼 수 있습니다.'
     + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
     + '</p>'
-    + quadChartHTML(rows) + body
-    + '<p class="tcaveat" style="margin-top:12px">' + esc(T.unpaired) + '</p>'
-    + (T.subsNote? '<p class="gnote">' + esc(T.subsNote) + '</p>' : '')
-    + '<p class="gnote">' + esc(T.note) + '</p></div>';
+    + quadChartHTML(rows)
+    + catSummaryHTML(rows)
+    + '<p class="tcaveat" style="margin-top:10px">' + esc(T.unpaired) + '</p></div>';
 }
 
 // ── 분야 안을 들여다보면: 세부 기술 쏠림 ──────────────────────────────
@@ -2538,12 +2626,11 @@ function renderGuide(){
   const G = FEED.guide||[];
   // 분석 표는 홈에 있다. 여기서는 그리로 보내기만 한다(같은 표를 두 번 그리면
   // 둘 중 하나는 반드시 뒤처진다).
-  const trade = (FULL && concentration(FEED.patents.items||[]).length)
-    ? '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
-      + '<p class="gdesc">어느 분야를 몇 곳이 나눠 갖고 있는지, 뉴스 관심은 어느 쪽으로 '
-      + '움직였는지는 <b>홈</b>에 있습니다. 거기서 분야를 고른 뒤 아래 창구로 오시면 됩니다. '
-      + '<button type="button" class="golink" data-gohome="1">홈에서 보기 →</button></p>'
-    : '';
+  // 분야 카드는 **여기가 제자리다**. 홈에는 지도와 한 줄 요약만 두고(홈은 '지금
+  // 무슨 일이 벌어지나' 를 한눈에 보이는 자리라 카드 여섯 장 1,900px 이 너무
+  // 무겁다), 상대를 고르는 상세는 창구 바로 위에 온다.
+  const trade = FULL ? tradeSectionHTML('trade')
+    : '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>' + loadingNote('집중도');
   // 분석 다음에 '누구한테 가면 되나'가 온다. 매물(국유판매기술)·창구보다 앞이다 —
   // 상대를 정하고 나서야 매물과 창구가 뜻을 갖는다.
   // 공급자 표는 항목을 직접 센다 → 다 받기 전에는 숫자를 내보내지 않는다.
@@ -3483,6 +3570,15 @@ function wire(){
     // 지난 브리핑 더 보기/접기 — 홈 전체가 아니라 그 패널만 갈아 끼운다(브리핑
     // 카드나 특허 브리핑을 펼쳐 둔 상태가 날아가지 않게). 패널을 새로 그리면 그
     // 안에서 펼쳐 둔 항목은 닫히므로, 날짜를 기억했다가 되살린다.
+    // 홈 요약 줄 → 거래 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
+    const cg=e.target.closest('[data-catgo]');
+    if(cg){ gotoTab('guide'); const k=cg.getAttribute('data-catgo');
+      setTimeout(()=>{ const t=document.querySelector('.trow[data-cat="'+k+'"]');
+        (t||document.getElementById('sec-analysis'))
+          .scrollIntoView({behavior:'smooth', block:'start'});
+        if(t){ t.classList.add('hit'); setTimeout(()=>t.classList.remove('hit'), 1600); }
+      }, 60);
+      return; }
     if(e.target.closest('[data-more="tl"]')){
       tlAll=!tlAll;
       const cur=document.getElementById('tlpanel');

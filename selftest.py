@@ -1239,6 +1239,40 @@ def _origin_checks() -> None:
     check("querySelector('.krpanel')" in js,
           "보기를 바꿀 때 그 패널만 갈아 끼운다")
 
+    # ── 홈은 요약, 거래 탭은 상세 ─────────────────────────────────
+    # 분야 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 먹고 있었다. 홈은 '지금
+    # 무슨 일이 벌어지나' 를 한눈에 보이는 자리라 카드가 너무 무겁다 → 지도와
+    # 한 줄 요약만 남기고, 상세는 '누구와 부딪히나' 를 묻는 거래 탭으로 보낸다.
+    print("\n· 홈은 요약, 거래 탭은 상세")
+    css2 = _re.sub(r"\s+", "", _sr._CSS)
+    check("tradeSectionHTML('trade')" in js,
+          "거래 탭이 분야 카드를 **실제로** 그린다 (홈으로 보내는 안내만 두지 않는다)")
+    # 정의만 보면 안 된다 — 'function catSummaryHTML(rows){' 자체가 그 글자를
+    # 담고 있어서, 부르는 줄을 지워도 통과한다(변이시험에서 실제로 통과했다).
+    check("+ catSummaryHTML(rows)" in js and "class=\"crow2" in js,
+          "홈이 한 줄 요약을 **부른다**")
+    # 같은 카드를 두 곳에서 그리면 둘 중 하나는 반드시 뒤처진다.
+    home_part = js[js.find("return '<div class=\"homepanel\" id=\"sec-analysis\">"):]
+    home_part = home_part[:home_part.find("\n}")]
+    check("body" not in home_part.replace("bodyx", ""),
+          "홈 패널은 분야 카드(body)를 그리지 않는다 (같은 표를 두 곳에서 그리지 않게)")
+    check("data-catgo" in js and "'[data-catgo]'" in js,
+          "요약 줄을 누르면 거래 탭의 그 분야로 간다 (버튼만 있고 안 눌리는 상태를 막는다)")
+    check('.trow[data-cat="' in js and 'data-cat="\'+esc(r.cat.key)' in js,
+          "카드에 분야 키가 달려 있어 찾아갈 수 있다")
+    check("classList.add('hit')" in js and ".trow.hit{" in css2,
+          "찾아간 카드를 잠깐 표시한다 (탭만 바뀌면 무엇을 골랐는지 놓친다)")
+    # 추정 총계는 실수다. 그대로 찍으면 '8,282.095' 처럼 쉼표와 소수점이 섞인다.
+    check("Math.round(r.tot).toLocaleString()" in js,
+          "요약 줄의 추정 규모를 반올림해 찍는다")
+    # 특허 브리핑 본문은 접는다(실측 780px — 그것 하나가 홈 한 화면을 먹었다).
+    # 접는 쪽은 서술, 펴 두는 쪽은 결론이라 접어도 무슨 일이 있었는지는 읽힌다.
+    pb = js[js.find("function patentBriefHomeHTML"):]
+    pb = pb[:pb.find("\n}")]
+    check("<details class=\"pbfull\"" in pb and "bpoints" in pb
+          and pb.find("bpoints") < pb.find("pbfull"),
+          "홈 특허 브리핑은 짚은 점을 펴 두고 긴 본문만 접는다")
+
     # ── 출원인국 → 기술 → 공개 특허청 (Sankey) ────────────────────
     # 나라별 건수 표는 '자국에만 100건' 과 '다섯 특허청에 100건' 을 같은 숫자로
     # 적는다. 세 축을 이으면 그 차이가 띠 굵기로 보인다. 여기서 가장 조심할
@@ -1352,7 +1386,7 @@ def _origin_checks() -> None:
     #     아예 만들어지지 않아 아무 일도 하지 않는다.
     #   · 검색칸이 제 최소폭을 고집해 오른쪽 묶음을 화면 밖으로 민다.
     #   · minmax(300px,…) 는 화면이 300px 보다 좁아도 칸을 못 줄인다.
-    css2 = _re.sub(r"\s+", "", _sr._CSS)
+
     check(".stats>.panel{min-width:0}" in css2,
           "통계 패널이 줄어들 수 있다 (표의 최소폭이 화면을 밀어내지 않게)")
     check(".searchrow{" in css2 and "flex-wrap:wrap}" in
