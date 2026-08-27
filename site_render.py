@@ -1788,11 +1788,16 @@ function sparkline(series){
 function briefHTML(){
   const b = FEED.brief;   // 최신 브리핑(홈 상단)
   if(!b || !(b.headline || (b.body&&b.body.length))) return '';
-  // 최신 뉴스일과 브리핑 기준일 차이 → 오래된 브리핑이면 정직하게 표시.
-  let stale='';
+  // 이 브리핑은 **어제 하루치**를 아침에 정리한다. 오늘치는 아침 시점에 몇 시간
+  // 분량뿐이라(실측 32건, 하루가 닫히면 26~72건) 하루가 온전히 지난 뒤 정리하는
+  // 편이 고르다. 그래서 기준일이 어제인 것은 **정상**이고, 이틀 이상 벌어졌을
+  // 때만 경고다. 전에는 하루 차이에 아무 말도 없어서, 화면은 '오늘의 브리핑'
+  // 이라 하고 날짜는 어제인 채로 이유 없이 어긋나 보였다.
+  let cover='', stale='';
   const L=latestNewsDate();
   if(b.date && L){ const dd=Math.round((Date.parse(L)-Date.parse(b.date))/86400000);
-    if(dd>=2) stale='<span class="bstale">· '+dd+'일 전 작성</span>'; }
+    if(dd===1) cover=' (어제 하루치)';
+    else if(dd>=2) stale='<span class="bstale">· '+dd+'일 전 작성</span>'; }
   const body=(b.body||[]).map(p=>'<p>'+esc(p)+'</p>').join('');
   const pts=(b.points||[]).map(p=>'<div class="pt"><div class="pl">'+esc(p.emoji||'')+' '+esc(p.label||'')
     +'</div><div class="px">'+esc(p.text||'')+'</div></div>').join('');
@@ -1802,7 +1807,7 @@ function briefHTML(){
   if(b.note) foot.push('<span class="sep">·</span> '+esc(b.note));
   return '<div class="brief'+(briefCollapsed?' collapsed':'')+'" id="sec-brief">'
     + '<div class="bhead"><span class="btag">🧭 오늘의 브리핑</span>'
-    + (b.date?'<span class="bdate">'+esc(b.date)+' 기준</span>':'') + stale
+    + (b.date?'<span class="bdate">'+esc(b.date)+' 뉴스'+cover+'</span>':'') + stale
     + '<button class="btoggle" id="briefToggle">'+(briefCollapsed?'펼치기 ▾':'접기 ▴')+'</button></div>'
     + (b.headline?'<h2>'+esc(b.headline)+'</h2>':'')
     + '<div class="bbody">'+body+'</div>'

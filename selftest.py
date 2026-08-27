@@ -1622,6 +1622,70 @@ def _origin_checks() -> None:
     check(not dups, "한 dict 안에 같은 키를 두 번 적지 않는다 "
                     + (f"(덮인 키: {dups})" if dups else "(3개 파일)"))
 
+    # ── 브리핑이 무엇을 정리한 것인지 밝힌다 ─────────────────────
+    # 브리핑은 어제 하루치를 아침에 정리한다(수집이 Routine 뒤에 돌기 때문이고,
+    # 아침의 오늘치는 몇 시간 분량뿐이라 그 편이 고르다). 전에는 하루 차이에
+    # 아무 표시가 없어 '오늘의 브리핑' 인데 날짜는 어제인 채로 어긋나 보였다.
+    # 글자만 맞춰 보지 않고 **그려서** 확인한다.
+    _bh = js[js.find("function briefHTML()"):]
+    _bh = _bh[:_bh.find("\nfunction ", 10)]
+    _prog = (
+        "const localStorage={getItem(){return '0';},setItem(){}};\n"
+        "let briefCollapsed=false;\n"
+        "function esc(s){return String(s);}\n"
+        "function latestNewsDate(){return FEED.news.perDay.slice(-1)[0].x;}\n"
+        + _bh + "\n"
+        "function run(bd, last){ FEED={brief:{date:bd, headline:'H'},"
+        " news:{perDay:[{x:last}]}}; return briefHTML(); }\n"
+        "let FEED;\n"
+        "console.log(JSON.stringify({same:run('2026-08-27','2026-08-27'),"
+        " one:run('2026-08-26','2026-08-27'), three:run('2026-08-24','2026-08-27')}));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(_prog); _bp = f.name
+    try:
+        _out = subprocess.run(["node", _bp], capture_output=True, text=True, timeout=30)
+        _ok = _out.returncode == 0
+        check(_ok, "브리핑 머리글 JS 가 실행된다"
+                   + ("" if _ok else f" ({_out.stderr.strip()[:200]})"))
+        _r = json.loads(_out.stdout) if _ok else None
+    finally:
+        try:
+            __import__("os").unlink(_bp)
+        except OSError:
+            pass
+    if _r:
+        check("어제 하루치" in _r["one"],
+              "하루 차이면 '어제 하루치' 라고 밝힌다 (정상인데 어긋나 보이던 자리)")
+        check("어제 하루치" not in _r["same"] and "일 전 작성" not in _r["same"],
+              "같은 날이면 군더더기를 붙이지 않는다")
+        check("3일 전 작성" in _r["three"] and "어제 하루치" not in _r["three"],
+              "이틀 이상 벌어지면 그때는 경고한다")
+
+    # ── 예약 시각 ─────────────────────────────────────────────────
+    # 정시(분 0)는 전 세계가 몰려 GitHub 이 지연시키거나 그 실행을 **버린다**.
+    # 실측: "0 23" 이던 한 달 동안 한 번도 정시에 못 떴고(23:22~23:45),
+    # 2026-08-27 아침에는 34회 연속 성공 뒤 처음으로 누락됐다.
+    #
+    # 그리고 수집은 브리핑 Routine(23:03 UTC)보다 **뒤**여야 한다 — Routine 이
+    # 배포본에서 '최신 뉴스 날짜'를 찾아 그날치를 정리하므로, 수집이 먼저 끝나면
+    # 브리핑이 조용히 당일치로 바뀐다(지금 의도는 어제 하루치다).
+    import glob as _glob
+    ROUTINE_MIN = 23 * 60 + 5          # 브리핑 Routine 이 뜨는 시각(UTC) 뒤
+    for wf in sorted(_glob.glob(".github/workflows/*.yml")):
+        for line in open(wf, encoding="utf-8"):
+            m = _re.search(r'^\s*-\s*cron:\s*"(\S+)\s+(\S+)\s', line)
+            if not m:
+                continue
+            mi, hh = m.group(1), m.group(2)
+            name = wf.split("/")[-1]
+            check(mi != "0",
+                  f"{name}: 예약이 정시가 아니다 (분={mi} — 정시는 누락된다)")
+            if mi.isdigit() and hh.isdigit():
+                check(int(hh) * 60 + int(mi) >= ROUTINE_MIN,
+                      f"{name}: 수집이 브리핑 Routine 뒤에 온다 "
+                      f"({hh}:{mi} UTC — 앞서면 브리핑이 당일치로 바뀐다)")
+
 
 def _foreign_checks() -> None:
     """해외 수집기. 국내와 규칙이 뒤집힌 자리가 많아 회귀 검사가 특히 중요하다."""
