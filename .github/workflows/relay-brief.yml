@@ -123,8 +123,20 @@ jobs:
           git push origin HEAD:main
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      # 브리핑이 바뀌었는지와 **무관하게** 부른다.
+      #
+      # 전에는 changed == 'true' 일 때만 불렀는데, 그게 순환 고리를 만들었다:
+      #   수집이 돌아야 새 뉴스 날짜가 생기고
+      #   → 새 뉴스 날짜가 있어야 Routine 이 브리핑을 새로 쓰고
+      #   → 브리핑이 바뀌어야 여기서 수집을 부른다.
+      # 어느 한 곳이 하루 멈추면 스스로 돌아오지 못한다. 실제로 2026-08-26·27
+      # 이틀 연속 GitHub 예약(schedule)이 안 떴을 때, 아침 수집을 살려 둔 것이
+      # 오직 이 호출뿐이었다 — 그날 브리핑이 마침 바뀌었기에 살았을 뿐이다.
+      #
+      # 이 워크플로가 돌았다는 것은 곧 아침 Routine 이 돌았다는 뜻이고, 그러면
+      # 그날 수집은 부르는 것이 맞다. 수집은 같은 날 여러 번 돌아도 URL·제목으로
+      # 중복을 걸러 이어 담으므로(누적), 한 번 더 부르는 쪽이 안전하다.
       - name: 배포 워크플로 호출
-        if: steps.apply.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run daily-power-news.yml --ref main

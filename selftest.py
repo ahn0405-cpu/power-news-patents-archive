@@ -1670,6 +1670,15 @@ def _origin_checks() -> None:
     # 그리고 수집은 브리핑 Routine(23:03 UTC)보다 **뒤**여야 한다 — Routine 이
     # 배포본에서 '최신 뉴스 날짜'를 찾아 그날치를 정리하므로, 수집이 먼저 끝나면
     # 브리핑이 조용히 당일치로 바뀐다(지금 의도는 어제 하루치다).
+    # 중계가 수집을 부르는 것은 브리핑이 바뀐 것과 무관해야 한다. 조건을 걸면
+    # 순환이 된다 — 수집이 돌아야 새 뉴스가 생기고, 새 뉴스가 있어야 브리핑이
+    # 바뀌고, 브리핑이 바뀌어야 수집을 부른다. 한 곳이 멈추면 스스로 못 푼다.
+    _relay = open(".github/workflows/relay-brief.yml", encoding="utf-8").read()
+    _call = _relay[_relay.find("- name: 배포 워크플로 호출"):]
+    check("gh workflow run daily-power-news.yml" in _call
+          and "if:" not in _call,
+          "중계는 브리핑이 그대로여도 수집을 부른다 (조건을 걸면 순환이 된다)")
+
     import glob as _glob
     ROUTINE_MIN = 23 * 60 + 5          # 브리핑 Routine 이 뜨는 시각(UTC) 뒤
     for wf in sorted(_glob.glob(".github/workflows/*.yml")):
