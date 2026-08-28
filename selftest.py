@@ -1685,11 +1685,13 @@ def _origin_checks() -> None:
     _on = _ry[[k for k in _ry if str(k) in ("on", "True")][0]]
     check("paths" not in _on["push"],
           "중계는 푸시가 있었다는 사실만으로 돈다 (paths 로 거르면 고리가 남는다)")
-    # 대신 브랜치는 좁혀 둔다. 사람이 쓰는 작업 브랜치까지 수집을 깨우면 안 된다.
+    # 브랜치는 좁히지 않는다. Routine 세션이 어느 이름으로 밀지 우리가 못 정한다 —
+    # 프롬프트는 claude/happy-bohr 를 쓰라고 하지만 세션의 outcome 브랜치는
+    # claude/bold-hamilton 이고 원격에 그 접미사 판본들이 실제로 쌓여 있다.
+    # 좁혔다가 다른 이름으로 밀면 중계가 통째로 안 깨어난다.
     _br = _on["push"]["branches"]
-    check(_br and all(b != "claude/**" for b in _br)
-          and any("happy-bohr" in b for b in _br),
-          f"중계 브랜치는 Routine 것만 받는다 (받은 값 {_br})")
+    check(_br == ["claude/**"],
+          f"중계는 claude/** 를 다 받는다 (좁히면 Routine 브랜치를 놓친다 — 받은 값 {_br})")
 
     import glob as _glob
     ROUTINE_MIN = 23 * 60 + 5          # 브리핑 Routine 이 뜨는 시각(UTC) 뒤

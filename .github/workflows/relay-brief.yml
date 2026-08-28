@@ -19,13 +19,18 @@ name: 브리핑 중계 (claude/* → main)
 
 on:
   push:
-    # 브리핑 Routine 이 쓰는 중계 브랜치만 받는다. 예전에는 'claude/**' 전체였는데,
-    # 아래 paths 를 걷어내면서 사람이 쓰는 작업 브랜치(claude/<기능이름>)까지
-    # 중계를 깨우게 되므로 이름을 좁힌다.
+    # claude/** 전체를 받는다. 좁히고 싶은 마음이 들지만 좁히면 안 된다 —
+    # Routine 세션이 어느 이름으로 밀지 우리가 정하지 못한다. 프롬프트는
+    # claude/happy-bohr 를 쓰라고 하지만 세션의 outcome 브랜치는
+    # claude/bold-hamilton 으로 잡혀 있고, 원격에는 그 접미사 판본들
+    # (claude/bold-hamilton-7cn95a 등)이 실제로 쌓여 있다. 이름을 셋으로
+    # 좁혀 뒀다가 Routine 이 다른 이름으로 밀면 중계가 통째로 안 깨어난다.
+    #
+    # 대가는 사람이 쓰는 작업 브랜치(claude/<기능이름>)에 푸시할 때도 수집이
+    # 한 번 도는 것뿐이다. 수집은 --ref main 으로 부르므로 작업 브랜치 내용이
+    # 배포되지 않고, 기사는 중복을 걸러 누적된다. 놓치는 쪽이 훨씬 비싸다.
     branches:
-      - 'claude/happy-bohr**'
-      - 'claude/brief**'
-      - 'claude/heartbeat**'
+      - 'claude/**'
     # paths 필터를 두지 않는다.
     #
     # 전에는 brief.json·patent_brief.json 이 **바뀐** 푸시만 받았다. 그래서 새 뉴스가
