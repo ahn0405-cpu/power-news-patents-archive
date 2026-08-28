@@ -1678,6 +1678,18 @@ def _origin_checks() -> None:
     check("gh workflow run daily-power-news.yml" in _call
           and "if:" not in _call,
           "중계는 브리핑이 그대로여도 수집을 부른다 (조건을 걸면 순환이 된다)")
+    # 조건을 없애도 paths 필터가 남아 있으면 소용이 없다 — 브리핑 파일이 안 바뀐
+    # 푸시는 애초에 이 워크플로를 깨우지 못해, 고리는 그대로 남는다.
+    import yaml as _yaml
+    _ry = _yaml.safe_load(_relay)
+    _on = _ry[[k for k in _ry if str(k) in ("on", "True")][0]]
+    check("paths" not in _on["push"],
+          "중계는 푸시가 있었다는 사실만으로 돈다 (paths 로 거르면 고리가 남는다)")
+    # 대신 브랜치는 좁혀 둔다. 사람이 쓰는 작업 브랜치까지 수집을 깨우면 안 된다.
+    _br = _on["push"]["branches"]
+    check(_br and all(b != "claude/**" for b in _br)
+          and any("happy-bohr" in b for b in _br),
+          f"중계 브랜치는 Routine 것만 받는다 (받은 값 {_br})")
 
     import glob as _glob
     ROUTINE_MIN = 23 * 60 + 5          # 브리핑 Routine 이 뜨는 시각(UTC) 뒤
