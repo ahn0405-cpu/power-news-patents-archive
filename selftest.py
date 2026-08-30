@@ -775,6 +775,39 @@ def _fg_page(rows: list[tuple[str, str, str]], total: int) -> str:
             "</items></body></response>")
 
 
+def _wf_block(src, key: str, indent: int) -> list[str]:
+    """워크플로 YAML 에서 `key:` 아래 블록의 줄들을 준다 (주석·빈 줄은 뺀다).
+
+    PyYAML 을 쓰지 않는다. 이 자리에서 import 하던 yaml 이 러너에 없어
+    selftest 가 죽었고, selftest 를 도는 세 워크플로(일간 뉴스·주간 특허·
+    재빌드)가 2026-08-28~29 연속 실패해 배포가 48시간 멈췄다. 검사 하나에
+    필요한 모듈이 그날 수집을 통째로 멈추게 해서는 안 된다 — 워크플로는
+    아무것도 설치하지 않고 표준 라이브러리만 쓴다는 전제로 서 있다.
+
+    주석을 먼저 걷어낸다. 이 파일은 'paths 필터를 두지 않는다', 'claude/**'
+    같은 말을 주석에 길게 적어 두고 있어서, 글자만 찾으면 주석에 속는다.
+
+    블록형(`key:` 뒤가 비고 아래로 들여쓴 꼴)만 읽는다. 인라인형
+    (`branches: [claude/**]`)이면 빈 목록이 나오고 부르는 쪽 검사가 FAIL 로
+    드러난다 — 모양이 바뀐 것을 조용히 통과시키지 않는다.
+    """
+    lines = src.splitlines() if isinstance(src, str) else list(src)
+    out: list[str] = []
+    inside = False
+    for raw in lines:
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        cur = len(line) - len(line.lstrip())
+        if inside:
+            if cur <= indent:
+                break
+            out.append(line)
+        elif cur == indent and line.strip() == key + ":":
+            inside = True
+    return out
+
+
 def _origin_checks() -> None:
     """출원인 국적 보강(patent_origin). 요청은 흉내 내고 고르는 규칙만 실측한다.
 
@@ -1680,20 +1713,42 @@ def _origin_checks() -> None:
           "중계는 브리핑이 그대로여도 수집을 부른다 (조건을 걸면 순환이 된다)")
     # 조건을 없애도 paths 필터가 남아 있으면 소용이 없다 — 브리핑 파일이 안 바뀐
     # 푸시는 애초에 이 워크플로를 깨우지 못해, 고리는 그대로 남는다.
-    import yaml as _yaml
-    _ry = _yaml.safe_load(_relay)
-    _on = _ry[[k for k in _ry if str(k) in ("on", "True")][0]]
-    check("paths" not in _on["push"],
+    _push = _wf_block(_wf_block(_relay, "on", 0), "push", 2)
+    check(bool(_push) and not any(l.lstrip().startswith("paths:") for l in _push),
           "중계는 푸시가 있었다는 사실만으로 돈다 (paths 로 거르면 고리가 남는다)")
     # 브랜치는 좁히지 않는다. Routine 세션이 어느 이름으로 밀지 우리가 못 정한다 —
     # 프롬프트는 claude/happy-bohr 를 쓰라고 하지만 세션의 outcome 브랜치는
     # claude/bold-hamilton 이고 원격에 그 접미사 판본들이 실제로 쌓여 있다.
     # 좁혔다가 다른 이름으로 밀면 중계가 통째로 안 깨어난다.
-    _br = _on["push"]["branches"]
+    _br = [l.lstrip()[1:].strip().strip("'\"")
+           for l in _wf_block(_push, "branches", 4) if l.lstrip().startswith("- ")]
     check(_br == ["claude/**"],
           f"중계는 claude/** 를 다 받는다 (좁히면 Routine 브랜치를 놓친다 — 받은 값 {_br})")
 
+    # ── 저장소는 표준 라이브러리 밖으로 나가지 않는다 ────────────────
+    # 이번 고장의 본체다. selftest 가 import 하던 yaml 이 러너에 없어
+    # 세 워크플로가 나흘치 통째로 실패했다. 워크플로는 pip install 을 하지
+    # 않으므로, 검사용이든 수집용이든 밖의 모듈을 하나 들이면 그날로 수집이
+    # 멈춘다. try 로 감싼 것은 없어도 도는 것이라 봐준다(news_config 의
+    # dotenv 가 그렇다).
     import glob as _glob
+    for _p in sorted(_glob.glob("*.py")):
+        _tree = _ast.parse(open(_p, encoding="utf-8").read())
+        _guarded = {id(_s) for _n in _ast.walk(_tree)
+                    if isinstance(_n, _ast.Try) for _s in _ast.walk(_n)}
+        _mods: set[str] = set()
+        for _n in _ast.walk(_tree):
+            if id(_n) in _guarded:
+                continue
+            if isinstance(_n, _ast.Import):
+                _mods |= {a.name.split(".")[0] for a in _n.names}
+            elif isinstance(_n, _ast.ImportFrom) and not _n.level and _n.module:
+                _mods.add(_n.module.split(".")[0])
+        _ext = sorted(_mods - set(__import__("sys").stdlib_module_names)
+                      - {q[:-3] for q in _glob.glob("*.py")})
+        check(not _ext,
+              f"{_p}: 표준 라이브러리와 저장소 모듈만 쓴다 (밖의 것: {_ext})")
+
     ROUTINE_MIN = 23 * 60 + 5          # 브리핑 Routine 이 뜨는 시각(UTC) 뒤
     for wf in sorted(_glob.glob(".github/workflows/*.yml")):
         for line in open(wf, encoding="utf-8"):
