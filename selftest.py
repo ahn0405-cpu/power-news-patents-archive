@@ -272,8 +272,13 @@ def _lazy_checks(sr) -> None:
 
     check("function regionSplit(" in js, "국적 미상 출원인 수를 따로 센다")
     check("국적미상 " in js, "KPI 에 '국적미상 N' 을 함께 보인다")
-    check("국적을 아직 확인하지 못한" in js,
-          "국적별 랭킹이 '빠진 곳이 있다'고 밝힌다")
+    # 글자를 그대로 고정하지 않는다 — 문구를 다듬을 때마다 이 검사가 깨진다.
+    # 지켜야 할 것은 '빠진 곳의 수를 밝히는가' 이지 어떤 낱말을 쓰는가가 아니다.
+    _rs = js[js.find("const rankSub ="):]
+    _rs = _rs[:_rs.find(";\n", 10)]
+    check("unknown.toLocaleString()" in _rs
+          and ("제외" in _rs or "넣지 않" in _rs),
+          "국적별 랭킹이 '빠진 곳이 몇인지'를 밝힌다")
     check("서지상세를\\n    + '출원인당 한 번씩" in js
           or "출원인당 한 번씩 조회해 채웁니다" in js.replace("'\n    + '", ""),
           "국적을 어떻게 채우는지 화면에서 밝힌다")
@@ -1326,8 +1331,10 @@ def _origin_checks() -> None:
           "화살표를 건수 차이(delta)로 정하지 않는다")
     check("r.ratio" in ins and "'배'" in ins,
           "비중 배율로 정하고 '배' 로 적는다 (건수와 헷갈리지 않게)")
-    check("비중" in ins and "건수 차이가 아닙니다" in ins,
-          "부제가 화살표의 뜻을 밝힌다")
+    # 낱말을 그대로 고정하지 않는다(문구를 다듬을 때마다 깨진다). 지켜야 할 것은
+    # '비중이라고 말하고, 건수가 아님을 못 박는가' 다.
+    check("비중" in ins and _re.search(r"건수[^']{0,6}아닙니다", ins),
+          "부제가 화살표의 뜻을 밝힌다 (비중이며 건수가 아니다)")
     # 이전 기간에 없던 분류는 배율이 정의되지 않는다(ratio=null). 새로 만든
     # 분류가 여기 해당하는데, 그때 화살표를 그리면 없던 수를 지어내는 셈이다.
     check("r.ratio==null" in ins and "새 분류" in ins,
@@ -1398,7 +1405,8 @@ def _origin_checks() -> None:
     ins2 = ins2[:ins2.find("\n}")]
     check("sparkShare(catShareSeries([r.key], TREND_DAYS))" in ins2,
           "흐름 선은 비중으로 그린다 (건수는 아카이브가 커질수록 구조적으로 준다)")
-    check("TREND_DAYS" in js and "건수 차이가 아닙니다" in ins2 and "비중" in ins2,
+    check("TREND_DAYS" in js and "비중" in ins2
+          and _re.search(r"건수[^']{0,6}아닙니다", ins2),
           "부제가 무엇을 재는지 밝힌다 (비중이지 건수가 아니다)")
     # 패널 둘을 하나로 접었다. 옛 키워드 칩은 '▲' 옆에 **생건수 차이**를 찍어
     # '▲-178' 처럼 부호가 스스로 모순인 표시를 내고 있었다(원전 146건/7일 vs

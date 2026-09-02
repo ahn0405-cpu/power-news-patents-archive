@@ -2042,9 +2042,9 @@ function insightsHTML(){
   // 부제가 무엇을 재는지 말해야 한다. '이전 대비' 만 적어 두면 옆의 수와 견주는
   // 것으로 읽힌다 — 실제로 재는 것은 그 분야가 뉴스에서 차지한 **비중**이다.
   const sub = cmp
-    ? '최근 '+w.recentDays+'일 뉴스에서 각 분야가 차지한 <b>비중</b>과, 그 비중의 이전 대비 '
-      + '배율입니다(건수 차이가 아닙니다). 선은 최근 '+TREND_DAYS+'일 흐름, 오른쪽은 그 분야를 '
-      + '끌고 있는 말입니다 · 분야를 누르면 필터, 말을 누르면 검색.'
+    ? '최근 '+w.recentDays+'일 각 분야의 <b>비중</b>과 이전 대비 배율입니다'
+      + '(건수가 아닙니다). 선은 '+TREND_DAYS+'일 흐름, 오른쪽은 그 분야를 끄는 말 '
+      + '· 분야를 누르면 필터, 말을 누르면 검색.'
     : '최근 '+w.recentDays+'일 뉴스에서 각 분야가 차지한 비중입니다 '
       + '(비교할 이전 기간이 아직 쌓이지 않아 증감은 표시하지 않습니다).';
   // 패널 둘을 하나로 접는다. 전에는 키워드와 이슈 흐름이 나란히 있었는데, 둘 다
@@ -2131,14 +2131,12 @@ function catScopeNote(){
   const cs=(FEED.patents.categories||[]);
   if(!cs.length) return '';
   const inY=cs.filter(c=>!c.outside), out=cs.filter(c=>c.outside);
-  return '분야는 우리가 정한 것이 아니라 <b>CPC Y04S</b>(스마트그리드 — 계통 운영에 '
-    + '통신·정보기술을 붙인 기술을 묶는 국제 분류)의 '+inY.length+'개 갈래를 그대로 씁니다: '
+  // 결론부터 말한다: '6대 분야가 무엇인가' 가 물음이지, Y04S 의 정의가 물음이 아니다.
+  return '전력 '+cs.length+'대 분야 = <b>CPC Y04S</b>(스마트그리드) '+inY.length+'개 갈래'
+    + (out.length? ' + <b>'+out.map(c=>esc(c.name)).join('·')+'</b>' : '')+'입니다. '
     + inY.map(c=>esc(c.name)+'('+esc(c.cpc||'')+')').join(' · ') + '.'
-    + (out.length? ' 여기에 <b>'+out.map(c=>esc(c.name)).join('·')+'</b>'
-        + '을 따로 더해 '+cs.length+'개입니다 — 원전은 계통에 ICT 를 붙인 기술이 아니라 '
-        + 'Y04S 체계에 자리가 없지만, 기관 소관이라 Y02E 30(원자력)을 근거로 함께 봅니다.' : '')
-    + ' 실제 조회는 각 갈래에 대응하는 IPC 코드로 합니다 — Y04S 는 CPC 에만 있어 '
-    + '검색으로는 잡히지 않기 때문입니다.';
+    + (out.length? ' 원전은 Y04S 에 자리가 없어 Y02E 30 을 근거로 더했습니다.' : '')
+    + ' 조회는 각 갈래에 대응하는 IPC 로 합니다(Y04S 는 CPC 전용이라 검색에 안 잡힙니다).';
 }
 
 function kpiHTML(){
@@ -2183,10 +2181,9 @@ function kpiHTML(){
     + '</div>'
     // 툴팁은 모바일에서 뜨지 않는다 → 특허 수치의 산출 근거는 한 줄로도 항상 보이게.
     // 출원인 범위(40곳)는 바로 옆 '분석 출원인' 타일과 ⓘ 툴팁에 있어 여기선 뺀다.
-    + '<p class="kpinote">특허 수치는 <b>국내 공보와 해외(미국·유럽·일본·중국) 공보</b>'
-    + '(지식재산처 KIPRISplus 수록 기준)입니다. 최근 '+lookback+'일 공개분을 '
-    + catScopeText()+'로 조회한 값입니다. 같은 발명이 여러 나라에 공개되면 각각 세므로 '
-    + '특허 패밀리 수가 아니라 공개 문헌 수입니다.</p>'
+    + '<p class="kpinote"><b>국내 + 해외(미국·유럽·일본·중국) 공보</b>의 최근 '
+    + lookback+'일 공개분입니다(KIPRISplus 기준, '+catScopeText()+'). '
+    + '같은 발명이 여러 나라에 공개되면 각각 세는 <b>공개 문헌 수</b>이며 패밀리 수가 아닙니다.</p>'
     + '<p class="kpinote">'+catScopeNote()+'</p>';
 }
 
@@ -2300,10 +2297,10 @@ function patentScopeHTML(){
   return '<p class="scope">📄 <b>공개일 '+esc(r.from)+' ~ '+esc(r.to)+'</b> 특허 '
     // 수집 축이 바뀌었다(출원인 목록 → 분야+기간 전수). 문구가 옛 방식 그대로면
     // 읽는 사람은 아직 65곳만 보는 줄 안다.
-    + count('patents').toLocaleString()+'건 · <b>분야(IPC)와 기간</b>으로 조회해 '
-    + '조건에 맞는 것을 모두 담습니다(1회 조회 범위: 최근 '
-    + (f.lookbackDays||90)+'일 공개분, 국내 공보 + 미국·유럽·일본·중국). '
-    + '새로 공개된 것만 누적합니다.</p>';
+    + count('patents').toLocaleString()+'건 · <b>분야(IPC)+기간</b>으로 조회해 '
+    + '조건에 맞는 것을 모두 담습니다(1회 범위: 최근 '
+    + (f.lookbackDays||90)+'일, 국내 + 미국·유럽·일본·중국). '
+    + '새로 공개된 것만 누적.</p>';
 }
 
 function renderOverview(){
@@ -2799,10 +2796,9 @@ function tradeSectionHTML(where){
   // 분야마다 누가·무엇을(카드) → 기업 하나하나(매트릭스). 그다음이 창구다.
   if(where === 'trade')
     return '<div class="sec" id="sec-analysis">🧭 분야별 경쟁 구도</div>'
-      + '<p class="gdesc">먼저 지도로 분야끼리 견주고, 그 아래 분야마다 '
-      + '<b>누가 갖고 있나</b>(출원인)와 <b>무엇을 내고 있나</b>(세부 기술)를 봅니다. '
-      + '맨 아래 매트릭스는 기업 하나하나가 어느 분야에 내는지입니다. '
-      + '상대를 정하고 나서야 아래 창구가 뜻을 가지므로 여기 둡니다.'
+      + '<p class="gdesc">지도로 분야끼리 견주고, 그 아래에서 분야마다 '
+      + '<b>누가</b>(출원인) <b>무엇을</b>(세부 기술) 내는지 봅니다. '
+      + '맨 아래 매트릭스는 기업별로 어느 분야에 내는지입니다.'
       + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
       + '</p>'
       + quadChartHTML(rows)
@@ -3244,9 +3240,8 @@ function matrixHomeHTML(list){
   return '<div class="homepanel"><h3>🧩 출원인 × 분야 매트릭스'
     + '<span class="morelink" data-jump2="guide:sec-matrix">전체 보기 →</span></h3>'
     + '<p class="sub">국적별로 <b>가장 많이 낸 세 곳</b>이 어느 분야에 내는지입니다. '
-    + '칸을 누르면 그 출원인·분야 특허로 이동합니다. 칸의 수는 최근 '
-    + (FEED.patents.lookbackDays||90)+'일 공개분의 실제 건수입니다. '
-    + '전체 목록은 거래 탭에 있습니다.</p>'
+    + '칸을 누르면 해당 특허로 이동합니다(최근 '
+    + (FEED.patents.lookbackDays||90)+'일 실제 건수). 전체는 거래 탭에.</p>'
     + '<div class="mtxwrap">'
     + regionMatrixHTML(list, {total:true, top:MTX_HOME, fixed:true}) + '</div></div>';
 }
@@ -3254,16 +3249,15 @@ function matrixHomeHTML(list){
 function matrixSectionHTML(list){
   if(!list.length) return '';
   return '<div class="sec" id="sec-matrix">🧩 출원인 × 분야 매트릭스</div>'
-    + '<p class="gdesc">출원인을 국적(🇺🇸미국·🇰🇷한국·🇨🇳중국·🇯🇵일본·🇪🇺유럽)으로 묶어, '
-    + '각 기업이 <b>어느 분야에</b> 최근 특허를 냈는지 봅니다. 칸을 누르면 그 출원인·분야 '
-    + '특허로 이동합니다. 특허가 <b>공개된 특허청</b>은 이와 별개이며(한 기업이 여러 나라에 '
-    + '출원), 각 특허 카드에 표시됩니다.<br>'
+    + '<p class="gdesc">출원인을 국적별로 묶어, 각 기업이 <b>어느 분야에</b> 최근 특허를 '
+    + '냈는지 봅니다. 칸을 누르면 그 출원인·분야 특허로 이동합니다. '
+    + '<b>가로로</b>(이 기업이 어느 분야에) 읽으세요 — '
+    + '세로(이 분야를 누가 나눠 갖나)는 위 분야 카드가 말합니다.<br>'
     // 칸의 수는 표본이 아니라 실제 건수다(기간 안 모집단을 통째로 받는다).
     // 옛 안내를 그대로 두면 맞는 수를 틀린 수로 의심하게 만든다.
-    + '※ 칸의 수는 <b>최근 '+(FEED.patents.lookbackDays||90)
-    + '일 공개분의 실제 건수</b>이며, 그 기업이 가진 특허 전체가 아닙니다. '
-    + '이 표는 <b>가로로</b>(이 기업이 어느 분야에 내나) 읽으세요 — '
-    + '<b>세로로</b>(이 분야를 누가 나눠 갖나)는 바로 위 분야 카드가 말합니다.</p>'
+    + '※ 최근 '+(FEED.patents.lookbackDays||90)
+    + '일 공개분 건수이며 보유 특허 전체가 아닙니다. '
+    + '공개 특허청은 이와 별개로 각 카드에 표시됩니다.</p>'
     + '<div class="mtxwrap">'
     + regionMatrixHTML(list, {total:true, top:MTX_TOP}) + '</div>';
 }
@@ -3429,8 +3423,8 @@ function krAnalysisHTML(rows, krAll, cm){
     + '<div class="kacols">'
       + '<div class="kacol"><div class="kah">분야별 해외 비중</div>'
         + '<p class="kanote">그 분야 국내 공개분 가운데 해외 출원인이 낸 몫입니다. '
-        + '건수가 아니라 <b>밀도</b>라서, 적게 공개되는 분야도 비중이 높으면 눈에 띕니다. '
-        + '막대는 <b>가장 큰 값에 맞춰</b> 그렸습니다(견주기용) — 크기는 옆의 숫자로 보세요.</p>'
+        + '건수가 아니라 <b>밀도</b>라, 적게 공개되는 분야도 비중이 높으면 드러납니다. '
+        + '막대는 <b>최댓값 기준</b>(견주기용) — 크기는 옆 숫자로.</p>'
         + '<div class="kfrows">'+fldRows+'</div></div>'
       + '<div class="kacol"><div class="kah">어디서 왔나</div>'
         + '<p class="kanote">해외 '+rows.length.toLocaleString()+'건의 출원인 국적 구성입니다. '
@@ -3541,12 +3535,12 @@ function krEntryHTML(list){
   // 찾아보는 자리라 목록만 둔다 — 같은 그림을 두 곳에 그리지 않는다.
   return '<div class="panel wide krpanel" id="sec-krlist">'
     + '<h3>🇰🇷 해외 출원인의 국내 공개'+seg+'</h3>'
-    + '<p class="sub">'+lead+' 해외 출원인이 <b>한국에 공개</b>한 특허입니다. '
-    + '여러 관할 구역 가운데 한국이 포함됐다는 점에서, 해당 기술의 국내 권리화를 '
-    + '함께 고려한 것으로 볼 수 있습니다. 제목을 누르면 원문으로 이동합니다. '
+    // '해외 출원인이 한국에 공개한…' 두 문장은 홈 패널에 글자 그대로 또 있다.
+    // 같은 설명을 두 곳에서 읽게 되므로 여기서는 뺀다(홈 쪽만 남긴다).
+    + '<p class="sub">'+lead+' 제목을 누르면 원문으로 이동합니다. '
     + '<span class="morelink" data-jump2="home:">분야·국적 요약은 홈에서 →</span>'
-    + '<br>※ 매주 해외 출원인별로 국내 공개분을 따로 조회해 모읍니다(출원인당 최대 '
-    + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어서 채웁니다.</p>'
+    + '<br>※ 매주 출원인별로 국내 공개분을 조회해 모읍니다(출원인당 최대 '
+    + (FEED.patents.krLimit||15)+'건). 쿼터에 걸리면 다음 주에 이어 채웁니다.</p>'
     + '<div class="krwrap">'+blocks+'</div>'+restHTML+soloHTML+'</div>';
 }
 
@@ -3748,14 +3742,12 @@ function supplierHTML(list){
   }).join('');
   return '<div class="sec" id="sec-supply">🎓 분야별 국내 공급자</div>'
     + '<p class="gdesc">이 분야에 최근 공개가 있는 <b>대학 산학협력단·출연연·공공기관</b>입니다. '
-    + '기술이전 전담조직이 있어 거래가 제도로 굴러가는 쪽이라, 도입을 검토한다면 먼저 '
-    + '두드릴 상대입니다. 대기업은 협상 상대라기보다 회피 대상이라 여기서는 뺐습니다. '
-    + '기관 이름을 누르면 특허 탭에서 그 분야 공개 건이 열립니다.</p>'
+    + '기술이전 전담조직이 있어 먼저 두드릴 상대입니다(대기업은 협상 상대라기보다 '
+    + '회피 대상이라 뺐습니다). 기관 이름을 누르면 그 분야 공개 건이 열립니다.</p>'
     + '<div class="catlead sup">'+body+'</div>'
-    + '<p class="gnote">' + rows.length + '개 분야 · 기관 ' + orgAll.size + '곳 · ' + tot + '건. '
-    + '건수는 <b>최근 ' + (FEED.patents.lookbackDays||90) + '일 국내 공개분</b>이며 그 기관이 '
-    + '가진 특허 전체가 아닙니다. 목록에 있다는 것이 이전 의사가 있다는 뜻도 아닙니다 — '
-    + '문의는 아래 창구를 이용하세요.</p>';
+    + '<p class="gnote">' + rows.length + '개 분야 · 기관 ' + orgAll.size + '곳 · ' + tot + '건'
+    + '(최근 ' + (FEED.patents.lookbackDays||90) + '일 국내 공개분, 보유 특허 전체 아님). '
+    + '목록에 있다고 이전 의사가 있다는 뜻은 아닙니다 — 문의는 아래 창구로.</p>';
 }
 
 function renderStats(list){
@@ -3795,9 +3787,8 @@ function renderStats(list){
         + (nSampled? ' 사선 막대 '+nSampled+'곳은 목록에 표본만 저장돼 있습니다.' : '')
         // 이 표는 국적을 아는 곳만 담는다. 그 사실을 적지 않으면 빠진 곳이
         // '해당 나라에 없는 것'으로 읽힌다.
-        + (unknown? ' 국적을 아직 확인하지 못한 '+unknown.toLocaleString()
-            + '곳은 이 표에 넣지 않았습니다(서지상세로 매일 채우는 중입니다) — '
-            + '전체를 보려면 위 [전체] 또는 [공개국별]로 보세요.' : '')
+        + (unknown? ' 국적 미확인 '+unknown.toLocaleString()
+            + '곳은 제외했습니다(매일 채우는 중) — 전체는 [전체]·[공개국별]로 보세요.' : '')
     : rankMode==='office'
       ? '<b>공개 특허청(시장)별</b> — 그 특허청에 많이 공개한 기업(국적 무관, 상위 5). '
         + (exactOffice? '실제 공개 건수 기준.' : '표본 기반 근사치(다음 수집부터 정확).')
@@ -3814,10 +3805,9 @@ function renderStats(list){
       + '</div></div>'
     + '<div class="panel"><h3>🧭 분야별 경쟁 구도</h3>'
       + '<p class="sub">각 분야를 <b>몇 곳이 나눠 갖고 있는지</b>입니다. 막대는 <b>상위 3곳의 몫</b>, '
-      + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수입니다(출원인이 35곳이어도 셋이 대부분을 가져가면 4곳 수준으로 나옵니다). '
-      + '칩의 %는 그 분야 안에서의 지분입니다. 집중된 분야일수록 회피설계·라이선스 검토가 먼저 필요합니다.<br>'
+      + '‘실질 N곳’은 규모 차이를 반영한 경쟁자 수입니다. 칩의 %는 그 분야 안 지분입니다.<br>'
       + '<b>※ 시장 점유율이 아닙니다</b> — 최근 '+(FEED.patents.lookbackDays||90)
-      + '일 공개분 안에서의 분포이며, 각 기업이 가진 특허 전체가 아닙니다.</p>'
+      + '일 공개분의 분포이며 보유 특허 전체가 아닙니다.</p>'
       + '<div class="catlead">'+catLeadRows+'</div></div>'
     + '<div class="panel"><h3>🏆 출원인 랭킹'
       + '<span class="rankseg">'
