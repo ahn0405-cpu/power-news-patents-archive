@@ -109,9 +109,24 @@ def main() -> None:
     # ── 뉴스 수집 ──
     if what in ("news", "both"):
         print(f"{'[MOCK] ' if ncfg.is_mock() else ''}뉴스 수집 → {today}")
-        fresh, mock = news_source.collect(now)
-        _, added = news_archive.merge_today(news_days, today, fresh, mock)
-        print(f"  뉴스 신규 {added}건 (수집 {len(fresh)}{' MOCK' if mock else ''})")
+        # 오늘 수집이 통째로 막혀도 **사이트는 짓는다**. 아카이브(수십 일치)가
+        # 그대로 있는데 빌드를 죽이면, 수집과 무관한 변경(문구 수정 같은 것)까지
+        # 소스가 잠깐 흔들렸다는 이유로 배포가 막힌다 — 실제로 2026-09-04 에
+        # 구글 뉴스가 11개 카테고리 전부 503 을 내면서 그렇게 됐다.
+        #
+        # 다만 두 가지를 지킨다:
+        #  · MOCK 으로 메우지 않는다. NEWS_MOCK=off 는 '샘플을 아카이브에 섞지
+        #    말라' 는 뜻이고, 그 뜻은 실패했을 때야말로 지켜야 한다.
+        #  · merge_today 를 부르지 않는다. 빈 목록으로 부르면 '기사 0건인 날' 이
+        #    아카이브에 생겨 30일 추이가 오염된다(그날 뉴스가 없었던 것처럼 보인다).
+        # 그래서 그냥 건너뛴다 — 화면의 '최근 수집일' 이 어제로 남아 사실을 말한다.
+        try:
+            fresh, mock = news_source.collect(now)
+        except news_source.CollectFailed as e:
+            print(f"⚠️ 뉴스 수집 실패 — 기존 아카이브로 사이트를 짓습니다: {e}")
+        else:
+            _, added = news_archive.merge_today(news_days, today, fresh, mock)
+            print(f"  뉴스 신규 {added}건 (수집 {len(fresh)}{' MOCK' if mock else ''})")
 
     # ── 특허 수집 (주 단위) ──
     if what in ("patents", "both"):

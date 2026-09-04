@@ -2156,6 +2156,61 @@ def _kipris_checks() -> None:
         urllib.request.urlopen = orig_open
 
 
+def _news_outage_checks() -> None:
+    """뉴스 소스가 통째로 죽은 날, 사이트는 그래도 지어지는가.
+
+    2026-09-04 에 구글 뉴스가 11개 카테고리 전부 503 을 내면서 빌드가 죽었다.
+    아카이브 43일치가 멀쩡히 있는데도 site/ 가 만들어지지 않아, 그날 올린 문구
+    수정까지 배포되지 못했다. 수집 실패가 배포 실패로 번지지 않아야 한다.
+    """
+    import news_archive
+    import news_source
+
+    print("\n· 뉴스 소스가 죽은 날")
+
+    # 전량 실패는 전용 예외로 온다 — 진짜 버그(TypeError 등)와 섞이면 부르는 쪽이
+    # 둘을 갈라 다룰 수 없다.
+    check(issubclass(news_source.CollectFailed, RuntimeError),
+          "전량 실패에 전용 예외가 있다 (버그와 갈라 다루려면 필요하다)")
+
+    orig = news_source._fetch_rss
+    try:
+        def _dead(_q):
+            raise OSError("HTTP Error 503: Service Unavailable")
+        news_source._fetch_rss = _dead
+        raised = None
+        try:
+            news_source._live_collect()
+        except Exception as e:                                  # noqa: BLE001
+            raised = e
+        check(isinstance(raised, news_source.CollectFailed),
+              f"모두 503 이면 CollectFailed 를 올린다 (받은 값 {type(raised).__name__})")
+    finally:
+        news_source._fetch_rss = orig
+
+    # 부르는 쪽이 그 예외만 골라 잡고, **merge 를 건너뛴다**. 빈 목록으로 merge 하면
+    # '기사 0건인 날' 이 아카이브에 생겨 30일 추이가 그날만 푹 꺼진다.
+    src = open("build_site.py", encoding="utf-8").read()
+    blk = src[src.find("if what in (\"news\", \"both\")"):]
+    blk = blk[:blk.find("# ── 특허 수집")]
+    # 주석을 걷어내고 본다 — 위 주석이 merge_today 를 언급해서, 날것으로 위치를
+    # 비교하면 주석 쪽이 먼저 잡혀 엉뚱하게 판정된다(실제로 그렇게 틀렸다).
+    code = "\n".join(l for l in blk.split("\n") if not l.strip().startswith("#"))
+    check("except news_source.CollectFailed" in code,
+          "빌드가 그 예외만 골라 잡는다 (다른 예외는 그대로 터져야 한다)")
+    check("else:" in code
+          and code.find("except news_source.CollectFailed") < code.find("merge_today"),
+          "수집이 실패하면 merge 를 건너뛴다 (빈 날짜를 만들지 않는다)")
+    check("_mock_collect" not in code and "MOCK 으로 메우지" in blk,
+          "실패했다고 MOCK 으로 메우지 않는다 (NEWS_MOCK=off 의 뜻이다)")
+
+    # 실제로 빈 목록을 merge 하면 어떻게 되는지 — 위 규칙이 왜 필요한지를 못 박는다.
+    days = {"2026-09-03": {"date": "2026-09-03", "articles": [{"title": "t", "url": "u"}]}}
+    news_archive.merge_today(days, "2026-09-04", [], False)
+    check("2026-09-04" in days and not days["2026-09-04"]["articles"],
+          "빈 목록으로 merge 하면 실제로 빈 날짜가 생긴다 (그래서 건너뛰어야 한다)")
+
+
 def main() -> int:
     today = datetime(2026, 7, 27)
     orig = (ps._search, ps._get_token, cfg.OPS_KEY, cfg.OPS_SECRET, cfg.REQUEST_DELAY)
@@ -2381,6 +2436,7 @@ def main() -> int:
     _kipris_checks()
     _foreign_checks()
     _origin_checks()
+    _news_outage_checks()
 
     print(f"\n{'실패 ' + str(len(FAILS)) + '건' if FAILS else '전부 통과'}")
     return 1 if FAILS else 0

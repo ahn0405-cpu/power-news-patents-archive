@@ -116,6 +116,15 @@ def _similar(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+class CollectFailed(RuntimeError):
+    """오늘 수집이 **통째로** 막혔다(카테고리가 하나도 안 들어왔다).
+
+    코드 결함이 아니라 바깥 사정(소스 장애·네트워크 차단)이라는 뜻이라 따로 둔다.
+    부르는 쪽은 이것만 골라 잡아 '오늘 새 기사는 없지만 사이트는 짓는다' 로 갈 수
+    있고, 진짜 버그(TypeError 같은 것)는 그대로 터져 눈에 띈다.
+    """
+
+
 def _live_collect() -> list[dict]:
     """카테고리별 RSS 수집 → 카테고리 태깅 + 카테고리 내 중복 제거."""
     collected: list[dict] = []
@@ -148,7 +157,8 @@ def _live_collect() -> list[dict]:
                 break
         print(f"  · {cat['emoji']} {cat['name']}: {added}건")
     if not collected and errors == len(cfg.CATEGORIES):
-        raise RuntimeError("모든 카테고리 수집 실패(네트워크 차단 추정)")
+        raise CollectFailed(
+            f"모든 카테고리({errors}개) 수집 실패 — 네트워크 차단이나 소스 장애")
     return collected
 
 
