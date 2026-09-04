@@ -1477,15 +1477,15 @@ def _origin_checks() -> None:
     check("minmax(120px,1fr)62px74pxminmax(0,1.1fr)" in css2,
           "이름·흐름·수치·말 네 칸이 같은 격자에 선다")
 
-    # ── 홈은 요약, 거래 탭은 상세 ─────────────────────────────────
+    # ── 홈은 요약, 경쟁·활용 탭은 상세 ─────────────────────────────────
     # 분야 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 먹고 있었다. 홈은 '지금
     # 무슨 일이 벌어지나' 를 한눈에 보이는 자리라 카드가 너무 무겁다 → 지도와
-    # 한 줄 요약만 남기고, 상세는 '누구와 부딪히나' 를 묻는 거래 탭으로 보낸다.
-    print("\n· 홈은 요약, 거래 탭은 상세")
+    # 한 줄 요약만 남기고, 상세는 '누구와 부딪히나' 를 묻는 경쟁·활용 탭으로 보낸다.
+    print("\n· 홈은 요약, 경쟁·활용 탭은 상세")
     # 부르는 것만 보면 그 분기가 죽어도 통과한다(변이시험에서 통과했다) —
-    # where==='trade' 를 false 로 바꾸면 거래 탭이 홈 판본을 그리는데도 검사가
+    # where==='trade' 를 false 로 바꾸면 경쟁·활용 탭이 홈 판본을 그리는데도 검사가
     # 조용했다. 분기가 **있고 그 안에서 body 를 낸다**는 것까지 본다.
-    check("tradeSectionHTML('trade')" in js, "거래 탭이 'trade' 로 부른다")
+    check("tradeSectionHTML('trade')" in js, "경쟁·활용 탭이 'trade' 로 부른다")
     ts = js[js.find("function tradeSectionHTML"):]
     ts = ts[:ts.find("\n}")]
     br = ts[ts.find("if(where === 'trade')"):]
@@ -1502,7 +1502,7 @@ def _origin_checks() -> None:
     check("body" not in home_part.replace("bodyx", ""),
           "홈 패널은 분야 카드(body)를 그리지 않는다 (같은 표를 두 곳에서 그리지 않게)")
     check("data-catgo" in js and "'[data-catgo]'" in js,
-          "요약 줄을 누르면 거래 탭의 그 분야로 간다 (버튼만 있고 안 눌리는 상태를 막는다)")
+          "요약 줄을 누르면 경쟁·활용 탭의 그 분야로 간다 (버튼만 있고 안 눌리는 상태를 막는다)")
     check('.trow[data-cat="' in js and 'data-cat="\'+esc(r.cat.key)' in js,
           "카드에 분야 키가 달려 있어 찾아갈 수 있다")
     check("classList.add('hit')" in js and ".trow.hit{" in css2,
@@ -1519,7 +1519,7 @@ def _origin_checks() -> None:
           "홈 특허 브리핑은 짚은 점을 펴 두고 긴 본문만 접는다")
 
     # ── 홈의 매트릭스는 축약판이다 ─────────────────────────────────
-    # 거래 탭 판본(상위 10곳 + 펼치기)을 그대로 홈에 놓으면 홈이 다시 길어진다.
+    # 경쟁·활용 탭 판본(상위 10곳 + 펼치기)을 그대로 홈에 놓으면 홈이 다시 길어진다.
     # 정의만 보면 안 된다 — 부르는 줄이 있어야 화면에 뜬다.
     # 부르기만 해서는 모자란다 — 부른 값이 홈 마크업에 **들어가야** 뜬다.
     # (변이시험: 'FULL ?' 를 'false ?' 로 바꿔도 '부른다' 만 보면 통과했다.)
@@ -1583,6 +1583,28 @@ def _origin_checks() -> None:
           "검색칸과 그 입력칸 둘 다 줄어들 수 있다")
     check("minmax(min(300px,100%),1fr)" in css2,
           "국내 공개 칸이 화면보다 넓어지지 않는다 (320px 에서 넘치던 자리)")
+
+    # ── 탭 이름과 그것을 가리키는 문구가 어긋나지 않는다 ─────────────
+    # 이 탭은 '거래·지원' 이었다가 '경쟁·활용' 이 됐다(화면 절반이 경쟁 구도인데
+    # 이름은 거래만 말하고 있었다). 이름을 바꾸면 **그 탭을 가리키는 문구**도 같이
+    # 바뀌어야 한다 — 안 그러면 '거래 탭에 있습니다' 라고 안내해 놓고 그런 이름의
+    # 탭이 없는 상태가 된다. 한쪽만 고치는 실수를 기계가 잡는다.
+    _page = _sr._PAGE
+    _m = _re.search(r'data-tab="guide">([^<]+)<', _page)
+    check(bool(_m), "경쟁·활용 탭 버튼이 있다")
+    if _m:
+        _tab = _m.group(1)
+        _core = _tab.split(' ', 1)[-1].strip()       # 이모지를 뗀 이름
+        check("거래" not in _tab, f"탭 이름에 옛 이름이 남지 않았다 (받은 값 {_tab!r})")
+        # 화면 문자열(주석 제외)에서 이 탭을 가리키는 말이 새 이름을 쓰는가.
+        _body = "\n".join(l for l in js.split("\n") if not l.strip().startswith("//"))
+        _refs = _re.findall(r"[가-힣·]* 탭", _body)
+        _bad = sorted({r for r in _refs
+                       if r.strip() not in ("뉴스 탭", "특허 탭", _core + " 탭")})
+        check(not _bad, f"탭을 가리키는 문구가 실제 탭 이름을 쓴다 (어긋난 것: {_bad})")
+    # 스크린리더가 읽는 이름도 함께 맞춘다(화면과 다른 이름을 읽으면 더 헷갈린다).
+    check('aria-label="특허 경쟁 구도·활용 안내"' in _page,
+          "탭 영역의 aria-label 이 새 이름을 따른다")
 
     # ── 해외 국내공개: 나열 위에 읽는 값을 올린다 ────────────────────
     kr = js[js.find("function krEntryHTML("):]

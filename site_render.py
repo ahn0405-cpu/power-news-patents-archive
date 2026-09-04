@@ -273,7 +273,7 @@ SITE_TITLE = "IP-Power 플랫폼"
 # 시작했지만 지금은 분야별 경쟁 구도와 거래 창구 안내까지 있어, '한자리에 모은다'
 # 만으로는 절반만 말하는 셈이다. '거래를 돕는다' 로 넘어가지는 않는다 — 우리는
 # 알선·중개를 하지 않고 판단 재료와 창구를 알려줄 뿐이다.
-SITE_TAGLINE = "전력 뉴스와 특허를 매일 모아 — 기술 동향부터 지식재산 거래 참고까지"
+SITE_TAGLINE = "전력 뉴스와 특허를 매일 모아 — 기술 동향부터 경쟁 구도·활용까지"
 SITE_ORG = "지식재산처 전기통신심사국 전기심사과"
 # 헤더에서는 CI 에 '지식재산처' 가 이미 들어 있으므로 소속 부서만 덧붙인다.
 SITE_DEPT = "전기통신심사국 전기심사과"
@@ -1180,7 +1180,7 @@ a{color:inherit}
 .lead2 .l2go{font:inherit;font-size:11.5px;font-weight:700;color:var(--accent2);
   background:none;border:0;padding:0;cursor:pointer;white-space:nowrap}
 .lead2 .l2go:hover{text-decoration:underline}
-/* 매트릭스가 거래 탭으로 왔다. 거기 .panel 격자가 없으므로 표가 줄어들 수 있게
+/* 매트릭스가 경쟁·활용 탭으로 왔다. 거기 .panel 격자가 없으므로 표가 줄어들 수 있게
    직접 잡아 준다 — 안 그러면 표의 최소폭이 본문을 화면 밖으로 민다(통계 탭에서
    같은 자리를 이미 한 번 물렸다). */
 .mtxwrap{min-width:0}
@@ -1501,10 +1501,10 @@ _PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
     <button role="tab" id="tab-home" aria-selected="true" data-tab="home">🏠 홈</button>
     <button role="tab" id="tab-news" aria-selected="false" data-tab="news">📰 뉴스</button>
     <button role="tab" id="tab-patents" aria-selected="false" data-tab="patents">📄 특허</button>
-    <button role="tab" id="tab-guide" aria-selected="false" data-tab="guide">🤝 거래·지원</button>
+    <button role="tab" id="tab-guide" aria-selected="false" data-tab="guide">🤝 경쟁·활용</button>
   </nav>
   <section class="home" id="home" aria-label="대시보드" hidden></section>
-  <section class="home" id="guide" aria-label="지식재산 거래·지원 안내" hidden></section>
+  <section class="home" id="guide" aria-label="특허 경쟁 구도·활용 안내" hidden></section>
   <div class="viewseg" id="viewToggle" role="group" aria-label="특허 보기 방식">
     <button data-view="list" aria-pressed="true">목록</button>
     <button data-view="stats" aria-pressed="false">📊 통계</button>
@@ -2262,7 +2262,7 @@ function renderHome(){
   // 전체 폭으로. 브리핑이 서술한 내용을 바로 아래 수치가 받아 이어서 읽힌다.
   // 세부 기술은 패널을 따로 두지 않는다 — 같은 여덟 분야를 두 패널이 각각 한 번씩
   // 나열하면 한 분야의 그림을 맞추려고 위아래를 오가게 된다. 분야 카드 안에 넣었다.
-  // 분야별 경쟁 구도(지도·요약·카드)는 통째로 거래 탭에 있다. 홈은 '오늘 무슨
+  // 분야별 경쟁 구도(지도·요약·카드)는 통째로 경쟁·활용 탭에 있다. 홈은 '오늘 무슨
   // 일인가' 를 말하는 자리고, 분야를 하나씩 견주는 일은 '누구와 부딪히나' 를 묻는
   // 자리에서 필요하다 — 거기 창구가 바로 아래 있다.
   const pb=patentBriefHomeHTML(), pk=patentPickPanelHTML();
@@ -2634,12 +2634,12 @@ function sparkShare(vals){
 
 // 홈의 한 줄 요약. 분야마다 [규모 막대 · 뉴스 비중 30일 흐름 · 국내 지분] 만
 // 남기고, 상세(누가 갖고 있나 / 무엇을 내고 있나 / Y04S 갈래 / 국내 권리)는
-// 거래 탭으로 보낸다.
+// 경쟁·활용 탭으로 보낸다.
 //
 // 왜 나누나: 이 카드 여섯 장이 1,900px 이라 홈 높이의 절반을 차지하고 있었다.
 // 홈은 '지금 무슨 일이 벌어지나' 를 한눈에 보여야 하는 자리인데, 거기서 분야
 // 하나하나의 출원인 지분까지 읽게 만들면 첫 화면이 끝나기 전에 스크롤이 시작된다.
-// 상세는 '누구와 부딪히나' 를 묻는 자리 — 곧 거래 탭 — 에서 필요하다.
+// 상세는 '누구와 부딪히나' 를 묻는 자리 — 곧 경쟁·활용 탭 — 에서 필요하다.
 function catSummaryHTML(rows){
   const maxTot=Math.max.apply(null, rows.map(d=>d.r.tot||0)) || 1;
   return '<div class="csum">' + rows.map(d=>{
@@ -2786,10 +2786,10 @@ function tradeSectionHTML(where){
       + (d.note? '<p class="tcaveat">※ '+esc(d.note)+'</p>' : '')
       + '</div>';
   }).join('');
-  // 홈에 놓는다 — 거래 탭에도 같은 표를 두면 약한 판본이 하나 더 생긴다(전에
+  // 홈에 놓는다 — 경쟁·활용 탭에도 같은 표를 두면 약한 판본이 하나 더 생긴다(전에
   // 홈의 '분야별 경쟁 구도' 가 이 표의 축소판이었다). 이 표는 '거래' 이전에
   // '지금 이 분야가 어떻게 생겼나' 를 말하므로 홈이 제자리다.
-  // 홈에는 지도와 한 줄 요약까지, 거래 탭에는 분야 카드 여섯 장.
+  // 홈에는 지도와 한 줄 요약까지, 경쟁·활용 탭에는 분야 카드 여섯 장.
   // 분야 분석은 **한자리에** 모은다. 전에는 지도·요약이 홈에, 카드가 여기,
   // 매트릭스가 통계 탭에 흩어져 있어 한 분야의 그림을 맞추려면 탭을 오갔다.
   // 순서는 넓은 것에서 좁은 것으로: 분야끼리 견주기(지도) → 한 줄 요약 →
@@ -2811,7 +2811,7 @@ function tradeSectionHTML(where){
   return '<div class="homepanel" id="sec-analysis"><h3>🧭 분야별 경쟁 구도'
     + '<span class="morelink" data-go="patents-stats">특허 통계 전체 →</span></h3>'
     + '<p class="sub">분야끼리 견주는 지도입니다. 그 아래 한 줄씩은 <b>규모</b>와 '
-    + '<b>최근 2주 뉴스 비중</b>, <b>국내 출원인 몫</b>입니다. 줄을 누르면 거래 탭에서 '
+    + '<b>최근 2주 뉴스 비중</b>, <b>국내 출원인 몫</b>입니다. 줄을 누르면 경쟁·활용 탭에서 '
     + '그 분야를 누가 갖고 있는지까지 볼 수 있습니다.'
     + (cmp? '' : ' (이전 기간 자료가 아직 부족해 뉴스 변화는 표시하지 않습니다.)')
     + '</p>'
@@ -3201,7 +3201,7 @@ function _rgSecHTML(rg, list, opts){
   const all=_rankApplicants(sub);
   const cap=opts.top||0;
   // opts.fixed 는 '늘어나지 않는 축약판' 이다(홈). 펼치기 단추를 내지 않고,
-  // 거래 탭에서 펼쳐 둔 상태(mtxOpen)도 따르지 않는다 — 따르면 홈이 남의 조작
+  // 경쟁·활용 탭에서 펼쳐 둔 상태(mtxOpen)도 따르지 않는다 — 따르면 홈이 남의 조작
   // 때문에 수천 행으로 늘어난다. 홈은 언제 봐도 같은 높이여야 한다.
   const open=!opts.fixed && mtxOpen.has(rg.code);
   const ranked=(cap && !open)? all.slice(0, cap) : all;
@@ -3232,8 +3232,8 @@ function _mtxGroups(list){
 // 맨 아래에 온다(넓은 것 → 좁은 것). 전에는 통계 탭에 혼자 있어서, 카드에서 본
 // 분야를 기업 단위로 확인하려면 탭을 옮겨야 했다.
 // 홈에 놓는 축약판. 국적 묶음마다 **상위 세 곳**만 보이고 펼치지 않는다 —
-// 홈은 '한눈에' 가 전부인 자리라, 거래 탭의 상위 10곳 + 펼치기를 그대로 가져오면
-// 홈이 다시 길어진다. 전체는 거래 탭에 그대로 있고 링크로 잇는다.
+// 홈은 '한눈에' 가 전부인 자리라, 경쟁·활용 탭의 상위 10곳 + 펼치기를 그대로 가져오면
+// 홈이 다시 길어진다. 전체는 경쟁·활용 탭에 그대로 있고 링크로 잇는다.
 const MTX_HOME = 3;
 function matrixHomeHTML(list){
   if(!list.length) return '';
@@ -3241,7 +3241,7 @@ function matrixHomeHTML(list){
     + '<span class="morelink" data-jump2="guide:sec-matrix">전체 보기 →</span></h3>'
     + '<p class="sub">국적별로 <b>가장 많이 낸 세 곳</b>이 어느 분야에 내는지입니다. '
     + '칸을 누르면 해당 특허로 이동합니다(최근 '
-    + (FEED.patents.lookbackDays||90)+'일 실제 건수). 전체는 거래 탭에.</p>'
+    + (FEED.patents.lookbackDays||90)+'일 실제 건수). 전체는 경쟁·활용 탭에.</p>'
     + '<div class="mtxwrap">'
     + regionMatrixHTML(list, {total:true, top:MTX_HOME, fixed:true}) + '</div></div>';
 }
@@ -3984,7 +3984,7 @@ function wire(){
     // 지난 브리핑 더 보기/접기 — 홈 전체가 아니라 그 패널만 갈아 끼운다(브리핑
     // 카드나 특허 브리핑을 펼쳐 둔 상태가 날아가지 않게). 패널을 새로 그리면 그
     // 안에서 펼쳐 둔 항목은 닫히므로, 날짜를 기억했다가 되살린다.
-    // 홈 요약 줄 → 거래 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
+    // 홈 요약 줄 → 경쟁·활용 탭의 그 분야 카드로. 홈에서 고르고 거기서 상대를 본다.
     // '전체 보기' → 다른 탭의 특정 자리로. data-jump 는 같은 화면 안에서만
     // 움직이므로 탭을 건너뛰려면 탭 이름을 함께 실어야 한다('탭:앵커').
     // 결론 한 줄의 다리 → 특허 탭에서 그 분야만 본다.
