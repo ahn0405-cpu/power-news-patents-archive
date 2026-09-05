@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ahn0405-cpu.github.io/power-news-patents-archive/sitemap.xml
